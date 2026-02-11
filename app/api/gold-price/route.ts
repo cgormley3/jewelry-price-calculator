@@ -9,7 +9,9 @@ export async function GET() {
     process.env.SUPABASE_SERVICE_ROLE_KEY! // Use the Secret Key you found
   );
 
-  const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRCIKyw7uQpytVE7GayB_rMY8qqMwSjat28AwLj9rSSD64OrZRqDSIuIcDIdAob_BK81rrempUgTO-H/pub?gid=1610736361&single=true&output=csv";
+  // Added timestamp to break the Google export cache
+  const timestamp = Date.now();
+  const CSV_URL = `https://docs.google.com/spreadsheets/d/e/2PACX-1vRCIKyw7uQpytVE7GayB_rMY8qqMwSjat28AwLj9rSSD64OrZRqDSIuIcDIdAob_BK81rrempUgTO-H/pub?gid=1610736361&single=true&output=csv&t=${timestamp}`;
 
   try {
     const res = await fetch(CSV_URL, { cache: 'no-store' });
