@@ -193,87 +193,65 @@ export default function Home() {
     
     <div className="min-h-screen bg-slate-100 p-4 md:p-10 text-slate-900 font-sans">
       <div className="max-w-7xl mx-auto space-y-6">
-{/* BRAND HEADER */}
-<div className="flex flex-col items-center justify-center py-8 bg-white rounded-[2rem] border shadow-sm mb-6">
-  <div className="flex items-center gap-3">
+
+        {/* HEADER */}
+<div className="flex flex-col md:flex-row justify-between items-center bg-white px-4 py-4 md:px-6 rounded-[2rem] border shadow-sm gap-4 mb-6">
+  
+  {/* LEFT: THE VAULT BRANDING */}
+  <div className="flex items-center gap-2 md:order-1">
     <img 
       src="/icon.png" 
-      alt="Bear Silver and Stone Logo" 
-      className="w-10 h-10 object-contain"
+      alt="Bear Silver and Stone" 
+      className="w-6 h-6 object-contain"
     />
-    <h1 className="text-4xl font-black uppercase tracking-tighter text-slate-900">
-      The Vault
-    </h1>
+    <div className="flex flex-col items-start leading-none">
+      <h1 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">
+        The Vault
+      </h1>
+      <span className="text-[7px] font-black uppercase tracking-[0.2em] text-slate-400">
+        by Bear Silver and Stone
+      </span>
+    </div>
   </div>
-  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mt-2">
-    by Bear Silver and Stone
-  </p>
-</div>
-        {/* HEADER */}
-        <div className="flex justify-between items-center bg-white px-6 py-3 rounded-2xl border shadow-sm relative">
-          <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${user ? 'bg-green-500 animate-pulse' : 'bg-slate-300'}`}></div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-              {!user ? 'Vault Locked' : (user.is_anonymous ? 'Guest' : `User: ${user.email || 'Syncing...'}`)}
-            </p>
-          </div>
-          <div className="relative">
-            <div className="flex gap-4">
-              {(!user || user.is_anonymous) ? (
-                <button onClick={() => setShowAuth(!showAuth)} className="text-[10px] font-black uppercase bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
-                  Login / Sign Up
-                </button>
-              ) : (
-                <button onClick={async () => { await supabase.auth.signOut(); window.location.reload(); }} className="text-[10px] font-black uppercase bg-slate-100 px-4 py-2 rounded-lg hover:bg-slate-200 transition">
-                  Logout
-                </button>
-              )}
-            </div>
-            {showAuth && (
-              <div className="absolute right-0 mt-2 w-80 bg-white p-6 rounded-3xl border-2 border-blue-600 shadow-2xl z-[100] animate-in fade-in slide-in-from-top-2">
-                {isResetMode ? (
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-black uppercase text-center text-slate-800 tracking-tight">Reset Vault Access</h3>
-                    <p className="text-[10px] text-slate-400 font-bold text-center leading-tight uppercase">Enter your email and we'll send a secure link to reset your password.</p>
-                    {resetSent ? (
-                      <div className="bg-green-50 p-4 rounded-xl border border-green-100">
-                        <p className="text-[10px] text-green-600 font-black text-center uppercase leading-tight">Success! Check your inbox for the reset link.</p>
-                      </div>
-                    ) : (
-                      <form onSubmit={handleForgotPassword} className="space-y-3">
-                        <input type="email" placeholder="Email Address" className="w-full p-3 border rounded-xl text-sm outline-none focus:border-blue-500 transition" value={email} onChange={e => setEmail(e.target.value)} required />
-                        <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded-xl font-black text-xs uppercase hover:bg-blue-700 transition shadow-md">Send Reset Link</button>
-                      </form>
-                    )}
-                    <button onClick={() => { setIsResetMode(false); setResetSent(false); }} className="w-full text-[10px] font-black text-slate-400 uppercase hover:text-blue-600 transition">← Back to Login</button>
-                  </div>
-                ) : (
-                  <>
-                    <h3 className="text-sm font-black uppercase mb-4 text-slate-800 text-center tracking-tight">{isSignUp ? 'Create Vault Account' : 'save your vault'}</h3>
-                    <button onClick={loginWithGoogle} className="w-full flex items-center justify-center gap-3 bg-white border-2 border-slate-100 py-3 rounded-xl hover:bg-slate-50 transition mb-4 shadow-sm">
-                      <img src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png" className="w-4 h-4" alt="G" />
-                      <span className="text-[10px] font-black uppercase text-slate-700">Continue with Google</span>
-                    </button>
-                    <div className="flex items-center gap-2 mb-4">
-                      <div className="h-[1px] bg-slate-100 flex-1"></div>
-                      <span className="text-[9px] font-bold text-slate-300 uppercase">OR</span>
-                      <div className="h-[1px] bg-slate-100 flex-1"></div>
-                    </div>
-                    <form onSubmit={handleAuth} className="space-y-3">
-                      <input type="email" placeholder="Email" className="w-full p-3 border rounded-xl text-sm outline-none focus:border-blue-500 transition" value={email} onChange={e => setEmail(e.target.value)} required />
-                      <input type="password" placeholder="Password" className="w-full p-3 border rounded-xl text-sm outline-none focus:border-blue-500 transition" value={password} onChange={e => setPassword(e.target.value)} required />
-                      <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded-xl font-black text-xs uppercase hover:bg-blue-700 transition shadow-md">{isSignUp ? 'Confirm & Sync Data' : 'Login'}</button>
-                    </form>
-                    <div className="mt-6 flex flex-col gap-4 text-center">
-                      <p onClick={() => setIsSignUp(!isSignUp)} className="text-[11px] font-black text-blue-600 cursor-pointer uppercase tracking-wider hover:text-blue-800 transition">{isSignUp ? 'Already have an account? Login' : 'Need an account? Sign up'}</p>
-                      {!isSignUp && <p onClick={() => setIsResetMode(true)} className="text-[9px] font-bold text-slate-400 cursor-pointer uppercase hover:text-slate-600 transition tracking-widest">Forgot Password?</p>}
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
+
+  {/* RIGHT: STATUS & AUTH SECTION */}
+  <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto md:order-2">
+    
+    {/* STATUS (GUEST/USER) - Switched to right side */}
+    <div className="flex items-center gap-2 order-1 md:order-1">
+      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+        {!user ? 'Vault Locked' : (user.is_anonymous ? 'Guest' : `User: ${user.email?.split('@')[0]}`)}
+      </p>
+      <div className={`w-2 h-2 rounded-full ${user ? 'bg-green-500 animate-pulse' : 'bg-slate-300'}`}></div>
+    </div>
+
+    {/* AUTH BUTTON */}
+    <div className="relative w-full md:w-auto order-2 md:order-2">
+      {(!user || user.is_anonymous) ? (
+        <button 
+          onClick={() => setShowAuth(!showAuth)} 
+          className="w-full md:w-auto text-[10px] font-black uppercase bg-blue-600 text-white px-6 py-2.5 rounded-xl hover:bg-blue-700 transition shadow-sm"
+        >
+          Login / Sign Up
+        </button>
+      ) : (
+        <button 
+          onClick={async () => { await supabase.auth.signOut(); window.location.reload(); }} 
+          className="w-full md:w-auto text-[10px] font-black uppercase bg-slate-100 px-6 py-2.5 rounded-xl hover:bg-slate-200 transition"
+        >
+          Logout
+        </button>
+      )}
+
+      {/* AUTH DROPDOWN */}
+      {showAuth && (
+        <div className="absolute right-0 left-0 md:left-auto mt-4 w-full md:w-80 bg-white p-6 rounded-3xl border-2 border-blue-600 shadow-2xl z-[100] animate-in fade-in slide-in-from-top-2">
+          {/* ... Your existing Auth form logic ... */}
         </div>
+      )}
+    </div>
+  </div>
+</div>
 
         {/* TICKER */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
