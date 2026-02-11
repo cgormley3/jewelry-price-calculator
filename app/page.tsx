@@ -12,7 +12,8 @@ const UNIT_TO_GRAMS: { [key: string]: number } = {
 };
 
 export default function Home() {
-  const [prices, setPrices] = useState({ gold: 0, silver: 0, platinum: 0, palladium: 0 });
+  // Added lastUpdated to the state
+  const [prices, setPrices] = useState({ gold: 0, silver: 0, platinum: 0, palladium: 0, lastUpdated: null });
   const [itemName, setItemName] = useState('');
   const [metalList, setMetalList] = useState<{type: string, weight: number, unit: string}[]>([]);
   
@@ -163,17 +164,29 @@ export default function Home() {
     <div className="min-h-screen bg-slate-100 p-4 md:p-10 text-slate-900">
       <div className="max-w-7xl mx-auto space-y-6">
         
-        {/* TOP BAR: METAL PRICES - Optimized for Mobile (2x2) and Desktop (1x4) */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-          {Object.entries(prices).map(([name, p]) => (
-            <div key={name} className="bg-white p-3 md:p-4 rounded-xl border-l-4 border-blue-600 shadow-sm">
-              <p className="text-[9px] md:text-[10px] font-black uppercase text-slate-400">{name}</p>
-              <p className="text-lg md:text-xl font-bold">${p.toLocaleString()}</p>
-            </div>
-          ))}
+        {/* TOP BAR: METAL PRICES */}
+        <div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+            {Object.entries(prices).map(([name, p]) => {
+              if (name === 'lastUpdated') return null; // Don't render the timestamp as a card
+              return (
+                <div key={name} className="bg-white p-3 md:p-4 rounded-xl border-l-4 border-blue-600 shadow-sm">
+                  <p className="text-[9px] md:text-[10px] font-black uppercase text-slate-400">{name}</p>
+                  <p className="text-lg md:text-xl font-bold">${Number(p).toLocaleString()}</p>
+                </div>
+              );
+            })}
+          </div>
+          
+          {/* THE NEW LAST SYNCED LABEL */}
+          {prices.lastUpdated && (
+            <p className="text-[10px] font-bold text-slate-400 mt-3 uppercase tracking-widest text-right">
+              Last synced: {new Date(prices.lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </p>
+          )}
         </div>
 
-        {/* MAIN LAYOUT: Column on mobile, Row on larger screens */}
+        {/* MAIN LAYOUT */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8">
           
           {/* CALCULATOR COLUMN */}
@@ -269,56 +282,6 @@ export default function Home() {
                 </div>
               ))
             )}
-          </div>
-        </div>
-
-        {/* --- CALCULATION REFERENCE --- */}
-        <div className="space-y-6 opacity-80 hover:opacity-100 transition-opacity">
-          <div className="bg-white p-6 md:p-8 rounded-[1.5rem] md:rounded-[2rem] shadow-sm border border-slate-200">
-            <h2 className="text-lg md:text-xl font-black uppercase italic tracking-tighter mb-6 text-slate-800 underline decoration-blue-500 decoration-4 underline-offset-8">1. Material Calculation Detail</h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 md:gap-12">
-              <div className="space-y-6">
-                <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
-                  <h3 className="text-xs font-black text-blue-600 uppercase tracking-widest mb-4">The Logic</h3>
-                  <div className="font-mono text-sm space-y-2 bg-white p-4 rounded-xl border border-slate-200 text-center">
-                    <p className="text-blue-900 font-bold underline">Cost Calculation</p>
-                    <p className="text-[11px] mt-2">(Market Spot ÷ 31.1035) × Grams × Purity</p>
-                  </div>
-                </div>
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  Spot prices are converted from Troy Ounces to Grams. Then the purity percentage is applied to calculate the cost of the actual precious metal content.
-                </p>
-              </div>
-              <div className="bg-slate-50 p-6 rounded-2xl space-y-3">
-                <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest">Purity Constants Used:</h3>
-                <div className="grid grid-cols-2 gap-2 text-[9px] md:text-[10px] font-bold text-slate-500">
-                  <p>Sterling: 92.5%</p><p>24K Gold: 99.9%</p>
-                  <p>22K Gold: 91.6%</p><p>18K Gold: 75.0%</p>
-                  <p>14K Gold: 58.3%</p><p>10K Gold: 41.7%</p>
-                  <p>Plat 950: 95.0%</p><p>Palladium: 95.0%</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white p-6 md:p-8 rounded-[1.5rem] md:rounded-[2rem] shadow-sm border border-slate-200">
-            <h2 className="text-lg md:text-xl font-black uppercase italic tracking-tighter mb-6 text-slate-800 underline decoration-blue-500 decoration-4 underline-offset-8">2. Price Calculation Detail</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
-              <div className={`p-6 rounded-2xl border-2 transition-all ${strategy === 'A' ? 'border-blue-600 bg-blue-50' : 'bg-slate-50 border-transparent'}`}>
-                <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-2">Strategy A (Standard)</h3>
-                <div className="space-y-2 text-xs text-slate-700 font-bold">
-                  <p>Wholesale: Materials + Labor</p>
-                  <p className="text-blue-600">Retail: Wholesale × {retailMultA}</p>
-                </div>
-              </div>
-              <div className={`p-6 rounded-2xl border-2 transition-all ${strategy === 'B' ? 'border-blue-600 bg-blue-50' : 'bg-slate-50 border-transparent'}`}>
-                <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-2">Strategy B (Markup)</h3>
-                <div className="space-y-2 text-xs text-slate-700 font-bold">
-                  <p>Wholesale: (Materials × 1.8) + Labor</p>
-                  <p>Retail: Wholesale × 2</p>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </div>

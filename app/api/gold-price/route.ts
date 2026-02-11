@@ -1,47 +1,43 @@
 import { NextResponse } from 'next/server';
+import * as cheerio from 'cheerio';
 
 export async function GET() {
   try {
-    // Replace YOUR_API_KEY with your actual key if you have one
-    const API_KEY = 'goldapi-YOUR-KEY-HERE'; 
-    
-    const response = await fetch('https://www.goldapi.io/api/XAU/USD', {
-      headers: {
-        'x-access-token': API_KEY,
-        'Content-Type': 'application/json'
-      },
-      next: { revalidate: 3600 } // Cache for 1 hour
-    });
+    // We scrape Google Finance's public pages for Gold and Silver
+    // Gold Ticker: GCW00:COMEX | Silver Ticker: SIW00:COMEX
+    const goldUrl = 'https://www.google.com/finance/quote/GCW00:COMEX';
+    const silverUrl = 'https://www.google.com/finance/quote/SIW00:COMEX';
 
-    const data = await response.json();
+    const fetchPrice = async (url: string) => {
+      const res = await fetch(url, {
+        cache: 'no-store',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1'
+        }
+      });
+      const html = await res.text();
+      const $ = cheerio.load(html);
+      // This is the specific class Google uses for the "Last Price"
+      const priceText = $('.YMlKec.fxKbKc').first().text().replace(/[^0-9.]/g, '');
+      return parseFloat(priceText);
+    };
 
-    // If the external API fails, we return these fallback prices 
-    // so your app doesn't show blank/zeroes
-    if (!data.price) {
-      console.log("API limit reached or error, using fallback prices.");
+    const gold = await fetchPrice(goldUrl);
+    const silver = await fetchPrice(silverUrl);
+
+    if (gold > 0) {
       return NextResponse.json({
-        gold: 2045.50,
-        silver: 81.15,
-        platinum: 895.00,
-        palladium: 1040.00
+        gold,
+        silver,
+        platinum: 965.00, // Google Finance doesn't always show spot Plat/Pall easily
+        palladium: 1020.00,
+        lastUpdated: new Date().toISOString()
       });
     }
 
-    // Map the external data to your app's format
-    return NextResponse.json({
-      gold: data.price,
-      silver: 23.15,    // You can add more fetch calls for these
-      platinum: 895.00,
-      palladium: 1040.00
-    });
+    throw new Error("Google blocked the request or selector changed");
 
   } catch (error) {
-    // If everything crashes, return safe default numbers
-    return NextResponse.json({
-      gold: 2000,
-      silver: 23,
-      platinum: 900,
-      palladium: 1000
-    });
+    return NextResponse.json({ error: "Stealth Scraping Failed" }, { status: 500 });
   }
 }

@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/gold-price",
+      "schedule": "0 * * * *"
+    }
+  ]
+}
