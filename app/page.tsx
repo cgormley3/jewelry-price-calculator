@@ -5,7 +5,6 @@ import autoTable from 'jspdf-autotable';
 import { supabase } from '../lib/supabase';
 import { Turnstile } from '@marsidev/react-turnstile';
 
-
 const UNIT_TO_GRAMS: { [key: string]: number } = {
   "Grams": 1,
   "Pennyweights (dwt)": 1.55517,
@@ -22,24 +21,20 @@ export default function Home() {
   const [tempMetal, setTempMetal] = useState('Sterling Silver');
   const [tempWeight, setTempWeight] = useState(0);
   const [tempUnit, setTempUnit] = useState('Ounces (std)');
-
   const [token, setToken] = useState<string | null>(null);
-
   const [hours, setHours] = useState<number | ''>('');
   const [rate, setRate] = useState<number | ''>('');
   const [otherCosts, setOtherCosts] = useState<number | ''>('');
-
   const [strategy, setStrategy] = useState<'A' | 'B'>('A');
   const [retailMultA, setRetailMultA] = useState(3);
-
   const [inventory, setInventory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
-
   const [showAuth, setShowAuth] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
+  const [markupB, setMarkupB] = useState(1.8);
 
   useEffect(() => {
     async function initSession() {
@@ -50,7 +45,6 @@ export default function Home() {
       } else {
         setUser(session.user);
       }
-
       try {
         const res = await fetch('/api/gold-price');
         const priceData = await res.json();
@@ -61,7 +55,6 @@ export default function Home() {
       fetchInventory();
     }
     initSession();
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
       if (session) fetchInventory();
@@ -80,7 +73,6 @@ export default function Home() {
       .select('*')
       .eq('user_id', currentUserId)
       .order('created_at', { ascending: false });
-
     if (!error && data) setInventory(data);
     setLoading(false);
   }
@@ -101,34 +93,12 @@ export default function Home() {
     }
   };
 
-  const handleSave = async () => {
-    if (!token) {
-      alert("Please verify you are human first!");
-      return;
-    }
-    addToInventory();
-  };
-
   const loginWithGoogle = async () => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: {
-        redirectTo: window.location.origin,
-      },
+      options: { redirectTo: window.location.origin },
     });
     if (error) alert(error.message);
-  };
-
-  const handleResetPassword = async () => {
-    if (!email || email.trim() === "") {
-      alert("Please type your email address into the Email field first.");
-      return;
-    }
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
-    if (error) alert(error.message);
-    else alert(`Success! Reset link sent to ${email}.`);
   };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
@@ -136,26 +106,21 @@ export default function Home() {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/reset-password`,
     });
-
-    if (error) {
-      alert(error.message);
-    } else {
-      setResetSent(true);
-    }
+    if (error) alert(error.message);
+    else setResetSent(true);
   };
+
   const calculateFullBreakdown = (metals: any[], h: any, r: any, o: any) => {
     let rawMaterialCost = 0;
     const numH = Number(h) || 0;
     const numR = Number(r) || 0;
     const numO = Number(o) || 0;
-
     metals.forEach(m => {
       let spot = 0;
       if (m.type.includes('Gold')) spot = prices.gold;
       else if (m.type.includes('Silver')) spot = prices.silver;
       else if (m.type.includes('Platinum')) spot = prices.platinum;
       else if (m.type.includes('Palladium')) spot = prices.palladium;
-
       const purities: any = {
         '10K Gold': 0.417, '14K Gold': 0.583, '18K Gold': 0.750,
         '22K Gold': 0.916, '24K Gold': 0.999, 'Sterling Silver': 0.925,
@@ -164,14 +129,12 @@ export default function Home() {
       const purity = purities[m.type] || 1.0;
       rawMaterialCost += (spot / 31.1035) * (m.weight * UNIT_TO_GRAMS[m.unit]) * purity;
     });
-
     const totalMaterials = rawMaterialCost + numO;
     const labor = numH * numR;
     const wholesaleA = totalMaterials + labor;
     const retailA = wholesaleA * retailMultA;
-    const wholesaleB = (totalMaterials * 1.8) + labor;
+    const wholesaleB = (totalMaterials * markupB) + labor;
     const retailB = wholesaleB * 2;
-
     return { wholesaleA, retailA, wholesaleB, retailB, totalMaterials, labor };
   };
 
@@ -214,7 +177,7 @@ export default function Home() {
       setHours('');
       setRate('');
       setOtherCosts('');
-      setToken(null); 
+      setToken(null);
     }
   };
 
@@ -241,17 +204,11 @@ export default function Home() {
           <div className="relative">
             <div className="flex gap-4">
               {(!user || user.is_anonymous) ? (
-                <button
-                  onClick={() => setShowAuth(!showAuth)}
-                  className="text-[10px] font-black uppercase bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
-                >
+                <button onClick={() => setShowAuth(!showAuth)} className="text-[10px] font-black uppercase bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
                   Login / Sign Up
                 </button>
               ) : (
-                <button
-                  onClick={async () => { await supabase.auth.signOut(); window.location.reload(); }}
-                  className="text-[10px] font-black uppercase bg-slate-100 px-4 py-2 rounded-lg hover:bg-slate-200 transition"
-                >
+                <button onClick={async () => { await supabase.auth.signOut(); window.location.reload(); }} className="text-[10px] font-black uppercase bg-slate-100 px-4 py-2 rounded-lg hover:bg-slate-200 transition">
                   Logout
                 </button>
               )}
@@ -261,46 +218,23 @@ export default function Home() {
                 {isResetMode ? (
                   <div className="space-y-4">
                     <h3 className="text-sm font-black uppercase text-center text-slate-800 tracking-tight">Reset Vault Access</h3>
-                    <p className="text-[10px] text-slate-400 font-bold text-center leading-tight uppercase">
-                      Enter your email and we'll send a secure link to reset your password.
-                    </p>
+                    <p className="text-[10px] text-slate-400 font-bold text-center leading-tight uppercase">Enter your email and we'll send a secure link to reset your password.</p>
                     {resetSent ? (
                       <div className="bg-green-50 p-4 rounded-xl border border-green-100">
-                        <p className="text-[10px] text-green-600 font-black text-center uppercase leading-tight">
-                          Success! Check your inbox for the reset link.
-                        </p>
+                        <p className="text-[10px] text-green-600 font-black text-center uppercase leading-tight">Success! Check your inbox for the reset link.</p>
                       </div>
                     ) : (
                       <form onSubmit={handleForgotPassword} className="space-y-3">
-                        <input
-                          type="email"
-                          placeholder="Email Address"
-                          className="w-full p-3 border rounded-xl text-sm outline-none focus:border-blue-500 transition"
-                          value={email}
-                          onChange={e => setEmail(e.target.value)}
-                          required
-                        />
-                        <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded-xl font-black text-xs uppercase hover:bg-blue-700 transition shadow-md">
-                          Send Reset Link
-                        </button>
+                        <input type="email" placeholder="Email Address" className="w-full p-3 border rounded-xl text-sm outline-none focus:border-blue-500 transition" value={email} onChange={e => setEmail(e.target.value)} required />
+                        <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded-xl font-black text-xs uppercase hover:bg-blue-700 transition shadow-md">Send Reset Link</button>
                       </form>
                     )}
-                    <button
-                      onClick={() => { setIsResetMode(false); setResetSent(false); }}
-                      className="w-full text-[10px] font-black text-slate-400 uppercase hover:text-blue-600 transition"
-                    >
-                      ← Back to Login
-                    </button>
+                    <button onClick={() => { setIsResetMode(false); setResetSent(false); }} className="w-full text-[10px] font-black text-slate-400 uppercase hover:text-blue-600 transition">← Back to Login</button>
                   </div>
                 ) : (
                   <>
-                    <h3 className="text-sm font-black uppercase mb-4 text-slate-800 text-center tracking-tight">
-                      {isSignUp ? 'Create Vault Account' : 'save your vault'}
-                    </h3>
-                    <button
-                      onClick={loginWithGoogle}
-                      className="w-full flex items-center justify-center gap-3 bg-white border-2 border-slate-100 py-3 rounded-xl hover:bg-slate-50 transition mb-4 shadow-sm"
-                    >
+                    <h3 className="text-sm font-black uppercase mb-4 text-slate-800 text-center tracking-tight">{isSignUp ? 'Create Vault Account' : 'save your vault'}</h3>
+                    <button onClick={loginWithGoogle} className="w-full flex items-center justify-center gap-3 bg-white border-2 border-slate-100 py-3 rounded-xl hover:bg-slate-50 transition mb-4 shadow-sm">
                       <img src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png" className="w-4 h-4" alt="G" />
                       <span className="text-[10px] font-black uppercase text-slate-700">Continue with Google</span>
                     </button>
@@ -310,41 +244,13 @@ export default function Home() {
                       <div className="h-[1px] bg-slate-100 flex-1"></div>
                     </div>
                     <form onSubmit={handleAuth} className="space-y-3">
-                      <input
-                        type="email"
-                        placeholder="Email"
-                        className="w-full p-3 border rounded-xl text-sm outline-none focus:border-blue-500 transition"
-                        value={email}
-                        onChange={e => setEmail(e.target.value)}
-                        required
-                      />
-                      <input
-                        type="password"
-                        placeholder="Password"
-                        className="w-full p-3 border rounded-xl text-sm outline-none focus:border-blue-500 transition"
-                        value={password}
-                        onChange={e => setPassword(e.target.value)}
-                        required
-                      />
-                      <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded-xl font-black text-xs uppercase hover:bg-blue-700 transition shadow-md">
-                        {isSignUp ? 'Confirm & Sync Data' : 'Login'}
-                      </button>
+                      <input type="email" placeholder="Email" className="w-full p-3 border rounded-xl text-sm outline-none focus:border-blue-500 transition" value={email} onChange={e => setEmail(e.target.value)} required />
+                      <input type="password" placeholder="Password" className="w-full p-3 border rounded-xl text-sm outline-none focus:border-blue-500 transition" value={password} onChange={e => setPassword(e.target.value)} required />
+                      <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded-xl font-black text-xs uppercase hover:bg-blue-700 transition shadow-md">{isSignUp ? 'Confirm & Sync Data' : 'Login'}</button>
                     </form>
                     <div className="mt-6 flex flex-col gap-4 text-center">
-                      <p
-                        onClick={() => setIsSignUp(!isSignUp)}
-                        className="text-[11px] font-black text-blue-600 cursor-pointer uppercase tracking-wider hover:text-blue-800 transition"
-                      >
-                        {isSignUp ? 'Already have an account? Login' : 'Need an account? Sign up'}
-                      </p>
-                      {!isSignUp && (
-                        <p
-                          onClick={() => setIsResetMode(true)}
-                          className="text-[9px] font-bold text-slate-400 cursor-pointer uppercase hover:text-slate-600 transition tracking-widest"
-                        >
-                          Forgot Password?
-                        </p>
-                      )}
+                      <p onClick={() => setIsSignUp(!isSignUp)} className="text-[11px] font-black text-blue-600 cursor-pointer uppercase tracking-wider hover:text-blue-800 transition">{isSignUp ? 'Already have an account? Login' : 'Need an account? Sign up'}</p>
+                      {!isSignUp && <p onClick={() => setIsResetMode(true)} className="text-[9px] font-bold text-slate-400 cursor-pointer uppercase hover:text-slate-600 transition tracking-widest">Forgot Password?</p>}
                     </div>
                   </>
                 )}
@@ -360,22 +266,16 @@ export default function Home() {
             .map(([name, p]) => (
               <div key={name} className="bg-white p-4 rounded-xl border-l-4 border-blue-600 shadow-sm text-center lg:text-left">
                 <p className="text-[10px] font-black uppercase text-slate-400">{name}</p>
-                <p className="text-xl font-bold">
-                  {p !== null
-                    ? `$${Number(p).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                    : "--.--"}
-                </p>
+                <p className="text-xl font-bold">{p !== null ? `$${Number(p).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "--.--"}</p>
               </div>
             ))}
         </div>
 
-        {/* MAIN CALCULATOR UI */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           <div className="lg:col-span-5 space-y-6">
             <div className="bg-white p-8 rounded-[2rem] shadow-xl space-y-5">
               <h2 className="text-2xl font-black uppercase italic tracking-tighter">Jewelry Calculator</h2>
               <input placeholder="Product Name" className="w-full p-4 bg-slate-50 border rounded-2xl outline-none" value={itemName} onChange={e => setItemName(e.target.value)} />
-
               <div className="p-4 bg-slate-50 rounded-2xl border-2 border-dotted border-slate-300 space-y-3">
                 <select className="w-full p-3 border rounded-xl font-bold bg-white" value={tempMetal} onChange={e => setTempMetal(e.target.value)}>
                   <option>Sterling Silver</option><option>10K Gold</option><option>14K Gold</option><option>18K Gold</option><option>22K Gold</option><option>24K Gold</option><option>Platinum 950</option><option>Palladium</option>
@@ -394,15 +294,13 @@ export default function Home() {
                   </div>
                 ))}
               </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <input type="number" placeholder="Labor $/hr" className="p-3 border rounded-xl" value={rate} onChange={e => setRate(e.target.value === '' ? '' : Number(e.target.value))} />
                 <input type="number" placeholder="Hours" className="p-3 border rounded-xl" value={hours} onChange={e => setHours(e.target.value === '' ? '' : Number(e.target.value))} />
               </div>
-              <input type="number" placeholder="Other Costs ($)" className="w-full p-3 border rounded-xl" value={otherCosts} onChange={e => setOtherCosts(e.target.value === '' ? '' : Number(e.target.value))} />
+              <input type="number" placeholder="Stones/Other Costs ($)" className="w-full p-3 border rounded-xl" value={otherCosts} onChange={e => setOtherCosts(e.target.value === '' ? '' : Number(e.target.value))} />
 
               <div className="mt-4 flex flex-col items-center gap-4">
-                
                 <div className="w-full p-4 rounded-xl bg-stone-100 border border-stone-200 space-y-3">
                   <div className="flex justify-between items-center py-2 border-b border-stone-200">
                     <span className="text-stone-600">Materials Total</span>
@@ -426,34 +324,46 @@ export default function Home() {
                       </div>
                     </div>
                   </button>
-
-                  <button onClick={() => setStrategy('B')} className={`flex flex-col p-4 rounded-2xl border-2 text-left ${strategy === 'B' ? 'border-blue-600 bg-blue-50' : 'border-slate-100'}`}>
+                  <button
+                    onClick={() => setStrategy('B')}
+                    className={`flex flex-col p-4 rounded-2xl border-2 text-left ${strategy === 'B' ? 'border-blue-600 bg-blue-50' : 'border-slate-100'}`}
+                  >
                     <p className="text-[10px] font-black opacity-50 uppercase tracking-tighter mb-1">Strategy B</p>
                     <p className="text-xl font-black mb-3">${b.retailB.toFixed(2)}</p>
                     <div className="mt-auto space-y-1">
-                      <p className="text-[8px] font-bold text-blue-600 uppercase italic">Wholesale: (M × 1.8) + L</p>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[8px] font-bold text-blue-600 uppercase italic">Wholesale: (M ×</span>
+                        <input
+                          type="number"
+                          step="0.1"
+                          className="w-10 bg-white border rounded text-[10px] font-black text-blue-600 px-1"
+                          value={markupB}
+                          onChange={(e) => setMarkupB(Number(e.target.value))}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <span className="text-[8px] font-bold text-blue-600 uppercase italic">) + L</span>
+                      </div>
                       <p className="text-[8px] font-bold text-slate-400 uppercase">Retail: Wholesale × 2</p>
                     </div>
                   </button>
                 </div>
 
-                {/* THE HUMAN CHECK - MOVED BELOW PRICES */}
-                <div className="bg-stone-50 p-4 rounded-2xl w-full flex flex-col items-center gap-4 border">
-                  <Turnstile
-                    siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
-                    onSuccess={(token) => setToken(token)}
-                    options={{ theme: 'light' }}
-                  />
-                  
+                {/* THE SINGLE AUTO-EXPANDING CONTAINER */}
+                <div className="bg-stone-50 p-4 rounded-2xl w-full flex flex-col items-center border transition-all duration-300">
                   <button
                     onClick={addToInventory}
                     disabled={!token}
-                    className={`w-full p-4 rounded-xl font-black uppercase transition-all shadow-md ${
-                      !token ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700 active:scale-95'
-                    }`}
+                    className={`w-full p-4 rounded-xl font-black uppercase transition-all shadow-md ${!token ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700 active:scale-95'}`}
                   >
                     {token ? "Save to Vault" : "Verifying Human..."}
                   </button>
+                  <div className={`w-full flex justify-center h-auto overflow-hidden ${!token ? 'mt-4' : 'mt-0'}`}>
+                    <Turnstile
+                      siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
+                      onSuccess={(token) => setToken(token)}
+                      options={{ theme: 'light', appearance: 'interaction-only' }}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -520,40 +430,56 @@ export default function Home() {
             </div>
           </div>
 
+          {/* 2. PRICE STRATEGY DETAIL */}
           <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200">
             <h2 className="text-xl font-black uppercase italic tracking-tighter mb-6 text-slate-800 underline decoration-blue-500 decoration-4 underline-offset-8">
               2. PRICE STRATEGY DETAIL
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+
+              {/* STRATEGY A DETAIL */}
               <div className={`p-6 rounded-2xl border-2 transition-all ${strategy === 'A' ? 'border-blue-600 bg-blue-50' : 'bg-slate-50 border-transparent'}`}>
                 <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-2">STRATEGY A (STANDARD MULTIPLIER)</h3>
                 <div className="space-y-2 text-xs text-slate-700">
                   <p><strong>Wholesale:</strong> Materials + Labor</p>
                   <p><strong>Retail:</strong> Wholesale × {retailMultA}</p>
+
+                  {/* Added Industry Benchmark Text */}
+                  <div className="mt-4 p-3 bg-white/50 rounded-xl border border-blue-100">
+                    <p className="text-[10px] text-slate-500 leading-relaxed">
+                      <span className="font-black text-blue-600 uppercase text-[8px] block mb-1">Industry Standard:</span>
+                      Standard industry retail markup is typically 2.0 to 3.0 times the wholesale cost.
+                    </p>
+                  </div>
                 </div>
               </div>
+
+              {/* STRATEGY B DETAIL */}
               <div className={`p-6 rounded-2xl border-2 transition-all ${strategy === 'B' ? 'border-blue-600 bg-blue-50' : 'bg-slate-50 border-transparent'}`}>
                 <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-2">STRATEGY B (MATERIALS MARKUP)</h3>
                 <div className="space-y-2 text-xs text-slate-700">
-                  <p><strong>Wholesale:</strong> (Materials × 1.8) + Labor</p>
+                  <p><strong>Wholesale:</strong> (Materials × {markupB}) + Labor</p>
                   <p><strong>Retail:</strong> Wholesale × 2</p>
+
+                  {/* Added Industry Benchmark Text */}
+                  <div className="mt-4 p-3 bg-white/50 rounded-xl border border-blue-100">
+                    <p className="text-[10px] text-slate-500 leading-relaxed">
+                      <span className="font-black text-blue-600 uppercase text-[8px] block mb-1">Industry Standard:</span>
+                      A production markup of 1.5 to 1.8 is standard to account for metal loss, consumables, and market volatility.
+                    </p>
+                  </div>
                 </div>
               </div>
+
             </div>
           </div>
         </div>
 
-        {/* TIMESTAMP FOOTER */}
         {prices.updated_at ? (
-          <p className="text-center text-slate-400 text-[10px] font-bold uppercase tracking-widest py-6">
-            Live Market Sync: {new Date(prices.updated_at).toLocaleString()}
-          </p>
+          <p className="text-center text-slate-400 text-[10px] font-bold uppercase tracking-widest py-6">Live Market Sync: {new Date(prices.updated_at).toLocaleString()}</p>
         ) : (
-          <p className="text-center text-slate-400 text-[10px] font-bold uppercase tracking-widest py-6 animate-pulse">
-            Syncing with London Bullion Market...
-          </p>
+          <p className="text-center text-slate-400 text-[10px] font-bold uppercase tracking-widest py-6 animate-pulse">Syncing with London Bullion Market...</p>
         )}
-
       </div>
     </div>
   );
