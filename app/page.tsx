@@ -160,23 +160,25 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 p-10 text-slate-900">
+    <div className="min-h-screen bg-slate-100 p-4 md:p-10 text-slate-900">
       <div className="max-w-7xl mx-auto space-y-6">
         
-        {/* TOP BAR: METAL PRICES */}
-        <div className="grid grid-cols-4 gap-4">
+        {/* TOP BAR: METAL PRICES - Optimized for Mobile (2x2) and Desktop (1x4) */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
           {Object.entries(prices).map(([name, p]) => (
-            <div key={name} className="bg-white p-4 rounded-xl border-l-4 border-blue-600 shadow-sm">
-              <p className="text-[10px] font-black uppercase text-slate-400">{name}</p>
-              <p className="text-xl font-bold">${p.toLocaleString()}</p>
+            <div key={name} className="bg-white p-3 md:p-4 rounded-xl border-l-4 border-blue-600 shadow-sm">
+              <p className="text-[9px] md:text-[10px] font-black uppercase text-slate-400">{name}</p>
+              <p className="text-lg md:text-xl font-bold">${p.toLocaleString()}</p>
             </div>
           ))}
         </div>
 
-        <div className="grid grid-cols-12 gap-8">
+        {/* MAIN LAYOUT: Column on mobile, Row on larger screens */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8">
+          
           {/* CALCULATOR COLUMN */}
-          <div className="col-span-5 bg-white p-8 rounded-[2rem] shadow-xl space-y-5">
-            <h2 className="text-2xl font-black uppercase italic tracking-tighter">Calculator</h2>
+          <div className="lg:col-span-5 bg-white p-6 md:p-8 rounded-[1.5rem] md:rounded-[2rem] shadow-xl space-y-5">
+            <h2 className="text-xl md:text-2xl font-black uppercase italic tracking-tighter">Calculator</h2>
             <input placeholder="Product Name" className="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:ring-2 focus:ring-blue-500" value={itemName} onChange={e => setItemName(e.target.value)} />
             
             <div className="p-4 bg-slate-50 rounded-2xl border-2 border-dotted border-slate-300 space-y-3">
@@ -210,7 +212,7 @@ export default function Home() {
             <div className="grid grid-cols-2 gap-4">
               <button onClick={() => setStrategy('A')} className={`p-4 rounded-2xl border-2 text-left relative transition-all ${strategy === 'A' ? 'border-blue-600 bg-blue-50' : 'border-slate-100 hover:border-slate-300'}`}>
                 <p className="text-[10px] font-black">STRATEGY A</p>
-                <p className="text-xl font-black">${b.retailA.toFixed(2)}</p>
+                <p className="text-lg md:text-xl font-black">${b.retailA.toFixed(2)}</p>
                 <div className="flex items-center gap-1 mt-1" onClick={(e) => e.stopPropagation()}>
                     <span className="text-[9px] font-bold text-slate-400 uppercase">Mult: x</span>
                     <input 
@@ -223,7 +225,7 @@ export default function Home() {
               </button>
               <button onClick={() => setStrategy('B')} className={`p-4 rounded-2xl border-2 text-left transition-all ${strategy === 'B' ? 'border-blue-600 bg-blue-50' : 'border-slate-100 hover:border-slate-300'}`}>
                 <p className="text-[10px] font-black">STRATEGY B</p>
-                <p className="text-xl font-black">${b.retailB.toFixed(2)}</p>
+                <p className="text-lg md:text-xl font-black">${b.retailB.toFixed(2)}</p>
                 <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase">Mat x1.8 | Ret x2</p>
               </button>
             </div>
@@ -231,13 +233,13 @@ export default function Home() {
           </div>
 
           {/* INVENTORY COLUMN */}
-          <div className="col-span-7 space-y-4">
-            <div className="flex justify-between items-center">
+          <div className="lg:col-span-7 space-y-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-0">
               <h2 className="text-xl font-black uppercase tracking-tight">Inventory</h2>
               <button 
                 onClick={exportToPDF}
                 disabled={inventory.length === 0}
-                className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase transition ${
+                className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase transition w-full sm:w-auto ${
                   inventory.length === 0 ? 'bg-slate-200 text-slate-400 cursor-not-allowed border border-slate-300' : 'bg-green-600 text-white hover:bg-green-700 shadow-md active:scale-95'
                 }`}
               >
@@ -248,20 +250,20 @@ export default function Home() {
             {loading ? (
               <div className="p-20 text-center animate-pulse text-slate-400 font-bold uppercase tracking-widest">Connecting to Database...</div>
             ) : inventory.length === 0 ? (
-              <div className="bg-white p-12 rounded-[2rem] border-2 border-dotted text-center text-slate-400 font-bold">No items saved in database yet.</div>
+              <div className="bg-white p-12 rounded-[1.5rem] md:rounded-[2rem] border-2 border-dotted text-center text-slate-400 font-bold">No items saved in database yet.</div>
             ) : (
               inventory.map(item => (
-                <div key={item.id} className="bg-white p-6 rounded-[2rem] border shadow-sm flex justify-between items-center hover:shadow-md transition-shadow">
-                  <div>
-                    <p className="text-xl font-black">{item.name}</p>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                <div key={item.id} className="bg-white p-5 md:p-6 rounded-[1.5rem] md:rounded-[2rem] border shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:shadow-md transition-shadow">
+                  <div className="w-full sm:w-auto">
+                    <p className="text-lg md:text-xl font-black">{item.name}</p>
+                    <p className="text-[9px] md:text-[10px] text-slate-400 font-bold uppercase tracking-widest">
                       {new Date(item.created_at).toLocaleString()} | Strategy {item.strategy}
                     </p>
                     <button onClick={() => deleteInventoryItem(item.id)} className="mt-2 text-[9px] font-bold text-red-400 uppercase hover:text-red-600 transition">[ Delete ]</button>
                   </div>
-                  <div className="text-right">
-                    <p className="text-[10px] font-black text-blue-600 uppercase">Retail Price</p>
-                    <p className="text-3xl font-black text-slate-900">${Number(item.retail).toFixed(2)}</p>
+                  <div className="w-full sm:text-right">
+                    <p className="text-[9px] md:text-[10px] font-black text-blue-600 uppercase">Retail Price</p>
+                    <p className="text-2xl md:text-3xl font-black text-slate-900">${Number(item.retail).toFixed(2)}</p>
                     <p className="text-[9px] font-bold text-slate-400 uppercase">Wholesale: ${Number(item.wholesale).toFixed(2)}</p>
                   </div>
                 </div>
@@ -272,9 +274,9 @@ export default function Home() {
 
         {/* --- CALCULATION REFERENCE --- */}
         <div className="space-y-6 opacity-80 hover:opacity-100 transition-opacity">
-          <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200">
-            <h2 className="text-xl font-black uppercase italic tracking-tighter mb-6 text-slate-800 underline decoration-blue-500 decoration-4 underline-offset-8">1. Material Calculation Detail</h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+          <div className="bg-white p-6 md:p-8 rounded-[1.5rem] md:rounded-[2rem] shadow-sm border border-slate-200">
+            <h2 className="text-lg md:text-xl font-black uppercase italic tracking-tighter mb-6 text-slate-800 underline decoration-blue-500 decoration-4 underline-offset-8">1. Material Calculation Detail</h2>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 md:gap-12">
               <div className="space-y-6">
                 <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
                   <h3 className="text-xs font-black text-blue-600 uppercase tracking-widest mb-4">The Logic</h3>
@@ -289,7 +291,7 @@ export default function Home() {
               </div>
               <div className="bg-slate-50 p-6 rounded-2xl space-y-3">
                 <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest">Purity Constants Used:</h3>
-                <div className="grid grid-cols-2 gap-2 text-[10px] font-bold text-slate-500">
+                <div className="grid grid-cols-2 gap-2 text-[9px] md:text-[10px] font-bold text-slate-500">
                   <p>Sterling: 92.5%</p><p>24K Gold: 99.9%</p>
                   <p>22K Gold: 91.6%</p><p>18K Gold: 75.0%</p>
                   <p>14K Gold: 58.3%</p><p>10K Gold: 41.7%</p>
@@ -299,9 +301,9 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200">
-            <h2 className="text-xl font-black uppercase italic tracking-tighter mb-6 text-slate-800 underline decoration-blue-500 decoration-4 underline-offset-8">2. Price Calculation Detail</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="bg-white p-6 md:p-8 rounded-[1.5rem] md:rounded-[2rem] shadow-sm border border-slate-200">
+            <h2 className="text-lg md:text-xl font-black uppercase italic tracking-tighter mb-6 text-slate-800 underline decoration-blue-500 decoration-4 underline-offset-8">2. Price Calculation Detail</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
               <div className={`p-6 rounded-2xl border-2 transition-all ${strategy === 'A' ? 'border-blue-600 bg-blue-50' : 'bg-slate-50 border-transparent'}`}>
                 <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-2">Strategy A (Standard)</h3>
                 <div className="space-y-2 text-xs text-slate-700 font-bold">
