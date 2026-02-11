@@ -165,8 +165,8 @@ export default function Home() {
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8">
           
-          {/* CALCULATOR SIDE */}
-          <div className="lg:col-span-5 space-y-5">
+          {/* CALCULATOR SIDE (Left) */}
+          <div className="lg:col-span-5 space-y-6">
             <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-xl space-y-5">
               <h2 className="text-xl md:text-2xl font-black uppercase italic tracking-tighter">Jewelry Calculator</h2>
               <input placeholder="Product Name" className="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:ring-2 focus:ring-blue-500" value={itemName} onChange={e => setItemName(e.target.value)} />
@@ -216,9 +216,28 @@ export default function Home() {
               </div>
               <button onClick={addToInventory} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black shadow-lg hover:bg-blue-700 active:scale-95 transition-all">PUSH TO INVENTORY</button>
             </div>
+
+            {/* REAL-TIME COST BREAKDOWN (Stacks above inventory on mobile) */}
+            <div className="bg-white border-2 border-blue-600 p-8 rounded-[2rem] shadow-2xl relative overflow-hidden">
+               <h3 className="text-sm font-black uppercase tracking-widest text-slate-900 mb-6">Real-Time Cost Breakdown</h3>
+               <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold uppercase text-slate-400">Pure Materials</p>
+                    <p className="text-2xl font-black text-slate-900">${b.totalMaterials.toFixed(2)}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold uppercase text-slate-400">Bench Labor</p>
+                    <p className="text-2xl font-black text-slate-900">${b.labor.toFixed(2)}</p>
+                  </div>
+                  <div className="bg-slate-50 p-4 rounded-2xl border flex flex-col justify-center text-center">
+                    <p className="text-[10px] font-black uppercase text-blue-600">Projected Margin</p>
+                    <p className="text-2xl font-black text-slate-900">${(activeRetail - activeWholesale).toFixed(2)}</p>
+                  </div>
+               </div>
+            </div>
           </div>
 
-          {/* INVENTORY SIDE */}
+          {/* INVENTORY SIDE (Right) */}
           <div className="lg:col-span-7 space-y-6">
             <div className="flex justify-between items-center bg-white px-6 py-4 rounded-2xl border shadow-sm">
               <h2 className="text-lg font-black uppercase tracking-tight">Active Inventory</h2>
@@ -255,26 +274,6 @@ export default function Home() {
                   </div>
                 ))
               )}
-            </div>
-
-            {/* COST ANALYSIS BLOCK */}
-            <div className="bg-white border-2 border-blue-600 p-8 rounded-[2rem] shadow-2xl relative overflow-hidden">
-               <div className="absolute top-0 right-0 bg-blue-600 text-white px-4 py-1 text-[9px] font-black uppercase tracking-widest">Live Analysis</div>
-               <h3 className="text-sm font-black uppercase tracking-widest text-slate-900 mb-6">Real-Time Cost Breakdown</h3>
-               <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-bold uppercase text-slate-400">Pure Materials</p>
-                    <p className="text-2xl font-black text-slate-900">${b.totalMaterials.toFixed(2)}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-bold uppercase text-slate-400">Bench Labor</p>
-                    <p className="text-2xl font-black text-slate-900">${b.labor.toFixed(2)}</p>
-                  </div>
-                  <div className="bg-slate-50 p-4 rounded-2xl border flex flex-col justify-center text-center">
-                    <p className="text-[10px] font-black uppercase text-blue-600">Projected Margin</p>
-                    <p className="text-2xl font-black text-slate-900">${(activeRetail - activeWholesale).toFixed(2)}</p>
-                  </div>
-               </div>
             </div>
           </div>
         </div>
