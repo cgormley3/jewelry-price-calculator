@@ -21,6 +21,7 @@ export default function Home() {
   const [tempWeight, setTempWeight] = useState(0);
   const [tempUnit, setTempUnit] = useState('Ounces (std)');
 
+
   const [hours, setHours] = useState<number | ''>('');
   const [rate, setRate] = useState<number | ''>('');
   const [otherCosts, setOtherCosts] = useState<number | ''>('');
@@ -200,6 +201,7 @@ export default function Home() {
       setItemName('');
       setMetalList([]);
       setHours('');
+      setRate('');
       setOtherCosts('');
     }
   };
@@ -400,6 +402,21 @@ export default function Home() {
                 <input type="number" placeholder="Hours" className="p-3 border rounded-xl" value={hours} onChange={e => setHours(e.target.value === '' ? '' : Number(e.target.value))} />
               </div>
               <input type="number" placeholder="Other Costs ($)" className="w-full p-3 border rounded-xl" value={otherCosts} onChange={e => setOtherCosts(e.target.value === '' ? '' : Number(e.target.value))} />
+
+              {/* RE-ADDED WORKSHOP BREAKDOWN SECTION */}
+              {/* RE-ADDED WORKSHOP BREAKDOWN SECTION */}
+              <div className="mt-6 p-4 rounded-xl bg-stone-100 border border-stone-200 space-y-3">
+
+                <div className="flex justify-between items-center py-2 border-b border-stone-200">
+                  <span className="text-stone-600">Materials Total</span>
+                  <span className="font-medium text-stone-800">${b.totalMaterials.toFixed(2)}</span>
+                </div>
+
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-stone-600">Labor Total ({hours || 0}h @ ${rate || 0}/hr)</span>
+                  <span className="font-medium text-stone-800">${b.labor.toFixed(2)}</span>
+                </div>
+              </div>
 
               <div className="grid grid-cols-2 gap-4 items-stretch">
                 <button onClick={() => setStrategy('A')} className={`flex flex-col p-4 rounded-2xl border-2 text-left ${strategy === 'A' ? 'border-blue-600 bg-blue-50' : 'border-slate-100'}`}>
