@@ -16,7 +16,7 @@ export default function Home() {
   const [prices, setPrices] = useState<any>({ gold: null, silver: null, platinum: null, palladium: null, updated_at: null });
   const [itemName, setItemName] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [showExportMenu, setShowExportMenu] = useState(false); // NEW: State for export dropdown
+  const [showExportMenu, setShowExportMenu] = useState(false);
   const [metalList, setMetalList] = useState<{ type: string, weight: number, unit: string, isManual?: boolean, manualPrice?: number }[]>([]);
   const [tempMetal, setTempMetal] = useState('Sterling Silver');
   const [tempWeight, setTempWeight] = useState(0);
@@ -145,9 +145,22 @@ export default function Home() {
     if (!error && data) { setInventory([data[0], ...inventory]); setItemName(''); setMetalList([]); setHours(''); setRate(''); setOtherCosts(''); setToken(null); }
   };
 
+  const filteredInventory = useMemo(() => {
+    return inventory.filter(item => item.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  }, [inventory, searchTerm]);
+
+  const totalVaultValue = useMemo(() => {
+    return inventory.reduce((acc, item) => {
+      const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
+      const labor = item.labor_at_making || 0;
+      const liveRetail = item.strategy === 'A' ? (current.totalMaterials + labor) * (item.multiplier || 3) : ((current.totalMaterials * (item.markup_b || 1.8)) + labor) * 2;
+      return acc + liveRetail;
+    }, 0);
+  }, [inventory, prices]);
+
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    let result = isSignUp 
+    let result = isSignUp
       ? await supabase.auth.signUp({ email, password, options: { data: { is_converted_from_anonymous: true } } })
       : await supabase.auth.signInWithPassword({ email, password });
     if (result.error) alert(result.error.message);
@@ -162,34 +175,37 @@ export default function Home() {
     if (error) alert(error.message);
   };
 
-  const filteredInventory = useMemo(() => {
-    return inventory.filter(item => item.name.toLowerCase().includes(searchTerm.toLowerCase()));
-  }, [inventory, searchTerm]);
-
-  const totalVaultValue = useMemo(() => {
-    return inventory.reduce((acc, item) => {
-      const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
-      const labor = item.labor_at_making || 0;
-      const liveRetail = item.strategy === 'A' ? (current.totalMaterials + labor) * (item.multiplier || 3) : ((current.totalMaterials * (item.markup_b || 1.8)) + labor) * 2;
-      return acc + liveRetail;
-    }, 0);
-  }, [inventory, prices]);
+  // --- REORGANIZED EXPORTS ---
 
   const exportToCSV = () => {
-    const headers = ["Item Name", "Date Created", "Strategy", "Multiplier/Markup", "Labor (Orig)", "Materials (Orig)", "Other Costs (Orig)", "Wholesale (Orig)", "Wholesale (Live)", "Retail (Orig)", "Retail (Live)", "Notes", "Metals"];
+    // Relevance First: Name, Prices, then metadata
+    const headers = ["Item Name", "Retail (Live)", "Wholesale (Live)", "Retail (Orig)", "Wholesale (Orig)", "Notes", "Date Created", "Strategy", "Mult/Markup", "Metals"];
     const rows = filteredInventory.map(item => {
       const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
       const labor = item.labor_at_making || 0;
       const liveWholesale = item.strategy === 'A' ? current.wholesaleA + labor : current.wholesaleB;
       const liveRetail = item.strategy === 'A' ? (current.totalMaterials + labor) * (item.multiplier || 3) : ((current.totalMaterials * (item.markup_b || 1.8)) + labor) * 2;
-      const metalsStr = item.metals.map((m:any) => `${m.weight}${m.unit} ${m.type}`).join('; ');
-      return [`"${item.name}"`, new Date(item.created_at).toLocaleDateString(), item.strategy, item.strategy === 'A' ? item.multiplier : item.markup_b, item.labor_at_making, item.materials_at_making, item.other_costs_at_making, Number(item.wholesale).toFixed(2), liveWholesale.toFixed(2), Number(item.retail).toFixed(2), liveRetail.toFixed(2), `"${item.notes?.replace(/"/g, '""') || ''}"`, `"${metalsStr}"`];
+      const metalsStr = item.metals.map((m: any) => `${m.weight}${m.unit} ${m.type}`).join('; ');
+
+      return [
+        `"${item.name}"`,
+        liveRetail.toFixed(2),
+        liveWholesale.toFixed(2),
+        Number(item.retail).toFixed(2),
+        Number(item.wholesale).toFixed(2),
+        `"${item.notes?.replace(/"/g, '""') || ''}"`,
+        new Date(item.created_at).toLocaleDateString(),
+        item.strategy,
+        item.strategy === 'A' ? item.multiplier : item.markup_b,
+        `"${metalsStr}"`
+      ];
     });
+
     const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "the-vault-inventory.csv");
+    link.setAttribute("download", "bear-vault-inventory.csv");
     document.body.appendChild(link);
     link.click();
     setShowExportMenu(false);
@@ -198,37 +214,78 @@ export default function Home() {
   const exportDetailedPDF = () => {
     const doc = new jsPDF();
     doc.setFontSize(22);
-    doc.text('THE VAULT: Detailed Inventory Report', 14, 20);
-    doc.setFontSize(10);
-    doc.text(`Generated on ${new Date().toLocaleString()}`, 14, 28);
-    let currentY = 35;
+    doc.setTextColor(45, 74, 34); // Bear Sage
+    doc.text('THE VAULT INVENTORY REPORT', 14, 20);
+
+    doc.setFontSize(9);
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 26);
+    doc.text(`Total Vault Retail Value: $${totalVaultValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, 14, 31);
+
+    let currentY = 40;
+
     filteredInventory.forEach((item, index) => {
-      if (currentY > 240) { doc.addPage(); currentY = 20; }
+      if (currentY > 230) { doc.addPage(); currentY = 20; }
+
       const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
       const labor = item.labor_at_making || 0;
       const liveWholesale = item.strategy === 'A' ? current.wholesaleA + labor : current.wholesaleB;
       const liveRetail = item.strategy === 'A' ? (current.totalMaterials + labor) * (item.multiplier || 3) : ((current.totalMaterials * (item.markup_b || 1.8)) + labor) * 2;
-      doc.setFont("helvetica", "bold"); doc.setFontSize(14); doc.text(`${index + 1}. ${item.name}`, 14, currentY);
-      doc.setFontSize(9); doc.setFont("helvetica", "normal"); doc.text(`Strategy: ${item.strategy} | Created: ${new Date(item.created_at).toLocaleDateString()}`, 14, currentY + 5);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.setTextColor(0, 0, 0);
+      doc.text(`${item.name.toUpperCase()}`, 14, currentY);
+
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(150, 150, 150);
+      doc.text(`ID: ${item.id.slice(0, 8)} | Strategy: ${item.strategy} | Saved: ${new Date(item.created_at).toLocaleDateString()}`, 14, currentY + 5);
+
       autoTable(doc, {
-        startY: currentY + 8, head: [['Metric', 'Historical (Saved)', 'Live (Current Market)']],
-        body: [['Wholesale Cost', `$${Number(item.wholesale).toFixed(2)}`, `$${liveWholesale.toFixed(2)}`], ['Retail Price', `$${Number(item.retail).toFixed(2)}`, `$${liveRetail.toFixed(2)}`], ['Net Market Shift', '-', `${liveRetail - item.retail >= 0 ? '+' : ''}$${(liveRetail - item.retail).toFixed(2)}`]],
-        theme: 'striped', headStyles: { fillColor: [165, 190, 172], textColor: 255 }, margin: { left: 14 }, styles: { fontSize: 8 }, tableWidth: 100
+        startY: currentY + 8,
+        head: [['Financial Metric', 'Saved (Original)', 'Current Market (Live)']],
+        body: [
+          ['Retail Price', `$${Number(item.retail).toFixed(2)}`, { content: `$${liveRetail.toFixed(2)}`, styles: { fontStyle: 'bold' } }],
+          ['Wholesale Cost', `$${Number(item.wholesale).toFixed(2)}`, `$${liveWholesale.toFixed(2)}`],
+          ['Market Variance', '-', `${liveRetail - item.retail >= 0 ? '▲' : '▼'} $${Math.abs(liveRetail - item.retail).toFixed(2)}`]
+        ],
+        theme: 'grid',
+        headStyles: { fillColor: [165, 190, 172], textColor: 255, fontSize: 8 },
+        styles: { fontSize: 8, cellPadding: 2 },
+        margin: { left: 14 },
+        tableWidth: 120
       });
-      const componentRows = item.metals.map((m: any) => [`${m.weight}${m.unit} ${m.type}`, m.isManual ? 'Manual' : 'Market Spot']);
-      if (item.other_costs_at_making > 0) componentRows.push(['Stones/Other Costs', `$${item.other_costs_at_making}`]);
-      componentRows.push(['Labor Cost', `$${labor}`]);
-      autoTable(doc, {
-        startY: (doc as any).lastAutoTable.finalY + 2, head: [['Component', 'Pricing Source']], body: componentRows,
-        theme: 'plain', headStyles: { textColor: [100, 100, 100], fontStyle: 'bold' }, margin: { left: 14 }, styles: { fontSize: 8 }, tableWidth: 100
+
+      const componentLines = item.metals.map((m: any) => `${m.weight}${m.unit} ${m.type} (${m.isManual ? 'Manual' : 'Spot'})`);
+      if (item.other_costs_at_making > 0) componentLines.push(`Stones/Other: $${item.other_costs_at_making}`);
+      componentLines.push(`Labor: $${labor}`);
+
+      doc.setFontSize(8);
+      doc.setTextColor(80, 80, 80);
+      doc.setFont("helvetica", "bold");
+      doc.text("BREAKDOWN:", 140, currentY + 12);
+      doc.setFont("helvetica", "normal");
+      componentLines.forEach((line, i) => {
+        doc.text(line, 140, currentY + 17 + (i * 4));
       });
+
       if (item.notes) {
-        doc.setFont("helvetica", "italic"); doc.text(`Notes: ${item.notes}`, 14, (doc as any).lastAutoTable.finalY + 5, { maxWidth: 180 });
-        currentY = (doc as any).lastAutoTable.finalY + 15;
-      } else { currentY = (doc as any).lastAutoTable.finalY + 10; }
-      doc.setDrawColor(240); doc.line(14, currentY - 2, 196, currentY - 2);
+        doc.setFont("helvetica", "bold");
+        doc.text("NOTES:", 14, (doc as any).lastAutoTable.finalY + 6);
+        doc.setFont("helvetica", "italic");
+        doc.setTextColor(100, 100, 100);
+        doc.text(item.notes, 14, (doc as any).lastAutoTable.finalY + 10, { maxWidth: 120 });
+        currentY = Math.max((doc as any).lastAutoTable.finalY + 20, currentY + 25 + (componentLines.length * 4));
+      } else {
+        currentY = Math.max((doc as any).lastAutoTable.finalY + 12, currentY + 25 + (componentLines.length * 4));
+      }
+
+      doc.setDrawColor(220);
+      doc.line(14, currentY - 4, 196, currentY - 4);
     });
-    doc.save('the-vault-detailed-report.pdf');
+
+    doc.save(`Vault_Report_${new Date().toISOString().split('T')[0]}.pdf`);
     setShowExportMenu(false);
   };
 
@@ -285,18 +342,18 @@ export default function Home() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           <div className="lg:col-span-5 space-y-6">
             <div className="bg-white p-8 rounded-[2rem] shadow-xl space-y-5 border-2 border-[#A5BEAC] lg:sticky lg:top-6">
-              <h2 className="text-2xl font-black uppercase italic tracking-tighter text-slate-900">Jewelry Calculator</h2>
+              <h2 className="text-2xl font-black uppercase italic tracking-tighter text-slate-900">Calculator</h2>
               <input placeholder="Product Name" className="w-full p-4 bg-stone-50 border border-stone-200 rounded-2xl outline-none focus:border-[#A5BEAC] transition-all" value={itemName} onChange={e => setItemName(e.target.value)} />
               <div className="p-4 bg-stone-50 rounded-2xl border-2 border-dotted border-stone-300 space-y-3">
-                <select className="w-full p-3 border border-stone-200 rounded-xl font-bold bg-white focus:border-[#2d4a22]" value={tempMetal} onChange={e => setTempMetal(e.target.value)}>
+                <select className="w-full p-3 border border-stone-200 rounded-xl font-bold bg-white" value={tempMetal} onChange={e => setTempMetal(e.target.value)}>
                   <option>Sterling Silver</option><option>10K Gold</option><option>14K Gold</option><option>18K Gold</option><option>22K Gold</option><option>24K Gold</option><option>Platinum 950</option><option>Palladium</option>
                 </select>
                 <div className="flex gap-2">
-                  <input type="number" placeholder="Weight" className="w-full p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22]" value={tempWeight || ''} onChange={e => setTempWeight(Number(e.target.value))} />
-                  <select className="p-3 border border-stone-200 rounded-xl text-[10px] font-bold focus:border-[#2d4a22]" value={tempUnit} onChange={e => setTempUnit(e.target.value)}>{Object.keys(UNIT_TO_GRAMS).map(u => <option key={u}>{u}</option>)}</select>
+                  <input type="number" placeholder="Weight" className="w-full p-3 border border-stone-200 rounded-xl" value={tempWeight || ''} onChange={e => setTempWeight(Number(e.target.value))} />
+                  <select className="p-3 border border-stone-200 rounded-xl text-[10px] font-bold" value={tempUnit} onChange={e => setTempUnit(e.target.value)}>{Object.keys(UNIT_TO_GRAMS).map(u => <option key={u}>{u}</option>)}</select>
                 </div>
                 <div className="space-y-2">
-                  <select className="w-full p-3 border border-stone-200 rounded-xl text-[10px] font-bold bg-white focus:border-[#2d4a22]" value={useManualPrice ? "manual" : "spot"} onChange={(e) => setUseManualPrice(e.target.value === "manual")}>
+                  <select className="w-full p-3 border border-stone-200 rounded-xl text-[10px] font-bold bg-white" value={useManualPrice ? "manual" : "spot"} onChange={(e) => setUseManualPrice(e.target.value === "manual")}>
                     <option value="spot">Use Live Spot Price</option><option value="manual">Use Manual Input</option>
                   </select>
                   {useManualPrice && <input type="number" placeholder={`Price per ${tempUnit}`} className="w-full p-3 border border-[#A5BEAC] rounded-xl text-sm outline-none animate-in fade-in" value={manualPriceInput} onChange={(e) => setManualPriceInput(e.target.value === '' ? '' : Number(e.target.value))} />}
@@ -330,46 +387,33 @@ export default function Home() {
           </div>
 
           <div className="lg:col-span-7 space-y-4">
-             {/* INVENTORY HEADER */}
-             <div className="bg-white p-6 rounded-[2rem] border-2 shadow-sm border-[#A5BEAC] space-y-4">
-               <div className="flex justify-between items-center">
-                  <div>
-                    <h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Vault Inventory</h2>
-                    <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">{inventory.length} Pieces Stored</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[9px] font-black text-[#2d4a22] uppercase italic">Total Vault Value</p>
-                    <p className="text-2xl font-black text-slate-900">${pricesLoaded ? totalVaultValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : "--.--"}</p>
-                  </div>
-               </div>
-               
-               <div className="flex flex-col sm:flex-row gap-4">
-                 <div className="relative flex-1">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-300 text-xs">🔍</span>
-                    <input type="text" placeholder="Search items..." className="w-full pl-10 pr-4 py-3 bg-stone-50 border rounded-xl text-xs font-bold outline-none focus:border-[#A5BEAC] transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-                 </div>
-                 
-                 {/* CONSOLIDATED EXPORT DROPDOWN */}
-                 <div className="relative">
-                    <button 
-                      onClick={() => setShowExportMenu(!showExportMenu)} 
-                      className="w-full sm:w-auto px-6 py-3 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase hover:bg-[#A5BEAC] transition-colors flex items-center justify-center gap-2"
-                    >
-                      Export {showExportMenu ? '▲' : '▼'}
-                    </button>
-                    {showExportMenu && (
-                      <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[50] overflow-hidden animate-in fade-in slide-in-from-top-2">
-                        <button onClick={exportDetailedPDF} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 transition-colors border-b border-stone-100">Export as PDF</button>
-                        <button onClick={exportToCSV} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 transition-colors">Export as CSV</button>
-                      </div>
-                    )}
-                 </div>
-               </div>
+            <div className="bg-white p-6 rounded-[2rem] border-2 shadow-sm border-[#A5BEAC] space-y-4">
+              <div className="flex justify-between items-center">
+                <div><h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Vault Inventory</h2><p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">{inventory.length} Pieces Stored</p></div>
+                <div className="text-right"><p className="text-[9px] font-black text-[#2d4a22] uppercase italic">Total Value</p><p className="text-2xl font-black text-slate-900">${pricesLoaded ? totalVaultValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "--.--"}</p></div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="relative flex-1">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-300 text-xs">🔍</span>
+                  <input type="text" placeholder="Search items..." className="w-full pl-10 pr-4 py-3 bg-stone-50 border rounded-xl text-xs font-bold outline-none focus:border-[#A5BEAC] transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                </div>
+
+                <div className="relative">
+                  <button onClick={() => setShowExportMenu(!showExportMenu)} className="w-full sm:w-auto px-6 py-3 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase hover:bg-[#A5BEAC] transition-colors flex items-center justify-center gap-2">Export {showExportMenu ? '▲' : '▼'}</button>
+                  {showExportMenu && (
+                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[50] overflow-hidden animate-in fade-in slide-in-from-top-2">
+                      <button onClick={exportDetailedPDF} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 transition-colors border-b border-stone-100">Export PDF</button>
+                      <button onClick={exportToCSV} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 transition-colors">Export CSV</button>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
             <div className="space-y-4 overflow-y-auto max-h-[850px] pr-2 custom-scrollbar">
               {loading ? <div className="p-20 text-center text-stone-400 font-bold uppercase tracking-widest text-xs">Opening Vault...</div> :
-                filteredInventory.length === 0 ? <div className="bg-white p-12 rounded-[2rem] border-2 border-dotted border-stone-200 text-center text-stone-400 font-bold uppercase text-xs">{searchTerm ? "No matches." : "Your vault is empty."}</div> :
+                filteredInventory.length === 0 ? <div className="bg-white p-12 rounded-[2rem] border-2 border-dotted border-stone-200 text-center text-stone-400 font-bold uppercase text-xs">No matches.</div> :
                   filteredInventory.map(item => {
                     const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
                     const labor = item.labor_at_making || 0;
@@ -383,47 +427,45 @@ export default function Home() {
                         <div className="p-6 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6">
                           <div className="flex-1 min-w-0 text-left">
                             <div className="flex items-center gap-2 mb-1">
-                                <p className="text-xl font-black text-slate-800 truncate">{item.name}</p>
-                                <span className={`text-[8px] font-bold px-2 py-0.5 rounded-full border shrink-0 transition-opacity duration-500 ${pricesLoaded ? 'opacity-100' : 'opacity-0'} ${isUp ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
-                                    {isUp ? '▲' : '▼'} ${Math.abs(priceDiff).toFixed(2)}
-                                </span>
+                              <p className="text-xl font-black text-slate-800 truncate">{item.name}</p>
+                              <span className={`text-[8px] font-bold px-2 py-0.5 rounded-full border shrink-0 transition-opacity duration-500 ${pricesLoaded ? 'opacity-100' : 'opacity-0'} ${isUp ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{isUp ? '▲' : '▼'} ${Math.abs(priceDiff).toFixed(2)}</span>
                             </div>
                             <p className="text-[10px] text-stone-400 font-bold uppercase tracking-widest leading-none mb-3">{new Date(item.created_at).toLocaleDateString()} | Strategy: {item.strategy}</p>
                             <button onClick={() => deleteInventoryItem(item.id, item.name)} className="text-[10px] font-black text-red-300 uppercase hover:text-red-600 transition-colors px-2 py-1 bg-stone-50 rounded-lg">[ Remove Piece ]</button>
                           </div>
                           <div className="flex flex-wrap items-center gap-8 xl:gap-12 shrink-0 text-right">
-                                <div className="flex gap-6 border-r border-stone-100 pr-8">
-                                    <div><p className="text-[8px] font-black text-stone-300 uppercase tracking-widest mb-1">Prev. Wholesale</p><p className="text-sm font-bold text-stone-400">${Number(item.wholesale).toFixed(2)}</p></div>
-                                    <div><p className="text-[8px] font-black text-stone-300 uppercase tracking-widest mb-1">Prev. Retail</p><p className="text-sm font-bold text-stone-400">${Number(item.retail).toFixed(2)}</p></div>
-                                </div>
-                                <div className="flex gap-8 items-center">
-                                    <div><p className="text-[8px] font-black text-[#A5BEAC] uppercase tracking-widest mb-1">Live Wholesale</p><p className={`text-lg font-black transition-all ${pricesLoaded ? 'text-slate-600' : 'text-stone-200'}`}>{pricesLoaded ? `$${liveWholesale.toFixed(2)}` : "--.--"}</p></div>
-                                    <div><p className="text-[8px] font-black text-[#2d4a22] uppercase tracking-widest mb-1 italic">Live Retail</p><p className="text-3xl font-black text-slate-900 leading-none transition-all duration-300">{pricesLoaded ? `$${liveRetail.toFixed(2)}` : "--.--"}</p></div>
-                                </div>
+                            <div className="flex gap-6 border-r border-stone-100 pr-8">
+                              <div><p className="text-[8px] font-black text-stone-300 uppercase tracking-widest mb-1">Prev. Wholesale</p><p className="text-sm font-bold text-stone-400">${Number(item.wholesale).toFixed(2)}</p></div>
+                              <div><p className="text-[8px] font-black text-stone-300 uppercase tracking-widest mb-1">Prev. Retail</p><p className="text-sm font-bold text-stone-400">${Number(item.retail).toFixed(2)}</p></div>
+                            </div>
+                            <div className="flex gap-8 items-center">
+                              <div><p className="text-[8px] font-black text-[#A5BEAC] uppercase tracking-widest mb-1">Live Wholesale</p><p className={`text-lg font-black transition-all ${pricesLoaded ? 'text-slate-600' : 'text-stone-200'}`}>{pricesLoaded ? `$${liveWholesale.toFixed(2)}` : "--.--"}</p></div>
+                              <div><p className="text-[8px] font-black text-[#2d4a22] uppercase tracking-widest mb-1 italic">Live Retail</p><p className="text-3xl font-black text-slate-900 leading-none transition-all duration-300">{pricesLoaded ? `$${liveRetail.toFixed(2)}` : "--.--"}</p></div>
+                            </div>
                           </div>
                         </div>
                         <details className="group border-t border-stone-50">
-                            <summary className="list-none cursor-pointer py-2 text-center text-[8px] font-black uppercase tracking-[0.2em] text-stone-300 hover:text-[#A5BEAC] transition-colors">Breakdown & Snapshot</summary>
-                            <div className="p-6 bg-stone-50/50 space-y-6">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
-                                    <div className="space-y-3">
-                                        <h4 className="text-[10px] font-black uppercase text-stone-400">Metal Composition</h4>
-                                        {item.metals?.map((m: any, idx: number) => (<div key={idx} className="flex justify-between text-[10px] font-bold border-b border-stone-100 pb-1 uppercase"><span>{m.weight}{m.unit} {m.type}</span><span className="text-stone-400">{m.isManual ? 'Manual' : 'Spot'}</span></div>))}
-                                        {item.other_costs_at_making > 0 && (<div className="flex justify-between text-[10px] font-bold border-b border-stone-100 pb-1 uppercase"><span>Stones/Other</span><span>${Number(item.other_costs_at_making).toFixed(2)}</span></div>)}
-                                    </div>
-                                    <div className="space-y-4">
-                                        <div className="grid grid-cols-2 gap-2 text-center">
-                                            <div className="bg-white p-3 rounded-xl border border-stone-100"><p className="text-[8px] font-black text-stone-400 uppercase">Materials (Orig)</p><p className="text-xs font-black text-slate-700">${(Number(item.materials_at_making || 0) + Number(item.other_costs_at_making || 0)).toFixed(2)}</p></div>
-                                            <div className="bg-white p-3 rounded-xl border border-stone-100"><p className="text-[8px] font-black text-stone-400 uppercase">Labor Cost</p><p className="text-xs font-black text-slate-700">${Number(labor).toFixed(2)}</p></div>
-                                        </div>
-                                        <button onClick={() => syncToMarket(item)} className="w-full py-2 bg-[#2d4a22] text-white rounded-lg font-black text-[9px] uppercase tracking-widest hover:bg-slate-900 transition-all shadow-sm">Sync Vault to Market</button>
-                                    </div>
+                          <summary className="list-none cursor-pointer py-2 text-center text-[8px] font-black uppercase tracking-[0.2em] text-stone-300 hover:text-[#A5BEAC] transition-colors">Breakdown & Snapshot</summary>
+                          <div className="p-6 bg-stone-50/50 space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
+                              <div className="space-y-3">
+                                <h4 className="text-[10px] font-black uppercase text-stone-400">Metal Composition</h4>
+                                {item.metals?.map((m: any, idx: number) => (<div key={idx} className="flex justify-between text-[10px] font-bold border-b border-stone-100 pb-1 uppercase"><span>{m.weight}{m.unit} {m.type}</span><span className="text-stone-400">{m.isManual ? 'Manual' : 'Spot'}</span></div>))}
+                                {item.other_costs_at_making > 0 && (<div className="flex justify-between text-[10px] font-bold border-b border-stone-100 pb-1 uppercase"><span>Stones/Other</span><span>${Number(item.other_costs_at_making).toFixed(2)}</span></div>)}
+                              </div>
+                              <div className="space-y-4">
+                                <div className="grid grid-cols-2 gap-2 text-center">
+                                  <div className="bg-white p-3 rounded-xl border border-stone-100"><p className="text-[8px] font-black text-stone-400 uppercase">Materials (Orig)</p><p className="text-xs font-black text-slate-700">${(Number(item.materials_at_making || 0) + Number(item.other_costs_at_making || 0)).toFixed(2)}</p></div>
+                                  <div className="bg-white p-3 rounded-xl border border-stone-100"><p className="text-[8px] font-black text-stone-400 uppercase">Labor Cost</p><p className="text-xs font-black text-slate-700">${Number(labor).toFixed(2)}</p></div>
                                 </div>
-                                <div className="bg-white p-4 rounded-2xl border border-stone-200 text-left">
-                                  <h4 className="text-[9px] font-black uppercase text-stone-400 mb-2">Vault Notes</h4>
-                                  <textarea className="w-full p-3 bg-stone-50 border border-stone-100 rounded-xl text-xs italic text-slate-600 resize-none h-20 outline-none focus:border-[#A5BEAC] transition-all" placeholder="Click to add notes..." defaultValue={item.notes || ''} onBlur={(e) => saveNote(item.id, e.target.value)} />
-                                </div>
+                                <button onClick={() => syncToMarket(item)} className="w-full py-2 bg-[#2d4a22] text-white rounded-lg font-black text-[9px] uppercase tracking-widest hover:bg-slate-900 transition-all shadow-sm">Sync Vault to Market</button>
+                              </div>
                             </div>
+                            <div className="bg-white p-4 rounded-2xl border border-stone-200 text-left">
+                              <h4 className="text-[9px] font-black uppercase text-stone-400 mb-2">Vault Notes</h4>
+                              <textarea className="w-full p-3 bg-stone-50 border border-stone-100 rounded-xl text-xs italic text-slate-600 resize-none h-20 outline-none focus:border-[#A5BEAC] transition-all" placeholder="Click to add notes..." defaultValue={item.notes || ''} onBlur={(e) => saveNote(item.id, e.target.value)} />
+                            </div>
+                          </div>
                         </details>
                       </div>
                     );
@@ -456,7 +498,6 @@ export default function Home() {
           </div>
         </div>
       </div>
-
       <style jsx global>{`
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
