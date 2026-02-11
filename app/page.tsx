@@ -101,15 +101,6 @@ export default function Home() {
     if (error) alert(error.message);
   };
 
-  const handleForgotPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
-    if (error) alert(error.message);
-    else setResetSent(true);
-  };
-
   const calculateFullBreakdown = (metals: any[], h: any, r: any, o: any) => {
     let rawMaterialCost = 0;
     const numH = Number(h) || 0;
@@ -138,7 +129,8 @@ export default function Home() {
     return { wholesaleA, retailA, wholesaleB, retailB, totalMaterials, labor };
   };
 
-  const b = calculateFullBreakdown(metalList, hours, rate, otherCosts);
+  const a = calculateFullBreakdown(metalList, hours, rate, otherCosts);
+  const b = a;
   const activeRetail = strategy === 'A' ? b.retailA : b.retailB;
   const activeWholesale = strategy === 'A' ? b.wholesaleA : b.wholesaleB;
 
@@ -190,68 +182,70 @@ export default function Home() {
   };
 
   return (
-    
     <div className="min-h-screen bg-slate-100 p-4 md:p-10 text-slate-900 font-sans">
       <div className="max-w-7xl mx-auto space-y-6">
 
         {/* HEADER */}
-<div className="flex flex-col md:flex-row justify-between items-center bg-white px-4 py-4 md:px-6 rounded-[2rem] border shadow-sm gap-4 mb-6">
-  
-  {/* LEFT: THE VAULT BRANDING */}
-  <div className="flex items-center gap-2 md:order-1">
-    <img 
-      src="/icon.png" 
-      alt="Bear Silver and Stone" 
-      className="w-6 h-6 object-contain"
-    />
-    <div className="flex flex-col items-start leading-none">
-      <h1 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">
-        The Vault
-      </h1>
-      <span className="text-[7px] font-black uppercase tracking-[0.2em] text-slate-400">
-        by Bear Silver and Stone
-      </span>
-    </div>
-  </div>
+        <div className="flex flex-col md:flex-row justify-between items-center bg-white px-4 py-6 md:px-6 rounded-[2rem] border shadow-sm gap-4 mb-6 relative">
+          <div className="flex flex-col items-center w-full md:w-auto">
+            <div className="flex flex-col items-center leading-none">
+              <h1 className="text-2xl font-black uppercase italic tracking-[0.1em] text-slate-900 leading-none ml-[0.1em]">
+                THE VAULT
+              </h1>
+              <a href="https://bearsilverandstone.com" target="_blank" rel="noopener noreferrer" className="text-[8px] font-black uppercase tracking-[0.12em] text-slate-400 mt-1 whitespace-nowrap hover:text-blue-600 transition-colors cursor-pointer">
+                BY BEAR SILVER AND STONE
+              </a>
+            </div>
+          </div>
 
-  {/* RIGHT: STATUS & AUTH SECTION */}
-  <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto md:order-2">
-    
-    {/* STATUS (GUEST/USER) - Switched to right side */}
-    <div className="flex items-center gap-2 order-1 md:order-1">
-      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-        {!user ? 'Vault Locked' : (user.is_anonymous ? 'Guest' : `User: ${user.email?.split('@')[0]}`)}
-      </p>
-      <div className={`w-2 h-2 rounded-full ${user ? 'bg-green-500 animate-pulse' : 'bg-slate-300'}`}></div>
-    </div>
+          <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
+            <div className="flex items-center justify-center gap-2 w-full md:w-auto order-1">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+                {!user ? 'Vault Locked' : (user.is_anonymous ? 'Guest' : `User: ${user.email?.split('@')[0]}`)}
+              </p>
+              <div className={`w-2 h-2 rounded-full ${user ? 'bg-green-500 animate-pulse' : 'bg-slate-300'}`}></div>
+            </div>
 
-    {/* AUTH BUTTON */}
-    <div className="relative w-full md:w-auto order-2 md:order-2">
-      {(!user || user.is_anonymous) ? (
-        <button 
-          onClick={() => setShowAuth(!showAuth)} 
-          className="w-full md:w-auto text-[10px] font-black uppercase bg-blue-600 text-white px-6 py-2.5 rounded-xl hover:bg-blue-700 transition shadow-sm"
-        >
-          Login / Sign Up
-        </button>
-      ) : (
-        <button 
-          onClick={async () => { await supabase.auth.signOut(); window.location.reload(); }} 
-          className="w-full md:w-auto text-[10px] font-black uppercase bg-slate-100 px-6 py-2.5 rounded-xl hover:bg-slate-200 transition"
-        >
-          Logout
-        </button>
-      )}
+            <div className="relative w-full md:w-auto order-2">
+              {(!user || user.is_anonymous) ? (
+                <button onClick={() => setShowAuth(!showAuth)} className="w-full md:w-auto text-[10px] font-black uppercase bg-blue-600 text-white px-8 py-3 rounded-xl hover:bg-blue-700 transition shadow-sm">
+                  Login / Sign Up
+                </button>
+              ) : (
+                <button onClick={async () => { await supabase.auth.signOut(); window.location.reload(); }} className="w-full md:w-auto text-[10px] font-black uppercase bg-slate-100 px-8 py-3 rounded-xl hover:bg-slate-200 transition">
+                  Logout
+                </button>
+              )}
 
-      {/* AUTH DROPDOWN */}
-      {showAuth && (
-        <div className="absolute right-0 left-0 md:left-auto mt-4 w-full md:w-80 bg-white p-6 rounded-3xl border-2 border-blue-600 shadow-2xl z-[100] animate-in fade-in slide-in-from-top-2">
-          {/* ... Your existing Auth form logic ... */}
+              {showAuth && (
+                <div className="absolute left-0 right-0 md:left-auto md:right-0 mt-4 w-full md:w-80 bg-white p-6 rounded-3xl border-2 border-blue-600 shadow-2xl z-[100] animate-in fade-in slide-in-from-top-2 mx-auto">
+                  <h3 className="text-sm font-black uppercase mb-4 text-slate-800 text-center tracking-tight">Vault Access</h3>
+                  <button onClick={loginWithGoogle} className="w-full flex items-center justify-center gap-3 bg-white border-2 border-slate-100 py-3 rounded-xl hover:bg-slate-50 transition mb-4 shadow-sm">
+                    <img src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png" className="w-4 h-4" alt="G" />
+                    <span className="text-[10px] font-black uppercase text-slate-700">Continue with Google</span>
+                  </button>
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="h-[1px] bg-slate-100 flex-1"></div>
+                    <span className="text-[9px] font-bold text-slate-300 uppercase">OR</span>
+                    <div className="h-[1px] bg-slate-100 flex-1"></div>
+                  </div>
+                  <form onSubmit={handleAuth} className="space-y-3">
+                    <input type="email" placeholder="Email" className="w-full p-3 border rounded-xl text-sm outline-none focus:border-blue-500 transition" value={email} onChange={e => setEmail(e.target.value)} required />
+                    <input type="password" placeholder="Password" className="w-full p-3 border rounded-xl text-sm outline-none focus:border-blue-500 transition" value={password} onChange={e => setPassword(e.target.value)} required />
+                    <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded-xl font-black text-xs uppercase hover:bg-blue-700 transition shadow-md">
+                      {isSignUp ? 'Create Vault Account' : 'Open The Vault'}
+                    </button>
+                  </form>
+                  <div className="mt-6 text-center">
+                    <p onClick={() => setIsSignUp(!isSignUp)} className="text-[10px] font-black text-blue-600 cursor-pointer uppercase tracking-wider hover:text-blue-800 transition underline underline-offset-4">
+                      {isSignUp ? 'Already have an account? Login' : 'Need an account? Sign up'}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-      )}
-    </div>
-  </div>
-</div>
 
         {/* TICKER */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -306,62 +300,91 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 items-stretch w-full">
-                  <button onClick={() => setStrategy('A')} className={`flex flex-col p-4 rounded-2xl border-2 text-left ${strategy === 'A' ? 'border-blue-600 bg-blue-50' : 'border-slate-100'}`}>
-                    <p className="text-[10px] font-black opacity-50 uppercase tracking-tighter mb-1">Strategy A</p>
-                    <p className="text-xl font-black mb-3">${b.retailA.toFixed(2)}</p>
-                    <div className="mt-auto space-y-1">
-                      <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">Wholesale: Materials + Labor</p>
-                      <div className="flex items-center gap-1">
-                        <span className="text-[8px] font-bold text-slate-400 uppercase">Retail: Wholesale ×</span>
-                        <input type="number" step="0.1" className="w-10 bg-white border rounded text-[10px] font-black text-blue-600 px-1" value={retailMultA} onChange={(e) => setRetailMultA(Number(e.target.value))} onClick={(e) => e.stopPropagation()} />
+                <div className="grid grid-cols-1 gap-4 mb-6">
+                  {/* STRATEGY A */}
+                  <button
+                    onClick={() => setStrategy('A')}
+                    className={`group flex items-center justify-between p-5 rounded-[2rem] border-2 transition-all ${strategy === 'A' ? 'border-blue-600 bg-blue-50/50 shadow-md' : 'border-slate-100 bg-white hover:border-slate-200'
+                      }`}
+                  >
+                    <div className="text-left">
+                      <p className="text-[10px] font-black opacity-40 uppercase tracking-tighter mb-1">Strategy A</p>
+                      <p className="text-3xl font-black text-slate-900">
+                        ${a?.retailA ? a.retailA.toFixed(2) : '0.00'}
+                      </p>
+                    </div>
+
+                    <div className="text-right space-y-2">
+                      <p className="text-[9px] font-bold text-slate-400 uppercase">Wholesale: M + L</p>
+                      <div className="flex items-center justify-end gap-2">
+                        <span className="text-[10px] font-black text-blue-600 uppercase italic">Retail: W ×</span>
+                        <input
+                          type="number"
+                          className="w-12 bg-white border-2 border-blue-600 rounded-xl text-xs font-black text-blue-600 py-1.5 text-center outline-none focus:ring-2 focus:ring-blue-400/20"
+                          value={retailMultA}
+                          onChange={(e) => setRetailMultA(Number(e.target.value))}
+                          onClick={(e) => e.stopPropagation()}
+                        />
                       </div>
                     </div>
                   </button>
+
+                  {/* STRATEGY B */}
                   <button
                     onClick={() => setStrategy('B')}
-                    className={`flex flex-col p-4 rounded-2xl border-2 text-left ${strategy === 'B' ? 'border-blue-600 bg-blue-50' : 'border-slate-100'}`}
+                    className={`group relative flex items-center justify-between p-5 rounded-[2rem] border-2 transition-all ${strategy === 'B' ? 'border-blue-600 bg-blue-50/50 shadow-md' : 'border-slate-100 bg-white hover:border-slate-200'
+                      }`}
                   >
-                    <p className="text-[10px] font-black opacity-50 uppercase tracking-tighter mb-1">Strategy B</p>
-                    <p className="text-xl font-black mb-3">${b.retailB.toFixed(2)}</p>
-                    <div className="mt-auto space-y-1">
-                      <div className="flex items-center gap-1">
-                        <span className="text-[8px] font-bold text-blue-600 uppercase italic">Wholesale: (M ×</span>
+                    <div className="text-left">
+                      <p className="text-[10px] font-black opacity-40 uppercase tracking-tighter mb-1">Strategy B</p>
+                      <p className="text-3xl font-black text-slate-900">
+                        ${b?.retailB ? b.retailB.toFixed(2) : '0.00'}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col items-end shrink-0">
+                      <div className="flex items-center gap-1 text-blue-600 italic font-black text-[10px] uppercase">
+                        <span className="whitespace-nowrap">Wholesale: (M ×</span>
                         <input
                           type="number"
-                          step="0.1"
-                          className="w-10 bg-white border rounded text-[10px] font-black text-blue-600 px-1"
+                          className="w-10 bg-white border-2 border-blue-600 rounded-xl text-xs font-black py-1 text-center outline-none focus:ring-2 focus:ring-blue-400/20"
                           value={markupB}
                           onChange={(e) => setMarkupB(Number(e.target.value))}
                           onClick={(e) => e.stopPropagation()}
                         />
-                        <span className="text-[8px] font-bold text-blue-600 uppercase italic">) + L</span>
+                        <span className="whitespace-nowrap">) + L</span>
                       </div>
-                      <p className="text-[8px] font-bold text-slate-400 uppercase">Retail: Wholesale × 2</p>
+                      <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">Retail: W × 2</p>
                     </div>
                   </button>
                 </div>
-
-                {/* THE SINGLE AUTO-EXPANDING CONTAINER */}
-                <div className="bg-stone-50 p-4 rounded-2xl w-full flex flex-col items-center border transition-all duration-300">
+                {/* UNIFIED SAVE TO VAULT SECTION */}
+                <div className="w-full flex flex-col items-center transition-all duration-300">
                   <button
                     onClick={addToInventory}
                     disabled={!token}
-                    className={`w-full p-4 rounded-xl font-black uppercase transition-all shadow-md ${!token ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700 active:scale-95'}`}
+                    className={`w-full py-5 rounded-[1.8rem] font-black uppercase tracking-[0.15em] text-sm transition-all ${!token
+                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                        : 'bg-blue-600 text-white shadow-xl shadow-blue-600/30 hover:bg-blue-700 active:scale-[0.97]'
+                      }`}
                   >
                     {token ? "Save to Vault" : "Verifying Human..."}
                   </button>
-                  <div className={`w-full flex justify-center h-auto overflow-hidden ${!token ? 'mt-4' : 'mt-0'}`}>
-                    <Turnstile
-                      siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
-                      onSuccess={(token) => setToken(token)}
-                      options={{ theme: 'light', appearance: 'interaction-only' }}
-                    />
-                  </div>
+
+                  {/* Turnstile logic */}
+                  {!token && (
+                    <div className="w-full flex justify-center mt-4 h-auto overflow-hidden animate-in fade-in slide-in-from-top-1">
+                      <Turnstile
+                        siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
+                        onSuccess={(token) => setToken(token)}
+                        options={{ theme: 'light', appearance: 'interaction-only' }}
+                      />
+                    </div>
+                  )}
                 </div>
-              </div>
-            </div>
-          </div>
+              </div> {/* Closes Calculator Container */}
+            </div> {/* Closes Column 5 */}
+          </div> {/* Closes Main Grid */}
 
           <div className="lg:col-span-7 space-y-6">
             <div className="flex justify-between items-center bg-white px-6 py-4 rounded-2xl border shadow-sm">
@@ -394,7 +417,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* EXPLANATION BOXES */}
         <div className="grid grid-cols-1 gap-6 pt-10">
           <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200">
             <h2 className="text-xl font-black uppercase italic tracking-tighter mb-6 text-slate-800 underline decoration-blue-500 decoration-4 underline-offset-8">
@@ -424,21 +446,16 @@ export default function Home() {
             </div>
           </div>
 
-          {/* 2. PRICE STRATEGY DETAIL */}
           <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200">
             <h2 className="text-xl font-black uppercase italic tracking-tighter mb-6 text-slate-800 underline decoration-blue-500 decoration-4 underline-offset-8">
               2. PRICE STRATEGY DETAIL
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-
-              {/* STRATEGY A DETAIL */}
               <div className={`p-6 rounded-2xl border-2 transition-all ${strategy === 'A' ? 'border-blue-600 bg-blue-50' : 'bg-slate-50 border-transparent'}`}>
                 <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-2">STRATEGY A (STANDARD MULTIPLIER)</h3>
                 <div className="space-y-2 text-xs text-slate-700">
                   <p><strong>Wholesale:</strong> Materials + Labor</p>
                   <p><strong>Retail:</strong> Wholesale × {retailMultA}</p>
-
-                  {/* Added Industry Benchmark Text */}
                   <div className="mt-4 p-3 bg-white/50 rounded-xl border border-blue-100">
                     <p className="text-[10px] text-slate-500 leading-relaxed">
                       <span className="font-black text-blue-600 uppercase text-[8px] block mb-1">Industry Standard:</span>
@@ -448,14 +465,11 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* STRATEGY B DETAIL */}
               <div className={`p-6 rounded-2xl border-2 transition-all ${strategy === 'B' ? 'border-blue-600 bg-blue-50' : 'bg-slate-50 border-transparent'}`}>
                 <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-2">STRATEGY B (MATERIALS MARKUP)</h3>
                 <div className="space-y-2 text-xs text-slate-700">
                   <p><strong>Wholesale:</strong> (Materials × {markupB}) + Labor</p>
                   <p><strong>Retail:</strong> Wholesale × 2</p>
-
-                  {/* Added Industry Benchmark Text */}
                   <div className="mt-4 p-3 bg-white/50 rounded-xl border border-blue-100">
                     <p className="text-[10px] text-slate-500 leading-relaxed">
                       <span className="font-black text-blue-600 uppercase text-[8px] block mb-1">Industry Standard:</span>
@@ -464,32 +478,17 @@ export default function Home() {
                   </div>
                 </div>
               </div>
-
             </div>
           </div>
-          {/* FOOTER LOGO SECTION */}
+
           <div className="flex flex-col items-center justify-center gap-2 py-8 border-t border-slate-200 mt-10">
-            <a
-              href="https://bearsilverandstone.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 hover:opacity-80 transition-opacity"
-            >
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
-                Powered by
-              </span>
-              <img
-                src="/icon.png"
-                alt="Bear Silver and Stone"
-                className="w-6 h-6 object-contain"
-              />
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900">
-                Bear Silver and Stone
-              </span>
+            <a href="https://bearsilverandstone.com" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Powered by</span>
+              <img src="/icon.png" alt="Bear Silver and Stone" className="w-6 h-6 object-contain" />
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900">Bear Silver and Stone</span>
             </a>
           </div>
         </div>
-
       </div>
     </div>
   );
