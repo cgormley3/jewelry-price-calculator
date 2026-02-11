@@ -473,13 +473,29 @@ export default function Home() {
 
             </div>
           </div>
+          {/* FOOTER LOGO SECTION */}
+          <div className="flex flex-col items-center justify-center gap-2 py-8 border-t border-slate-200 mt-10">
+            <a
+              href="https://bearsilverandstone.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+            >
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+                Powered by
+              </span>
+              <img
+                src="/icon.png"
+                alt="Bear Silver and Stone"
+                className="w-6 h-6 object-contain"
+              />
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900">
+                Bear Silver and Stone
+              </span>
+            </a>
+          </div>
         </div>
 
-        {prices.updated_at ? (
-          <p className="text-center text-slate-400 text-[10px] font-bold uppercase tracking-widest py-6">Live Market Sync: {new Date(prices.updated_at).toLocaleString()}</p>
-        ) : (
-          <p className="text-center text-slate-400 text-[10px] font-bold uppercase tracking-widest py-6 animate-pulse">Syncing with London Bullion Market...</p>
-        )}
       </div>
     </div>
   );
