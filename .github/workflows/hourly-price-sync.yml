@@ -1,0 +1,28 @@
+name: Daily Rio Grande Price Sync
+on:
+  schedule:
+    - cron: '30 17 * * *' 
+  workflow_dispatch:
+
+# ADD THIS SECTION HERE:
+permissions:
+  contents: write  # This gives the bot permission to save the file
+  pull-requests: write
+
+jobs:
+  update-prices:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Fetch Latest Prices
+        run: |
+          # Pings your API to trigger the Rio Grande scrape and saves it to prices.json
+          curl -s "https://jewelry-price-calculator-gamma.vercel.app//api/gold-price" > prices.json
+
+      - name: Commit and Push Changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "💎 Daily Rio Grande Market Update (10:30 AM MT)"
+          file_pattern: 'prices.json'
