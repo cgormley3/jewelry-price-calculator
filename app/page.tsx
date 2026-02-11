@@ -246,8 +246,7 @@ export default function Home() {
         head: [['Financial Metric', 'Saved (Original)', 'Current Market (Live)']],
         body: [
           ['Retail Price', `$${Number(item.retail).toFixed(2)}`, { content: `$${liveRetail.toFixed(2)}`, styles: { fontStyle: 'bold' } }],
-          ['Wholesale Cost', `$${Number(item.wholesale).toFixed(2)}`, `$${liveWholesale.toFixed(2)}`],
-          ['Market Variance', '-', `${liveRetail - item.retail >= 0 ? '▲' : '▼'} $${Math.abs(liveRetail - item.retail).toFixed(2)}`]
+          ['Wholesale Cost', `$${Number(item.wholesale).toFixed(2)}`, `$${liveWholesale.toFixed(2)}`]
         ],
         theme: 'grid',
         headStyles: { fillColor: [165, 190, 172], textColor: 255, fontSize: 8 },
