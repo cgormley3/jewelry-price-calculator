@@ -128,16 +128,29 @@ export default function Home() {
     setTempWeight(0); setManualPriceInput(''); setUseManualPrice(false);
   };
 
-  const deleteInventoryItem = async (id: string) => {
-    const { error } = await supabase.from('inventory').delete().eq('id', id);
-    if (!error) setInventory(inventory.filter(item => item.id !== id));
+  const deleteInventoryItem = async (id: string, name: string) => {
+    const isConfirmed = window.confirm(`Are you sure you want to permanently delete "${name}" from your vault?`);
+    if (isConfirmed) {
+      const { error } = await supabase.from('inventory').delete().eq('id', id);
+      if (!error) setInventory(inventory.filter(item => item.id !== id));
+    }
+  };
+
+  const saveNote = async (id: string, newNote: string) => {
+    const { error } = await supabase.from('inventory').update({ notes: newNote }).eq('id', id);
+    if (error) alert("Error saving note: " + error.message);
+    else fetchInventory();
   };
 
   const syncToMarket = async (item: any) => {
+    const isConfirmed = window.confirm(`Update stored prices for "${item.name}" to today's market value? This will overwrite your previous Wholesale and Retail costs.`);
+    if (!isConfirmed) return;
+
     const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
     const labor = item.labor_at_making || 0;
     const liveWholesale = item.strategy === 'A' ? current.wholesaleA + labor : current.wholesaleB;
     const liveRetail = item.strategy === 'A' ? (current.totalMaterials + labor) * (item.multiplier || 3) : ((current.totalMaterials * (item.markup_b || 1.8)) + labor) * 2;
+    
     const { error } = await supabase.from('inventory').update({ wholesale: liveWholesale, retail: liveRetail }).eq('id', item.id);
     if (!error) fetchInventory();
   };
@@ -145,13 +158,15 @@ export default function Home() {
   const addToInventory = async () => {
     if (!token || !itemName || metalList.length === 0 || !user) return alert("Missing verification");
     const newItem = {
-      name: itemName, metals: metalList,
+      name: itemName,
+      metals: metalList,
       wholesale: strategy === 'A' ? a.wholesaleA : a.wholesaleB,
       retail: strategy === 'A' ? a.retailA : a.retailB,
       materials_at_making: b.totalMaterials - (Number(otherCosts) || 0),
       labor_at_making: b.labor,
       other_costs_at_making: Number(otherCosts) || 0,
-      strategy: strategy, multiplier: retailMultA, markup_b: markupB, user_id: user.id
+      strategy: strategy, multiplier: retailMultA, markup_b: markupB, user_id: user.id,
+      notes: ''
     };
     const { data, error } = await supabase.from('inventory').insert([newItem]).select();
     if (error) alert(error.message);
@@ -166,14 +181,7 @@ export default function Home() {
       const labor = item.labor_at_making || 0;
       const liveRetail = item.strategy === 'A' ? (current.totalMaterials + labor) * (item.multiplier || 3) : ((current.totalMaterials * (item.markup_b || 1.8)) + labor) * 2;
       const liveWholesale = item.strategy === 'A' ? current.wholesaleA + labor : current.wholesaleB;
-      return [
-        item.name,
-        `$${Number(item.wholesale).toFixed(2)}`,
-        `$${liveWholesale.toFixed(2)}`,
-        `$${Number(item.retail).toFixed(2)}`,
-        `$${liveRetail.toFixed(2)}`,
-        new Date(item.created_at).toLocaleDateString()
-      ];
+      return [item.name, `$${Number(item.wholesale).toFixed(2)}`, `$${liveWholesale.toFixed(2)}`, `$${Number(item.retail).toFixed(2)}`, `$${liveRetail.toFixed(2)}`, new Date(item.created_at).toLocaleDateString()];
     });
     autoTable(doc, { startY: 30, head: [['Item', 'W-sale (Orig)', 'W-sale (Live)', 'Retail (Orig)', 'Retail (Live)', 'Date']], body: tableData, headStyles: { fillColor: [45, 74, 34] } });
     doc.save('the-vault-report.pdf');
@@ -202,8 +210,17 @@ export default function Home() {
               ) : (
                 <button onClick={async () => { await supabase.auth.signOut(); window.location.reload(); }} className="w-full md:w-auto text-[10px] font-black uppercase bg-stone-100 text-slate-900 px-8 py-3 rounded-xl hover:bg-stone-200 transition">Logout</button>
               )}
+              
               {showAuth && (
                 <div className="absolute left-0 right-0 md:left-auto md:right-0 mt-4 w-full md:w-80 bg-white p-6 rounded-3xl border-2 border-[#A5BEAC] shadow-2xl z-[100] animate-in fade-in slide-in-from-top-2 mx-auto">
+                  {/* NEW: CLOSE BUTTON */}
+                  <button 
+                    onClick={() => setShowAuth(false)}
+                    className="absolute top-4 right-4 text-stone-300 hover:text-[#A5BEAC] transition-colors font-black text-sm"
+                  >
+                    ✕
+                  </button>
+
                   <h3 className="text-sm font-black uppercase mb-4 text-slate-900 text-center tracking-tight">Vault Access</h3>
                   <button onClick={loginWithGoogle} className="w-full flex items-center justify-center gap-3 bg-white border-2 border-stone-100 py-3 rounded-xl hover:bg-stone-50 transition mb-4 shadow-sm">
                     <img src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png" className="w-4 h-4" alt="G" />
@@ -228,7 +245,7 @@ export default function Home() {
 
         {/* TICKER */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {Object.entries(prices).filter(([name]) => !['success', 'updated_at', 'lastUpdated', 'id', 'user_id', 'metals', 'other_costs_at_making', 'labor_at_making', 'multiplier', 'markup_b', 'wholesale', 'retail', 'strategy', 'name', 'created_at'].includes(name)).map(([name, p]) => (
+          {Object.entries(prices).filter(([name]) => !['success', 'updated_at', 'lastUpdated', 'id', 'user_id', 'metals', 'other_costs_at_making', 'labor_at_making', 'multiplier', 'markup_b', 'wholesale', 'retail', 'strategy', 'name', 'created_at', 'notes'].includes(name)).map(([name, p]) => (
             <div key={name} className="bg-white p-4 rounded-xl border-l-4 border-[#A5BEAC] shadow-sm text-center lg:text-left">
               <p className="text-[10px] font-black uppercase text-stone-400">{name}</p>
               <p className="text-xl font-bold">{p !== null ? `$${Number(p).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "--.--"}</p>
@@ -237,6 +254,7 @@ export default function Home() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          {/* CALCULATOR */}
           <div className="lg:col-span-5 space-y-6">
             <div className="bg-white p-8 rounded-[2rem] shadow-xl space-y-5 border-2 border-[#A5BEAC]">
               <h2 className="text-2xl font-black uppercase italic tracking-tighter text-slate-900">Jewelry Calculator</h2>
@@ -259,7 +277,7 @@ export default function Home() {
                 {metalList.map((m, i) => (
                   <div key={i} className="text-[10px] font-bold bg-white p-2 rounded border border-stone-100 flex justify-between items-center">
                     <span className="text-slate-700">{m.weight}{m.unit} {m.type} <span className="text-[#A5BEAC] ml-1">{m.isManual ? `($${m.manualPrice} Manual)` : "(Spot)"}</span></span>
-                    <button onClick={() => setMetalList(metalList.filter((_, idx) => idx !== i))} className="text-red-500 text-lg hover:text-red-700">×</button>
+                    <button onClick={() => setMetalList(metalList.filter((_, idx) => idx !== i))} className="text-red-500 text-lg hover:text-red-700 transition-colors">×</button>
                   </div>
                 ))}
               </div>
@@ -278,7 +296,7 @@ export default function Home() {
                   <button onClick={() => setStrategy('B')} className={`group relative flex flex-col sm:flex-row sm:items-center sm:justify-between p-5 rounded-[2rem] border-2 transition-all ${strategy === 'B' ? 'border-[#2d4a22] bg-stone-50 shadow-md' : 'border-stone-100 bg-white hover:border-stone-200'}`}><div className="text-left mb-4 sm:mb-0"><p className="text-[10px] font-black opacity-40 uppercase tracking-tighter mb-1 text-slate-900">Retail B</p><p className="text-3xl font-black text-slate-900">${b?.retailB ? b.retailB.toFixed(2) : '0.00'}</p></div><div className="flex flex-col items-start sm:items-end"><div className="flex items-center gap-1 text-[#2d4a22] italic font-black text-[10px] uppercase whitespace-nowrap"><span>Wholesale: (M ×</span><input type="number" className="w-12 bg-white border-2 border-[#2d4a22] rounded-xl text-xs font-black py-1.5 text-center outline-none" value={markupB} onChange={(e) => setMarkupB(Number(e.target.value))} onClick={(e) => e.stopPropagation()} /><span>) + L</span></div><p className="text-[9px] font-bold text-stone-400 uppercase mt-1">Retail: W × 2</p></div></button>
                 </div>
                 <button onClick={addToInventory} disabled={!token} className={`w-full py-5 rounded-[1.8rem] font-black uppercase tracking-[0.15em] text-sm transition-all ${!token ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-[#A5BEAC] text-white shadow-xl hover:bg-slate-900 active:scale-[0.97]'}`}>{token ? "Save to Vault" : "Verifying Human..."}</button>
-                {!token && <div className="w-full flex justify-center mt-4 h-auto overflow-hidden animate-in fade-in slide-in-from-top-1"><Turnstile siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!} onSuccess={(token) => setToken(token)} options={{ theme: 'light' }} /></div>}
+                {!token && <div className="w-full flex justify-center mt-4 h-auto overflow-hidden animate-in fade-in slide-in-from-top-1"><Turnstile siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!} onSuccess={(token) => setToken(token)} options={{ theme: 'light', appearance: 'interaction-only' }} /></div>}
               </div>
             </div>
           </div>
@@ -292,71 +310,55 @@ export default function Home() {
                     const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
                     const labor = item.labor_at_making || 0;
                     const liveWholesale = item.strategy === 'A' ? current.wholesaleA + labor : current.wholesaleB;
-                    const liveRetail = item.strategy === 'A' 
-                      ? (current.totalMaterials + labor) * (item.multiplier || 3) 
-                      : ((current.totalMaterials * (item.markup_b || 1.8)) + labor) * 2;
+                    const liveRetail = item.strategy === 'A' ? (current.totalMaterials + labor) * (item.multiplier || 3) : ((current.totalMaterials * (item.markup_b || 1.8)) + labor) * 2;
                     const priceDiff = liveRetail - item.retail;
                     const isUp = priceDiff >= 0;
 
                     return (
                       <div key={item.id} className="bg-white rounded-[2rem] border border-stone-100 shadow-sm overflow-hidden transition-all hover:shadow-md">
                         <div className="p-6 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6">
-                          <div className="flex-1 min-w-0">
+                          <div className="flex-1 min-w-0 text-left">
                             <div className="flex items-center gap-2 mb-1">
                                 <p className="text-xl font-black text-slate-800 truncate">{item.name}</p>
                                 <span className={`text-[8px] font-bold px-2 py-0.5 rounded-full border shrink-0 transition-opacity duration-500 ${pricesLoaded ? 'opacity-100' : 'opacity-0'} ${isUp ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
                                     {isUp ? '▲' : '▼'} ${Math.abs(priceDiff).toFixed(2)}
                                 </span>
                             </div>
-                            <p className="text-[10px] text-stone-400 font-bold uppercase tracking-widest leading-none">{new Date(item.created_at).toLocaleDateString()} | Strat: {item.strategy}</p>
+                            <p className="text-[10px] text-stone-400 font-bold uppercase tracking-widest leading-none mb-3">{new Date(item.created_at).toLocaleDateString()} | Strategy: {item.strategy}</p>
+                            <button onClick={() => deleteInventoryItem(item.id, item.name)} className="text-[10px] font-black text-red-300 uppercase hover:text-red-600 transition-colors px-2 py-1 bg-stone-50 rounded-lg">[ Remove Piece ]</button>
                           </div>
-                          
-                          <div className="flex flex-wrap items-center gap-8 xl:gap-12 shrink-0">
-                                {/* PREVIOUS DATA */}
-                                <div className="flex gap-6">
-                                    <div>
-                                        <p className="text-[8px] font-black text-stone-300 uppercase tracking-tighter mb-0.5">Prev. Wholesale</p>
-                                        <p className="text-xs font-bold text-stone-400">${Number(item.wholesale).toFixed(2)}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-[8px] font-black text-stone-300 uppercase tracking-tighter mb-0.5">Prev. Retail</p>
-                                        <p className="text-xs font-bold text-stone-400">${Number(item.retail).toFixed(2)}</p>
-                                    </div>
+                          <div className="flex flex-wrap items-center gap-8 xl:gap-12 shrink-0 text-right">
+                                <div className="flex gap-6 border-r border-stone-100 pr-8">
+                                    <div><p className="text-[8px] font-black text-stone-300 uppercase tracking-widest mb-1">Prev. Wholesale</p><p className="text-sm font-bold text-stone-400">${Number(item.wholesale).toFixed(2)}</p></div>
+                                    <div><p className="text-[8px] font-black text-stone-300 uppercase tracking-widest mb-1">Prev. Retail</p><p className="text-sm font-bold text-stone-400">${Number(item.retail).toFixed(2)}</p></div>
                                 </div>
-
-                                {/* LIVE DATA */}
-                                <div className="flex gap-6 items-center">
-                                    <div className="text-right">
-                                        <p className="text-[8px] font-black text-[#A5BEAC] uppercase tracking-tighter mb-0.5">Live Wholesale</p>
-                                        <p className={`text-sm font-black transition-all ${pricesLoaded ? 'text-slate-600' : 'text-stone-200'}`}>
-                                            {pricesLoaded ? `$${liveWholesale.toFixed(2)}` : "--.--"}
-                                        </p>
-                                    </div>
-                                    <div className="text-right">
-                                        <p className="text-[8px] font-black text-[#2d4a22] uppercase tracking-tighter mb-0.5 italic">Live Retail</p>
-                                        <p className="text-2xl font-black text-slate-900 leading-none transition-all duration-300">
-                                            {pricesLoaded ? `$${liveRetail.toFixed(2)}` : "--.--"}
-                                        </p>
-                                    </div>
+                                <div className="flex gap-8 items-center">
+                                    <div><p className="text-[8px] font-black text-[#A5BEAC] uppercase tracking-widest mb-1">Live Wholesale</p><p className={`text-lg font-black transition-all ${pricesLoaded ? 'text-slate-600' : 'text-stone-200'}`}>{pricesLoaded ? `$${liveWholesale.toFixed(2)}` : "--.--"}</p></div>
+                                    <div><p className="text-[8px] font-black text-[#2d4a22] uppercase tracking-widest mb-1 italic">Live Retail</p><p className="text-3xl font-black text-slate-900 leading-none transition-all duration-300">{pricesLoaded ? `$${liveRetail.toFixed(2)}` : "--.--"}</p></div>
                                 </div>
-
-                                <button onClick={() => deleteInventoryItem(item.id)} className="text-red-300 hover:text-red-600 transition-colors text-lg px-2 self-center">×</button>
                           </div>
                         </div>
                         <details className="group border-t border-stone-50">
-                            <summary className="list-none cursor-pointer py-2 text-center text-[8px] font-black uppercase tracking-[0.2em] text-stone-300 hover:text-[#A5BEAC] transition-colors">Full Piece Details</summary>
-                            <div className="p-6 bg-stone-50/50 grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
-                                <div className="space-y-3">
-                                    <h4 className="text-[10px] font-black uppercase text-stone-400">Piece Components</h4>
-                                    {item.metals?.map((m: any, idx: number) => (<div key={idx} className="flex justify-between text-[10px] font-bold border-b border-stone-100 pb-1 uppercase"><span>{m.weight}{m.unit} {m.type}</span><span className="text-stone-400">{m.isManual ? 'Manual' : 'Spot'}</span></div>))}
-                                    {item.other_costs_at_making > 0 && (<div className="flex justify-between text-[10px] font-bold border-b border-stone-100 pb-1 uppercase"><span>Stones/Other</span><span>${Number(item.other_costs_at_making).toFixed(2)}</span></div>)}
-                                </div>
-                                <div className="space-y-4">
-                                    <div className="grid grid-cols-2 gap-2 text-center">
-                                        <div className="bg-white p-3 rounded-xl border border-stone-100"><p className="text-[8px] font-black text-stone-400 uppercase">Materials (Orig)</p><p className="text-xs font-black text-slate-700">${(Number(item.materials_at_making || 0) + Number(item.other_costs_at_making || 0)).toFixed(2)}</p></div>
-                                        <div className="bg-white p-3 rounded-xl border border-stone-100"><p className="text-[8px] font-black text-stone-400 uppercase">Labor Cost</p><p className="text-xs font-black text-slate-700">${Number(labor).toFixed(2)}</p></div>
+                            <summary className="list-none cursor-pointer py-2 text-center text-[8px] font-black uppercase tracking-[0.2em] text-stone-300 hover:text-[#A5BEAC] transition-colors">Breakdown & Snapshot</summary>
+                            <div className="p-6 bg-stone-50/50 space-y-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
+                                    <div className="space-y-3">
+                                        <h4 className="text-[10px] font-black uppercase text-stone-400">Metal Composition</h4>
+                                        {item.metals?.map((m: any, idx: number) => (<div key={idx} className="flex justify-between text-[10px] font-bold border-b border-stone-100 pb-1 uppercase"><span>{m.weight}{m.unit} {m.type}</span><span className="text-stone-400">{m.isManual ? 'Manual' : 'Spot'}</span></div>))}
+                                        {item.other_costs_at_making > 0 && (<div className="flex justify-between text-[10px] font-bold border-b border-stone-100 pb-1 uppercase"><span>Stones/Other</span><span>${Number(item.other_costs_at_making).toFixed(2)}</span></div>)}
                                     </div>
-                                    <button onClick={() => syncToMarket(item)} className="w-full py-2 bg-[#2d4a22] text-white rounded-lg font-black text-[9px] uppercase tracking-widest hover:bg-slate-900 transition-all shadow-sm">Overide Stored Price with Live</button>
+                                    <div className="space-y-4">
+                                        <div className="grid grid-cols-2 gap-2 text-center">
+                                            <div className="bg-white p-3 rounded-xl border border-stone-100"><p className="text-[8px] font-black text-stone-400 uppercase">Materials (Orig)</p><p className="text-xs font-black text-slate-700">${(Number(item.materials_at_making || 0) + Number(item.other_costs_at_making || 0)).toFixed(2)}</p></div>
+                                            <div className="bg-white p-3 rounded-xl border border-stone-100"><p className="text-[8px] font-black text-stone-400 uppercase">Labor Cost</p><p className="text-xs font-black text-slate-700">${Number(labor).toFixed(2)}</p></div>
+                                        </div>
+                                        <button onClick={() => syncToMarket(item)} className="w-full py-2 bg-[#2d4a22] text-white rounded-lg font-black text-[9px] uppercase tracking-widest hover:bg-slate-900 transition-all shadow-sm">Sync Vault to Market</button>
+                                    </div>
+                                </div>
+                                <div className="bg-white p-4 rounded-2xl border border-stone-200 text-left">
+                                  <h4 className="text-[9px] font-black uppercase text-stone-400 mb-2">Vault Notes</h4>
+                                  <textarea className="w-full p-3 bg-stone-50 border border-stone-100 rounded-xl text-xs italic text-slate-600 resize-none h-20 outline-none focus:border-[#A5BEAC] transition-all" placeholder="Click to add notes about this piece (stones, customer, history)..." defaultValue={item.notes || ''} onBlur={(e) => saveNote(item.id, e.target.value)} />
+                                  <p className="text-[8px] text-stone-300 mt-1 uppercase font-bold tracking-tighter">Changes save automatically on click-away</p>
                                 </div>
                             </div>
                         </details>
@@ -379,39 +381,15 @@ export default function Home() {
               <div className="bg-stone-50 p-6 rounded-2xl space-y-3 border border-stone-100"><h3 className="text-xs font-black text-slate-900 uppercase tracking-widest">PURITY CONSTANTS:</h3><div className="grid grid-cols-2 gap-2 text-[10px] font-bold text-stone-400"><p>24K Gold: 99.9%</p><p>22K Gold: 91.6%</p><p>18K Gold: 75.0%</p><p>14K Gold: 58.3%</p><p>10K Gold: 41.7%</p><p>Sterling Silver: 92.5%</p><p>Plat 950: 95.0%</p><p>Palladium: 95.0%</p></div></div>
             </div>
           </div>
-
           <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-stone-100">
             <h2 className="text-xl font-black uppercase italic tracking-tighter mb-6 text-slate-900 underline decoration-[#A5BEAC] decoration-4 underline-offset-8">2. PRICE STRATEGY DETAIL</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
-              <div className={`p-6 rounded-2xl border-2 border-stone-100 bg-stone-50 transition-all`}>
-                <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-2">STRATEGY A (STANDARD MULTIPLIER)</h3>
-                <div className="space-y-2 text-xs text-stone-700">
-                  <p><strong className="text-slate-900">Wholesale:</strong> Materials + Labor</p>
-                  <p><strong className="text-slate-900">Retail:</strong> Wholesale × {retailMultA}</p>
-                  <div className="mt-4 p-3 bg-white/50 rounded-xl border border-[#A5BEAC]/30">
-                    <p className="text-[10px] text-stone-500 leading-relaxed"><span className="font-black text-[#A5BEAC] uppercase text-[8px] block mb-1">Industry Standard:</span>Standard industry retail markup is typically 2.0 to 3.0 times the wholesale cost to cover overhead and business growth.</p>
-                  </div>
-                </div>
-              </div>
-              <div className={`p-6 rounded-2xl border-2 border-stone-100 bg-stone-50 transition-all`}>
-                <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-2">STRATEGY B (MATERIALS MARKUP)</h3>
-                <div className="space-y-2 text-xs text-stone-700">
-                  <p><strong className="text-slate-900">Wholesale:</strong> (Materials × {markupB}) + Labor</p>
-                  <p><strong className="text-slate-900">Retail:</strong> Wholesale × 2</p>
-                  <div className="mt-4 p-3 bg-white/50 rounded-xl border border-[#A5BEAC]/30">
-                    <p className="text-[10px] text-stone-500 leading-relaxed"><span className="font-black text-[#A5BEAC] uppercase text-[8px] block mb-1">Industry Standard:</span>A production markup of 1.5 to 1.8 is standard to account for metal loss, consumables, and market volatility before labor is applied.</p>
-                  </div>
-                </div>
-              </div>
+              <div className="p-6 rounded-2xl border-2 border-stone-100 bg-stone-50 transition-all"><h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-2">STRATEGY A (STANDARD MULTIPLIER)</h3><div className="space-y-2 text-xs text-stone-700"><p><strong className="text-slate-900">Wholesale:</strong> Materials + Labor</p><p><strong className="text-slate-900">Retail:</strong> Wholesale × {retailMultA}</p><div className="mt-4 p-3 bg-white/50 rounded-xl border border-[#A5BEAC]/30"><p className="text-[10px] text-stone-500 leading-relaxed"><span className="font-black text-[#A5BEAC] uppercase text-[8px] block mb-1">Industry Standard:</span>Standard industry retail markup is typically 2.0 to 3.0 times the wholesale cost to cover overhead and business growth.</p></div></div></div>
+              <div className="p-6 rounded-2xl border-2 border-stone-100 bg-stone-50 transition-all"><h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-2">STRATEGY B (MATERIALS MARKUP)</h3><div className="space-y-2 text-xs text-stone-700"><p><strong className="text-slate-900">Wholesale:</strong> (Materials × {markupB}) + Labor</p><p><strong className="text-slate-900">Retail:</strong> Wholesale × 2</p><div className="mt-4 p-3 bg-white/50 rounded-xl border border-[#A5BEAC]/30"><p className="text-[10px] text-stone-500 leading-relaxed"><span className="font-black text-[#A5BEAC] uppercase text-[8px] block mb-1">Industry Standard:</span>A production markup of 1.5 to 1.8 is standard to account for metal loss, consumables, and market volatility before labor is applied.</p></div></div></div>
             </div>
           </div>
-
           <div className="flex flex-col items-center justify-center gap-2 py-8 border-t border-stone-200 mt-10">
-            <a href="https://bearsilverandstone.com" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400">Powered by</span>
-              <img src="/icon.png" alt="Bear Silver and Stone" className="w-6 h-6 object-contain" />
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900">Bear Silver and Stone</span>
-            </a>
+            <a href="https://bearsilverandstone.com" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:opacity-80 transition-opacity"><span className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400">Powered by</span><img src="/icon.png" alt="Bear Silver and Stone" className="w-6 h-6 object-contain" /><span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900">Bear Silver and Stone</span></a>
           </div>
         </div>
       </div>
