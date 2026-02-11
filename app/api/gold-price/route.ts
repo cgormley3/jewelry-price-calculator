@@ -9,12 +9,22 @@ export async function GET() {
     process.env.SUPABASE_SERVICE_ROLE_KEY! // Use the Secret Key you found
   );
 
-  // Added timestamp to break the Google export cache
-  const timestamp = Date.now();
-  const CSV_URL = `https://docs.google.com/spreadsheets/d/e/2PACX-1vRCIKyw7uQpytVE7GayB_rMY8qqMwSjat28AwLj9rSSD64OrZRqDSIuIcDIdAob_BK81rrempUgTO-H/pub?gid=1610736361&single=true&output=csv&t=${timestamp}`;
+  // Use a random string to force Google to bypass its internal export cache
+  const uniqueId = Math.random().toString(36).substring(7);
+  const CSV_URL = `https://docs.google.com/spreadsheets/d/e/2PACX-1vRCIKyw7uQpytVE7GayB_rMY8qqMwSjat28AwLj9rSSD64OrZRqDSIuIcDIdAob_BK81rrempUgTO-H/pub?gid=1610736361&single=true&output=csv&cachebuster=${uniqueId}`;
 
   try {
-    const res = await fetch(CSV_URL, { cache: 'no-store' });
+    // Added headers and revalidate: 0 to ensure all cache layers are bypassed
+    const res = await fetch(CSV_URL, { 
+      method: 'GET',
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      },
+      cache: 'no-store',
+      next: { revalidate: 0 } 
+    });
     const text = await res.text();
     
     // Split text into rows and then into columns

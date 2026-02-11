@@ -404,7 +404,6 @@ export default function Home() {
               <input type="number" placeholder="Other Costs ($)" className="w-full p-3 border rounded-xl" value={otherCosts} onChange={e => setOtherCosts(e.target.value === '' ? '' : Number(e.target.value))} />
 
               {/* RE-ADDED WORKSHOP BREAKDOWN SECTION */}
-              {/* RE-ADDED WORKSHOP BREAKDOWN SECTION */}
               <div className="mt-6 p-4 rounded-xl bg-stone-100 border border-stone-200 space-y-3">
 
                 <div className="flex justify-between items-center py-2 border-b border-stone-200">
