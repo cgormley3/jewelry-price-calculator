@@ -199,6 +199,19 @@ export default function Home() {
               </div>
               <input type="number" placeholder="Other Costs ($)" className="w-full p-3 border rounded-xl outline-none" value={otherCosts} onChange={e => setOtherCosts(e.target.value === '' ? '' : Number(e.target.value))} />
 
+              {/* INTEGRATED COST BREAKDOWN SECTION */}
+              <hr className="border-slate-100" />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                  <p className="text-[9px] font-black uppercase text-slate-400">Pure Materials</p>
+                  <p className="text-lg font-black text-slate-800">${b.totalMaterials.toFixed(2)}</p>
+                </div>
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                  <p className="text-[9px] font-black uppercase text-slate-400">Bench Labor</p>
+                  <p className="text-lg font-black text-slate-800">${b.labor.toFixed(2)}</p>
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <button onClick={() => setStrategy('A')} className={`p-4 rounded-2xl border-2 text-left relative transition-all ${strategy === 'A' ? 'border-blue-600 bg-blue-50' : 'border-slate-100'}`}>
                   <p className="text-[10px] font-black opacity-50 uppercase">Strategy A</p>
@@ -215,25 +228,6 @@ export default function Home() {
                 </button>
               </div>
               <button onClick={addToInventory} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black shadow-lg hover:bg-blue-700 active:scale-95 transition-all">PUSH TO INVENTORY</button>
-            </div>
-
-            {/* REAL-TIME COST BREAKDOWN (Stacks above inventory on mobile) */}
-            <div className="bg-white border-2 border-blue-600 p-8 rounded-[2rem] shadow-2xl relative overflow-hidden">
-               <h3 className="text-sm font-black uppercase tracking-widest text-slate-900 mb-6">Real-Time Cost Breakdown</h3>
-               <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-bold uppercase text-slate-400">Pure Materials</p>
-                    <p className="text-2xl font-black text-slate-900">${b.totalMaterials.toFixed(2)}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-bold uppercase text-slate-400">Bench Labor</p>
-                    <p className="text-2xl font-black text-slate-900">${b.labor.toFixed(2)}</p>
-                  </div>
-                  <div className="bg-slate-50 p-4 rounded-2xl border flex flex-col justify-center text-center">
-                    <p className="text-[10px] font-black uppercase text-blue-600">Projected Margin</p>
-                    <p className="text-2xl font-black text-slate-900">${(activeRetail - activeWholesale).toFixed(2)}</p>
-                  </div>
-               </div>
             </div>
           </div>
 
