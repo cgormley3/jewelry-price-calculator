@@ -286,7 +286,7 @@ export default function Home() {
                   /* 2. REGULAR LOGIN / SIGN UP MODE */
                   <>
                     <h3 className="text-sm font-black uppercase mb-4 text-slate-800 text-center tracking-tight">
-                      {isSignUp ? 'Create Vault Account' : 'Secure Vault Access'}
+                      {isSignUp ? 'Create Vault Account' : 'save your vault'}
                     </h3>
 
                     {/* GMAIL OPTION */}
