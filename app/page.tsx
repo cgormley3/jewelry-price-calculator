@@ -305,23 +305,23 @@ export default function Home() {
                   {/* STRATEGY A */}
                   <button
                     onClick={() => setStrategy('A')}
-                    className={`group flex items-center justify-between p-5 rounded-[2rem] border-2 transition-all ${strategy === 'A' ? 'border-[#A5BEAC] bg-stone-50 shadow-md' : 'border-stone-100 bg-white hover:border-stone-200'
+                    className={`group flex flex-col sm:flex-row sm:items-center sm:justify-between p-5 rounded-[2rem] border-2 transition-all ${strategy === 'A' ? 'border-[#A5BEAC] bg-stone-50 shadow-md' : 'border-stone-100 bg-white hover:border-stone-200'
                       }`}
                   >
-                    <div className="text-left">
-                      <p className="text-[10px] font-black opacity-40 uppercase tracking-tighter mb-1 text-slate-900">Strategy A</p>
+                    <div className="text-left mb-4 sm:mb-0">
+                      <p className="text-[10px] font-black opacity-40 uppercase tracking-tighter mb-1 text-slate-900">Retail A</p>
                       <p className="text-3xl font-black text-slate-900">
                         ${a?.retailA ? a.retailA.toFixed(2) : '0.00'}
                       </p>
                     </div>
 
-                    <div className="text-right space-y-2">
+                    <div className="text-left sm:text-right space-y-2">
                       <p className="text-[9px] font-bold text-stone-400 uppercase">Wholesale: M + L</p>
-                      <div className="flex items-center justify-end gap-2">
-                        <span className="text-[10px] font-black text-[#A5BEAC] uppercase italic">Retail: W ×</span>
+                      <div className="flex items-center sm:justify-end gap-2">
+                        <span className="text-[10px] font-black text-[#A5BEAC] uppercase italic whitespace-nowrap">Retail: W ×</span>
                         <input
                           type="number"
-                          className="w-12 bg-white border-2 border-[#A5BEAC] rounded-xl text-xs font-black text-[#A5BEAC] py-1.5 text-center outline-none focus:ring-2 focus:ring-[#A5BEAC]/20"
+                          className="w-12 bg-white border-2 border-[#A5BEAC] rounded-xl text-xs font-black text-[#A5BEAC] py-1.5 text-center outline-none"
                           value={retailMultA}
                           onChange={(e) => setRetailMultA(Number(e.target.value))}
                           onClick={(e) => e.stopPropagation()}
@@ -333,27 +333,27 @@ export default function Home() {
                   {/* STRATEGY B */}
                   <button
                     onClick={() => setStrategy('B')}
-                    className={`group relative flex items-center justify-between p-5 rounded-[2rem] border-2 transition-all ${strategy === 'B' ? 'border-[#A5BEAC] bg-stone-50 shadow-md' : 'border-stone-100 bg-white hover:border-stone-200'
+                    className={`group relative flex flex-col sm:flex-row sm:items-center sm:justify-between p-5 rounded-[2rem] border-2 transition-all ${strategy === 'B' ? 'border-[#A5BEAC] bg-stone-50 shadow-md' : 'border-stone-100 bg-white hover:border-stone-200'
                       }`}
                   >
-                    <div className="text-left">
-                      <p className="text-[10px] font-black opacity-40 uppercase tracking-tighter mb-1 text-slate-900">Strategy B</p>
+                    <div className="text-left mb-4 sm:mb-0">
+                      <p className="text-[10px] font-black opacity-40 uppercase tracking-tighter mb-1 text-slate-900">Retail B</p>
                       <p className="text-3xl font-black text-slate-900">
                         ${b?.retailB ? b.retailB.toFixed(2) : '0.00'}
                       </p>
                     </div>
 
-                    <div className="flex flex-col items-end shrink-0">
-                      <div className="flex items-center gap-1 text-[#A5BEAC] italic font-black text-[10px] uppercase">
-                        <span className="whitespace-nowrap">Wholesale: (M ×</span>
+                    <div className="flex flex-col items-start sm:items-end">
+                      <div className="flex items-center gap-1 text-[#A5BEAC] italic font-black text-[10px] uppercase whitespace-nowrap">
+                        <span>Wholesale: (M ×</span>
                         <input
                           type="number"
-                          className="w-10 bg-white border-2 border-[#A5BEAC] rounded-xl text-xs font-black py-1 text-center outline-none focus:ring-2 focus:ring-[#A5BEAC]/20"
+                          className="w-12 bg-white border-2 border-[#A5BEAC] rounded-xl text-xs font-black py-1.5 text-center outline-none"
                           value={markupB}
                           onChange={(e) => setMarkupB(Number(e.target.value))}
                           onClick={(e) => e.stopPropagation()}
                         />
-                        <span className="whitespace-nowrap">) + L</span>
+                        <span>) + L</span>
                       </div>
                       <p className="text-[9px] font-bold text-stone-400 uppercase mt-1">Retail: W × 2</p>
                     </div>
