@@ -190,9 +190,25 @@ export default function Home() {
   };
 
   return (
+    
     <div className="min-h-screen bg-slate-100 p-4 md:p-10 text-slate-900 font-sans">
       <div className="max-w-7xl mx-auto space-y-6">
-
+{/* BRAND HEADER */}
+<div className="flex flex-col items-center justify-center py-8 bg-white rounded-[2rem] border shadow-sm mb-6">
+  <div className="flex items-center gap-3">
+    <img 
+      src="/icon.png" 
+      alt="Bear Silver and Stone Logo" 
+      className="w-10 h-10 object-contain"
+    />
+    <h1 className="text-4xl font-black uppercase tracking-tighter text-slate-900">
+      The Vault
+    </h1>
+  </div>
+  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mt-2">
+    by Bear Silver and Stone
+  </p>
+</div>
         {/* HEADER */}
         <div className="flex justify-between items-center bg-white px-6 py-3 rounded-2xl border shadow-sm relative">
           <div className="flex items-center gap-2">
