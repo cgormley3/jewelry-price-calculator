@@ -106,9 +106,7 @@ export default function Home() {
       alert("Please verify you are human first!");
       return;
     }
-
-    // Your existing Supabase save logic here
-    console.log("Saving with token:", token);
+    addToInventory();
   };
 
   const loginWithGoogle = async () => {
@@ -136,7 +134,6 @@ export default function Home() {
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      // This tells Supabase where to send the user after they click the email link
       redirectTo: `${window.location.origin}/reset-password`,
     });
 
@@ -194,6 +191,7 @@ export default function Home() {
   };
 
   const addToInventory = async () => {
+    if (!token) return alert("Please verify you are human first!");
     if (!itemName || metalList.length === 0) return alert("Missing info");
     if (!user) return alert("Session not ready");
     const newItem = {
@@ -216,6 +214,7 @@ export default function Home() {
       setHours('');
       setRate('');
       setOtherCosts('');
+      setToken(null); 
     }
   };
 
@@ -259,15 +258,12 @@ export default function Home() {
             </div>
             {showAuth && (
               <div className="absolute right-0 mt-2 w-80 bg-white p-6 rounded-3xl border-2 border-blue-600 shadow-2xl z-[100] animate-in fade-in slide-in-from-top-2">
-
-                {/* 1. RESET PASSWORD MODE */}
                 {isResetMode ? (
                   <div className="space-y-4">
                     <h3 className="text-sm font-black uppercase text-center text-slate-800 tracking-tight">Reset Vault Access</h3>
                     <p className="text-[10px] text-slate-400 font-bold text-center leading-tight uppercase">
                       Enter your email and we'll send a secure link to reset your password.
                     </p>
-
                     {resetSent ? (
                       <div className="bg-green-50 p-4 rounded-xl border border-green-100">
                         <p className="text-[10px] text-green-600 font-black text-center uppercase leading-tight">
@@ -289,7 +285,6 @@ export default function Home() {
                         </button>
                       </form>
                     )}
-
                     <button
                       onClick={() => { setIsResetMode(false); setResetSent(false); }}
                       className="w-full text-[10px] font-black text-slate-400 uppercase hover:text-blue-600 transition"
@@ -298,13 +293,10 @@ export default function Home() {
                     </button>
                   </div>
                 ) : (
-                  /* 2. REGULAR LOGIN / SIGN UP MODE */
                   <>
                     <h3 className="text-sm font-black uppercase mb-4 text-slate-800 text-center tracking-tight">
                       {isSignUp ? 'Create Vault Account' : 'save your vault'}
                     </h3>
-
-                    {/* GMAIL OPTION */}
                     <button
                       onClick={loginWithGoogle}
                       className="w-full flex items-center justify-center gap-3 bg-white border-2 border-slate-100 py-3 rounded-xl hover:bg-slate-50 transition mb-4 shadow-sm"
@@ -312,14 +304,11 @@ export default function Home() {
                       <img src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png" className="w-4 h-4" alt="G" />
                       <span className="text-[10px] font-black uppercase text-slate-700">Continue with Google</span>
                     </button>
-
                     <div className="flex items-center gap-2 mb-4">
                       <div className="h-[1px] bg-slate-100 flex-1"></div>
                       <span className="text-[9px] font-bold text-slate-300 uppercase">OR</span>
                       <div className="h-[1px] bg-slate-100 flex-1"></div>
                     </div>
-
-                    {/* EMAIL FORM */}
                     <form onSubmit={handleAuth} className="space-y-3">
                       <input
                         type="email"
@@ -341,17 +330,13 @@ export default function Home() {
                         {isSignUp ? 'Confirm & Sync Data' : 'Login'}
                       </button>
                     </form>
-
                     <div className="mt-6 flex flex-col gap-4 text-center">
-                      {/* Main Toggle - Blue and Bigger */}
                       <p
                         onClick={() => setIsSignUp(!isSignUp)}
                         className="text-[11px] font-black text-blue-600 cursor-pointer uppercase tracking-wider hover:text-blue-800 transition"
                       >
                         {isSignUp ? 'Already have an account? Login' : 'Need an account? Sign up'}
                       </p>
-
-                      {/* Forgot Password - Gray and Smaller */}
                       {!isSignUp && (
                         <p
                           onClick={() => setIsResetMode(true)}
@@ -368,7 +353,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* 3. UPDATED TICKER */}
+        {/* TICKER */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {Object.entries(prices)
             .filter(([name]) => !['success', 'updated_at', 'lastUpdated', 'id'].includes(name))
@@ -417,57 +402,60 @@ export default function Home() {
               <input type="number" placeholder="Other Costs ($)" className="w-full p-3 border rounded-xl" value={otherCosts} onChange={e => setOtherCosts(e.target.value === '' ? '' : Number(e.target.value))} />
 
               <div className="mt-4 flex flex-col items-center gap-4">
-                <Turnstile
-                  siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
-                  onSuccess={(token) => setToken(token)}
-                />
-
-                <button
-                  onClick={handleSave}
-                  disabled={!token}
-                  className={`w-full p-4 rounded-xl font-bold uppercase transition-all ${!token ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-blue-600 text-white shadow-lg'
-                    }`}
-                >
-                  Save to Vault
-                </button>
-              </div>
-
-              {/* RE-ADDED WORKSHOP BREAKDOWN SECTION */}
-              <div className="mt-6 p-4 rounded-xl bg-stone-100 border border-stone-200 space-y-3">
-
-                <div className="flex justify-between items-center py-2 border-b border-stone-200">
-                  <span className="text-stone-600">Materials Total</span>
-                  <span className="font-medium text-stone-800">${b.totalMaterials.toFixed(2)}</span>
+                
+                <div className="w-full p-4 rounded-xl bg-stone-100 border border-stone-200 space-y-3">
+                  <div className="flex justify-between items-center py-2 border-b border-stone-200">
+                    <span className="text-stone-600">Materials Total</span>
+                    <span className="font-medium text-stone-800">${b.totalMaterials.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-stone-600">Labor Total ({hours || 0}h @ ${rate || 0}/hr)</span>
+                    <span className="font-medium text-stone-800">${b.labor.toFixed(2)}</span>
+                  </div>
                 </div>
 
-                <div className="flex justify-between items-center py-2">
-                  <span className="text-stone-600">Labor Total ({hours || 0}h @ ${rate || 0}/hr)</span>
-                  <span className="font-medium text-stone-800">${b.labor.toFixed(2)}</span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 items-stretch">
-                <button onClick={() => setStrategy('A')} className={`flex flex-col p-4 rounded-2xl border-2 text-left ${strategy === 'A' ? 'border-blue-600 bg-blue-50' : 'border-slate-100'}`}>
-                  <p className="text-[10px] font-black opacity-50 uppercase tracking-tighter mb-1">Strategy A</p>
-                  <p className="text-xl font-black mb-3">${b.retailA.toFixed(2)}</p>
-                  <div className="mt-auto space-y-1">
-                    <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">Wholesale: Materials + Labor</p>
-                    <div className="flex items-center gap-1">
-                      <span className="text-[8px] font-bold text-slate-400 uppercase">Retail: Wholesale ×</span>
-                      <input type="number" step="0.1" className="w-10 bg-white border rounded text-[10px] font-black text-blue-600 px-1" value={retailMultA} onChange={(e) => setRetailMultA(Number(e.target.value))} onClick={(e) => e.stopPropagation()} />
+                <div className="grid grid-cols-2 gap-4 items-stretch w-full">
+                  <button onClick={() => setStrategy('A')} className={`flex flex-col p-4 rounded-2xl border-2 text-left ${strategy === 'A' ? 'border-blue-600 bg-blue-50' : 'border-slate-100'}`}>
+                    <p className="text-[10px] font-black opacity-50 uppercase tracking-tighter mb-1">Strategy A</p>
+                    <p className="text-xl font-black mb-3">${b.retailA.toFixed(2)}</p>
+                    <div className="mt-auto space-y-1">
+                      <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">Wholesale: Materials + Labor</p>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[8px] font-bold text-slate-400 uppercase">Retail: Wholesale ×</span>
+                        <input type="number" step="0.1" className="w-10 bg-white border rounded text-[10px] font-black text-blue-600 px-1" value={retailMultA} onChange={(e) => setRetailMultA(Number(e.target.value))} onClick={(e) => e.stopPropagation()} />
+                      </div>
                     </div>
-                  </div>
-                </button>
-                <button onClick={() => setStrategy('B')} className={`flex flex-col p-4 rounded-2xl border-2 text-left ${strategy === 'B' ? 'border-blue-600 bg-blue-50' : 'border-slate-100'}`}>
-                  <p className="text-[10px] font-black opacity-50 uppercase tracking-tighter mb-1">Strategy B</p>
-                  <p className="text-xl font-black mb-3">${b.retailB.toFixed(2)}</p>
-                  <div className="mt-auto space-y-1">
-                    <p className="text-[8px] font-bold text-blue-600 uppercase italic">Wholesale: (M × 1.8) + L</p>
-                    <p className="text-[8px] font-bold text-slate-400 uppercase">Retail: Wholesale × 2</p>
-                  </div>
-                </button>
+                  </button>
+
+                  <button onClick={() => setStrategy('B')} className={`flex flex-col p-4 rounded-2xl border-2 text-left ${strategy === 'B' ? 'border-blue-600 bg-blue-50' : 'border-slate-100'}`}>
+                    <p className="text-[10px] font-black opacity-50 uppercase tracking-tighter mb-1">Strategy B</p>
+                    <p className="text-xl font-black mb-3">${b.retailB.toFixed(2)}</p>
+                    <div className="mt-auto space-y-1">
+                      <p className="text-[8px] font-bold text-blue-600 uppercase italic">Wholesale: (M × 1.8) + L</p>
+                      <p className="text-[8px] font-bold text-slate-400 uppercase">Retail: Wholesale × 2</p>
+                    </div>
+                  </button>
+                </div>
+
+                {/* THE HUMAN CHECK - MOVED BELOW PRICES */}
+                <div className="bg-stone-50 p-4 rounded-2xl w-full flex flex-col items-center gap-4 border">
+                  <Turnstile
+                    siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
+                    onSuccess={(token) => setToken(token)}
+                    options={{ theme: 'light' }}
+                  />
+                  
+                  <button
+                    onClick={addToInventory}
+                    disabled={!token}
+                    className={`w-full p-4 rounded-xl font-black uppercase transition-all shadow-md ${
+                      !token ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700 active:scale-95'
+                    }`}
+                  >
+                    {token ? "Save to Vault" : "Verifying Human..."}
+                  </button>
+                </div>
               </div>
-              <button onClick={addToInventory} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black shadow-lg uppercase">Save to Vault</button>
             </div>
           </div>
 
