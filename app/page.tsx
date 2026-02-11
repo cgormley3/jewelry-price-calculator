@@ -375,7 +375,7 @@ export default function Home() {
                         <span className="text-[10px] font-black text-[#A5BEAC] uppercase italic whitespace-nowrap">Retail: W ×</span>
                         <input 
                           type="number" 
-                          className="w-12 bg-white border-2 border-[#A5BEAC] rounded-xl text-xs font-black py-1.5 text-center outline-none" 
+                          className="w-12 bg-white border-2 border-[#A5BEAC] text-[#A5BEAC] rounded-xl text-xs font-black py-1.5 text-center outline-none" 
                           value={retailMultA} 
                           onChange={(e) => setRetailMultA(Number(e.target.value))} 
                           onClick={(e) => e.stopPropagation()} 
@@ -522,7 +522,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* BOTTOM SECTIONS - RESTORED ORIGINAL BOXED EQUATIONS */}
+        {/* BOTTOM SECTIONS */}
         <div className="grid grid-cols-1 gap-8 pt-10">
           <div className="bg-white p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC]">
             <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">1. MATERIAL CALCULATION DETAIL</h2>
@@ -555,37 +555,51 @@ export default function Home() {
           <div className="bg-white p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC]">
             <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">2. PRICE STRATEGY DETAIL</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
-              {/* STRATEGY A - ORIGINAL UI EQUATIONS */}
-              <div className="p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all overflow-x-auto">
-                <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6">STRATEGY A (STANDARD MULTIPLIER)</h3>
-                <div className="space-y-4 min-w-fit">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-white border border-stone-200 flex items-center justify-center font-black text-xs">W</div>
-                    <span className="text-xs font-bold text-stone-400">=</span>
-                    <span className="text-xs font-bold text-slate-900">Materials (M) + Labor (L)</span>
+              {/* STRATEGY A - RESTORED EQUATIONS + IN-BOX GUIDE */}
+              <div className="p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all flex flex-col justify-between">
+                <div>
+                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6">STRATEGY A (STANDARD MULTIPLIER)</h3>
+                  <div className="space-y-4 mb-8 overflow-x-auto min-w-fit">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-white border border-stone-200 flex items-center justify-center font-black text-xs shrink-0">W</div>
+                      <span className="text-xs font-bold text-stone-400">=</span>
+                      <span className="text-xs font-bold text-slate-900 whitespace-nowrap">Materials (M) + Labor (L)</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-black text-xs shrink-0">R</div>
+                      <span className="text-xs font-bold text-stone-400">=</span>
+                      <span className="text-xs font-bold text-slate-900 whitespace-nowrap">Wholesale (W) × {retailMultA}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-black text-xs">R</div>
-                    <span className="text-xs font-bold text-stone-400">=</span>
-                    <span className="text-xs font-bold text-slate-900">Wholesale (W) × {retailMultA}</span>
-                  </div>
+                </div>
+                <div className="pt-4 border-t border-stone-200/60">
+                  <p className="text-[10px] text-[#A5BEAC] leading-relaxed italic uppercase font-bold tracking-tight">
+                    * The standard retail model. Best for production pieces where a 2-3x markup covers overhead, marketing, and business growth.
+                  </p>
                 </div>
               </div>
 
-              {/* STRATEGY B - ORIGINAL UI EQUATIONS */}
-              <div className="p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all text-left overflow-x-auto">
-                <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6">STRATEGY B (MATERIALS MARKUP)</h3>
-                <div className="space-y-4 min-w-fit">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-white border border-stone-200 flex items-center justify-center font-black text-xs">W</div>
-                    <span className="text-xs font-bold text-stone-400">=</span>
-                    <span className="text-xs font-bold text-slate-900">(Materials × {markupB}) + Labor</span>
+              {/* STRATEGY B - RESTORED EQUATIONS + IN-BOX GUIDE */}
+              <div className="p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all flex flex-col justify-between">
+                <div>
+                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6">STRATEGY B (MATERIALS MARKUP)</h3>
+                  <div className="space-y-4 mb-8 overflow-x-auto min-w-fit">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-white border border-stone-200 flex items-center justify-center font-black text-xs shrink-0">W</div>
+                      <span className="text-xs font-bold text-stone-400">=</span>
+                      <span className="text-xs font-bold text-slate-900 whitespace-nowrap">(Materials × {markupB}) + Labor</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-black text-xs shrink-0">R</div>
+                      <span className="text-xs font-bold text-stone-400">=</span>
+                      <span className="text-xs font-bold text-slate-900 whitespace-nowrap">Wholesale (W) × 2</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-black text-xs">R</div>
-                    <span className="text-xs font-bold text-stone-400">=</span>
-                    <span className="text-xs font-bold text-slate-900">Wholesale (W) × 2</span>
-                  </div>
+                </div>
+                <div className="pt-4 border-t border-stone-200/60">
+                  <p className="text-[10px] text-[#A5BEAC] leading-relaxed italic uppercase font-bold tracking-tight">
+                    * The custom model. Best for high-material-cost work where you markup the metals first by 1.5-1.8x to protect against market volatility.
+                  </p>
                 </div>
               </div>
             </div>
