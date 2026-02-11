@@ -202,7 +202,7 @@ export default function Home() {
           <div className="flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full ${user ? 'bg-green-500 animate-pulse' : 'bg-slate-300'}`}></div>
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-              {!user ? 'Vault Locked' : (user.is_anonymous ? 'Guest Vault' : `User: ${user.email || 'Syncing...'}`)}
+              {!user ? 'Vault Locked' : (user.is_anonymous ? 'Guest' : `User: ${user.email || 'Syncing...'}`)}
             </p>
           </div>
 
@@ -312,22 +312,29 @@ export default function Home() {
               </div>
               <input type="number" placeholder="Other Costs ($)" className="w-full p-3 border rounded-xl" value={otherCosts} onChange={e => setOtherCosts(e.target.value === '' ? '' : Number(e.target.value))} />
 
-              {/* STRATEGY BUTTONS - WRAPPING FIX APPLIED */}
-              <div className="grid grid-cols-2 gap-4">
+              {/* STRATEGY BUTTONS - ALIGNED FROM TOP DOWN */}
+              <div className="grid grid-cols-2 gap-4 items-stretch">
+                {/* STRATEGY A */}
                 <button
                   onClick={() => setStrategy('A')}
-                  className={`p-4 rounded-2xl border-2 text-left transition-all ${strategy === 'A' ? 'border-blue-600 bg-blue-50' : 'border-slate-100'}`}
+                  className={`flex flex-col p-4 rounded-2xl border-2 text-left transition-all h-full ${strategy === 'A' ? 'border-blue-600 bg-blue-50' : 'border-slate-100'
+                    }`}
                 >
-                  <p className="text-[10px] font-black opacity-50 uppercase tracking-tighter">Strategy A</p>
-                  <p className="text-xl font-black">${b.retailA.toFixed(2)}</p>
-                  <div className="mt-1 space-y-1 flex flex-col">
-                    <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter leading-tight">Wholesale: Materials + Labor</p>
+                  <p className="text-[10px] font-black opacity-50 uppercase tracking-tighter mb-1">Strategy A</p>
+                  <p className="text-xl font-black mb-3">${b.retailA.toFixed(2)}</p>
+
+                  <div className="mt-auto space-y-2">
+                    <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter leading-tight">
+                      Wholesale: Materials + Labor
+                    </p>
                     <div className="flex items-center gap-1 flex-wrap">
-                      <span className="text-[8px] font-bold text-slate-400 uppercase whitespace-nowrap">Retail: Wholesale ×</span>
+                      <span className="text-[8px] font-bold text-slate-400 uppercase whitespace-nowrap">
+                        Retail: Wholesale ×
+                      </span>
                       <input
                         type="number"
                         step="0.1"
-                        className="w-10 bg-white border rounded text-[10px] font-black text-blue-600"
+                        className="w-10 bg-white border rounded text-[10px] font-black text-blue-600 px-1"
                         value={retailMultA}
                         onChange={(e) => setRetailMultA(Number(e.target.value))}
                         onClick={(e) => e.stopPropagation()}
@@ -335,16 +342,23 @@ export default function Home() {
                     </div>
                   </div>
                 </button>
+
+                {/* STRATEGY B */}
                 <button
                   onClick={() => setStrategy('B')}
-                  className={`p-4 rounded-2xl border-2 text-left transition-all ${strategy === 'B' ? 'border-blue-600 bg-blue-50' : 'border-slate-100'}`}
+                  className={`flex flex-col p-4 rounded-2xl border-2 text-left transition-all h-full ${strategy === 'B' ? 'border-blue-600 bg-blue-50' : 'border-slate-100'
+                    }`}
                 >
-                  <p className="text-[10px] font-black opacity-50 uppercase tracking-tighter">Strategy B</p>
-                  <p className="text-xl font-black">${b.retailB.toFixed(2)}</p>
-                  <div className="mt-1 space-y-1 flex flex-col">
-                    {/* FIXED: Removed whitespace-nowrap to allow text to wrap in the box */}
-                    <p className="text-[8px] font-bold text-blue-600 uppercase italic tracking-tighter leading-tight">Wholesale: (Materials × 1.8) + Labor</p>
-                    <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">Retail: Wholesale × 2</p>
+                  <p className="text-[10px] font-black opacity-50 uppercase tracking-tighter mb-1">Strategy B</p>
+                  <p className="text-xl font-black mb-3">${b.retailB.toFixed(2)}</p>
+
+                  <div className="mt-auto space-y-2">
+                    <p className="text-[8px] font-bold text-blue-600 uppercase italic tracking-tighter leading-tight">
+                      Wholesale: (Materials × 1.8) + Labor
+                    </p>
+                    <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">
+                      Retail: Wholesale × 2
+                    </p>
                   </div>
                 </button>
               </div>
