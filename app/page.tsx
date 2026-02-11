@@ -172,7 +172,7 @@ export default function Home() {
       const liveWholesale = item.strategy === 'A' ? current.wholesaleA + labor : current.wholesaleB;
       const liveRetail = item.strategy === 'A' ? (current.totalMaterials + labor) * (item.multiplier || 3) : ((current.totalMaterials * (item.markup_b || 1.8)) + labor) * 2;
       const metalsStr = item.metals.map((m: any) => `${m.weight}${m.unit} ${m.type}`).join('; ');
-      return [`"${item.name}"`, liveRetail.toFixed(2), liveWholesale.toFixed(2), Number(item.retail).toFixed(2), Number(item.wholesale).toFixed(2), `"${item.notes?.replace(/"/g, '""') || ''}"`, new Date(item.created_at).toLocaleDateString(), item.strategy, `"${metalsStr}"`];
+      return [`"${item.name}"`, liveRetail.toFixed(2), liveWholesale.toFixed(2), Number(item.retail).toFixed(2), Number(item.wholesale).toFixed(2), `"${item.notes?.replace(/"/g, '""') || ''}"`, new Date(item.created_at).toLocaleDateString(), item.strategy, `"${metalsStr}"` ];
     });
     const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
     const encodedUri = encodeURI(csvContent);
@@ -199,19 +199,18 @@ export default function Home() {
       doc.text(`Strategy: ${item.strategy} | Saved: ${new Date(item.created_at).toLocaleDateString()}`, 14, currentY + 5);
 
       autoTable(doc, {
-        startY: currentY + 8, head: [['Financial Metric', 'Established (Basis)', 'Market Value (Live)']],
+        startY: currentY + 8, head: [['Financial Metric', 'Saved (Original)', 'Live (Current Market)']],
         body: [['Retail Price', `$${Number(item.retail).toFixed(2)}`, { content: `$${liveRetail.toFixed(2)}`, styles: { fontStyle: 'bold' } }], ['Wholesale Cost', `$${Number(item.wholesale).toFixed(2)}`, `$${liveWholesale.toFixed(2)}`]],
         theme: 'grid', headStyles: { fillColor: [165, 190, 172], textColor: 255, fontSize: 8 },
         styles: { fontSize: 8, cellPadding: 2 }, margin: { left: 14 }, tableWidth: 120
       });
 
-      // Updated PDF Breakdown logic to include Stones and Labor
       const breakdownLines = item.metals.map((m: any) => `${m.weight}${m.unit} ${m.type}`);
       if (item.other_costs_at_making > 0) breakdownLines.push(`Stones/Other: $${Number(item.other_costs_at_making).toFixed(2)}`);
       if (labor > 0) breakdownLines.push(`Labor: $${Number(labor).toFixed(2)}`);
 
       doc.setFontSize(8); doc.setTextColor(80, 80, 80); doc.setFont("helvetica", "bold"); doc.text("BREAKDOWN:", 140, currentY + 12);
-      doc.setFont("helvetica", "normal");
+      doc.setFont("helvetica", "normal"); 
       breakdownLines.forEach((line: string, i: number) => doc.text(line, 140, currentY + 17 + (i * 4)));
 
       if (item.notes) {
@@ -225,15 +224,15 @@ export default function Home() {
     doc.save(`Vault_Report.pdf`); setShowExportMenu(false);
   };
 
-  const loginWithGoogle = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
-    if (error) alert(error.message);
-  };
-
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     let result = isSignUp ? await supabase.auth.signUp({ email, password, options: { data: { is_converted_from_anonymous: true } } }) : await supabase.auth.signInWithPassword({ email, password });
     if (result.error) alert(result.error.message); else { setShowAuth(false); fetchInventory(); }
+  };
+
+  const loginWithGoogle = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
+    if (error) alert(error.message);
   };
 
   return (
@@ -263,7 +262,12 @@ export default function Home() {
           <div className="hidden md:block md:w-1/4"></div>
 
           <div className="flex flex-col items-center justify-center text-center w-full md:w-2/4">
-            <img src="/icon.png" alt="Logo" className="w-12 h-12 object-contain bg-transparent block brightness-110 contrast-125 mb-3" style={{ mixBlendMode: 'multiply' }} />
+            <img 
+              src="/icon.png?v=2" 
+              alt="Logo" 
+              className="w-12 h-12 object-contain bg-transparent block brightness-110 contrast-125 mb-3" 
+              style={{ mixBlendMode: 'multiply' }} 
+            />
             <div className="flex flex-col items-center leading-none">
               <div className="flex items-center justify-center gap-2 mb-2">
                 <h1 className="text-3xl font-black uppercase italic tracking-[0.1em] text-slate-900 leading-none">THE VAULT</h1>
@@ -278,7 +282,7 @@ export default function Home() {
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400">{!user ? 'Vault Locked' : (user.is_anonymous ? 'Guest Mode' : `Vault: ${user.email?.split('@')[0]}`)}</p>
               <div className={`w-2 h-2 rounded-full ${user ? 'bg-[#A5BEAC] animate-pulse' : 'bg-stone-300'}`}></div>
             </div>
-            <div className="flex gap-2 w-full justify-center md:justify-end">
+            <div className="relative flex gap-2 w-full justify-center md:justify-end">
               {!isPro && user && !user.is_anonymous && (
                 <button onClick={() => window.open(SHOPIFY_PRO_URL, '_blank')} className="text-[10px] font-black uppercase bg-[#A5BEAC] text-white px-6 py-3 rounded-xl shadow-sm hover:scale-105 transition">Upgrade</button>
               )}
@@ -286,6 +290,22 @@ export default function Home() {
                 <button onClick={() => setShowAuth(!showAuth)} className="text-[10px] font-black uppercase bg-slate-900 text-white px-8 py-3 rounded-xl hover:bg-[#A5BEAC] transition shadow-sm">Login / Sign Up</button>
               ) : (
                 <button onClick={async () => { await supabase.auth.signOut(); window.location.reload(); }} className="text-[10px] font-black uppercase bg-stone-100 text-slate-900 px-8 py-3 rounded-xl hover:bg-stone-200 transition">Logout</button>
+              )}
+              {showAuth && (
+                <div className="absolute right-0 mt-12 w-full md:w-80 bg-white p-6 rounded-3xl border-2 border-[#A5BEAC] shadow-2xl z-[100] animate-in fade-in slide-in-from-top-2 mx-auto">
+                  <button onClick={() => setShowAuth(false)} className="absolute top-4 right-4 text-stone-300 hover:text-[#A5BEAC] font-black text-sm">✕</button>
+                  <h3 className="text-sm font-black uppercase mb-4 text-center text-slate-900">Vault Access</h3>
+                  <button onClick={loginWithGoogle} className="w-full flex items-center justify-center gap-3 bg-white border-2 border-stone-100 py-3 rounded-xl hover:bg-stone-50 transition mb-4 shadow-sm"><img src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png" className="w-4 h-4" alt="G" /><span className="text-[10px] font-black uppercase text-slate-700">Continue with Google</span></button>
+                  <div className="flex border-b border-stone-100 mb-4">
+                    <button onClick={() => setIsSignUp(false)} className={`flex-1 py-2 text-[10px] font-black uppercase ${!isSignUp ? 'text-[#A5BEAC] border-b-2 border-[#A5BEAC]' : 'text-stone-300'}`}>Login</button>
+                    <button onClick={() => setIsSignUp(true)} className={`flex-1 py-2 text-[10px] font-black uppercase ${isSignUp ? 'text-[#A5BEAC] border-b-2 border-[#A5BEAC]' : 'text-stone-300'}`}>Sign Up</button>
+                  </div>
+                  <form onSubmit={handleAuth} className="space-y-3">
+                    <input type="email" placeholder="Email" className="w-full p-3 border rounded-xl text-sm outline-none focus:border-[#A5BEAC] transition" value={email} onChange={e => setEmail(e.target.value)} required />
+                    <input type="password" placeholder="Password" className="w-full p-3 border rounded-xl text-sm outline-none focus:border-[#A5BEAC] transition" value={password} onChange={e => setPassword(e.target.value)} required />
+                    <button type="submit" className="w-full bg-[#A5BEAC] text-white py-3 rounded-xl font-black text-xs uppercase hover:bg-slate-900 transition shadow-md">{isSignUp ? 'Create Vault Account' : 'Open The Vault'}</button>
+                  </form>
+                </div>
               )}
             </div>
           </div>
@@ -339,8 +359,8 @@ export default function Home() {
                   <div className="flex justify-between items-center py-2"><span className="text-stone-500 font-bold uppercase text-[10px]">Labor Total ({hours || 0}h)</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts).labor.toFixed(2)}</span></div>
                 </div>
                 <div className="grid grid-cols-1 gap-4 mb-6 w-full">
-                  <button onClick={() => setStrategy('A')} className={`group flex flex-col sm:flex-row sm:items-center sm:justify-between p-5 rounded-[2rem] border-2 transition-all ${strategy === 'A' ? 'border-[#A5BEAC] bg-stone-50 shadow-md' : 'border-stone-100 bg-white hover:border-stone-200'}`}><div className="text-left mb-4 sm:mb-0"><p className="text-[10px] font-black opacity-40 uppercase tracking-tighter mb-1 text-slate-900">Retail A</p><p className="text-3xl font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts).retailA.toFixed(2)}</p></div><div className="flex items-center gap-2"><span className="text-[10px] font-black text-[#2d4a22] uppercase italic whitespace-nowrap">Retail: W ×</span><input type="number" className="w-12 bg-white border-2 border-[#2d4a22] rounded-xl text-xs font-black py-1.5 text-center outline-none" value={retailMultA} onChange={(e) => setRetailMultA(Number(e.target.value))} onClick={(e) => e.stopPropagation()} /></div></button>
-                  <button onClick={() => setStrategy('B')} className={`group relative flex flex-col sm:flex-row sm:items-center sm:justify-between p-5 rounded-[2rem] border-2 transition-all ${strategy === 'B' ? 'border-[#2d4a22] bg-stone-50 shadow-md' : 'border-stone-100 bg-white hover:border-stone-200'}`}><div className="text-left mb-4 sm:mb-0"><p className="text-[10px] font-black opacity-40 uppercase tracking-tighter mb-1 text-slate-900">Retail B</p><p className="text-3xl font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts).retailB.toFixed(2)}</p></div><div className="flex flex-col items-start sm:items-end"><div className="flex items-center gap-1 text-[#A5BEAC] italic font-black text-[10px] uppercase whitespace-nowrap"><span>Wholesale: (M ×</span><input type="number" className="w-12 bg-white border-2 border-[#2d4a22] rounded-xl text-xs font-black py-1.5 text-center outline-none" value={markupB} onChange={(e) => setMarkupB(Number(e.target.value))} onClick={(e) => e.stopPropagation()} /><span>) + L</span></div><p className="text-[9px] font-bold text-stone-400 uppercase mt-1">Retail: W × 2</p></div></button>
+                  <button onClick={() => setStrategy('A')} className={`group flex flex-col sm:flex-row sm:items-center sm:justify-between p-5 rounded-[2rem] border-2 transition-all ${strategy === 'A' ? 'border-[#2d4a22] bg-stone-50 shadow-md' : 'border-stone-100 bg-white hover:border-stone-200'}`}><div className="text-left mb-4 sm:mb-0"><p className="text-[10px] font-black opacity-40 uppercase tracking-tighter mb-1 text-slate-900">Retail A</p><p className="text-3xl font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts).retailA.toFixed(2)}</p></div><div className="flex items-center gap-2"><span className="text-[10px] font-black text-[#2d4a22] uppercase italic whitespace-nowrap">Retail: W ×</span><input type="number" className="w-12 bg-white border-2 border-[#2d4a22] rounded-xl text-xs font-black py-1.5 text-center outline-none" value={retailMultA} onChange={(e) => setRetailMultA(Number(e.target.value))} onClick={(e) => e.stopPropagation()} /></div></button>
+                  <button onClick={() => setStrategy('B')} className={`group relative flex flex-col sm:flex-row sm:items-center sm:justify-between p-5 rounded-[2rem] border-2 transition-all ${strategy === 'B' ? 'border-[#2d4a22] bg-stone-50 shadow-md' : 'border-stone-100 bg-white hover:border-stone-200'}`}><div className="text-left mb-4 sm:mb-0"><p className="text-[10px] font-black opacity-40 uppercase tracking-tighter mb-1 text-slate-900">Retail B</p><p className="text-3xl font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts).retailB.toFixed(2)}</p></div><div className="flex flex-col items-start sm:items-end"><div className="flex items-center gap-1 text-[#2d4a22] italic font-black text-[10px] uppercase whitespace-nowrap"><span>Wholesale: (M ×</span><input type="number" className="w-12 bg-white border-2 border-[#2d4a22] rounded-xl text-xs font-black py-1.5 text-center outline-none" value={markupB} onChange={(e) => setMarkupB(Number(e.target.value))} onClick={(e) => e.stopPropagation()} /><span>) + L</span></div><p className="text-[9px] font-bold text-stone-400 uppercase mt-1">Retail: W × 2</p></div></button>
                 </div>
                 <button onClick={addToInventory} disabled={!token} className={`w-full py-5 rounded-[1.8rem] font-black uppercase tracking-[0.15em] text-sm transition-all ${!token ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-[#A5BEAC] text-white shadow-xl hover:bg-slate-900 active:scale-[0.97]'}`}>{token ? "Save to Vault" : "Verifying Human..."}</button>
                 {!token && <div className="w-full flex justify-center mt-4 h-auto overflow-hidden animate-in fade-in slide-in-from-top-1"><Turnstile siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!} onSuccess={(token) => setToken(token)} options={{ theme: 'light', appearance: 'interaction-only' }} /></div>}
@@ -500,11 +520,11 @@ export default function Home() {
           <div className="flex flex-col items-center justify-center gap-2 py-8 border-t border-stone-200 mt-10">
             <a href="https://bearsilverandstone.com" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400">Powered by</span>
-              <img
-                src="/icon.png"
-                alt="Bear Silver and Stone"
-                className="w-6 h-6 object-contain brightness-110 contrast-125"
-                style={{ mixBlendMode: 'multiply' }}
+              <img 
+                src="/icon.png?v=2" 
+                alt="Bear Silver and Stone" 
+                className="w-6 h-6 object-contain brightness-110 contrast-125" 
+                style={{ mixBlendMode: 'multiply' }} 
               />
               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900">Bear Silver and Stone</span>
             </a>
