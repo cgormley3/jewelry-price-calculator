@@ -185,7 +185,7 @@ export default function Home() {
     const doc = new jsPDF();
     doc.setFontSize(22); doc.setTextColor(45, 74, 34); doc.text('THE VAULT INVENTORY REPORT', 14, 20);
     doc.setFontSize(9); doc.setTextColor(100, 100, 100); doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 26);
-    doc.text(`Total Vault Market Value: $${totalVaultValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, 14, 31);
+    doc.text(`Total Vault live Market Value: $${totalVaultValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, 14, 31);
     let currentY = 40;
     filteredInventory.forEach((item, index) => {
       if (currentY > 230) { doc.addPage(); currentY = 20; }
@@ -200,14 +200,14 @@ export default function Home() {
 
       autoTable(doc, {
         startY: currentY + 8, head: [['Financial Metric', 'Saved (Original)', 'Live (Current Market)']],
-        body: [['Retail Price', `$${Number(item.retail).toFixed(2)}`, { content: `$${liveRetail.toFixed(2)}`, styles: { fontStyle: 'bold' } }], ['Wholesale Cost', `$${Number(item.wholesale).toFixed(2)}`, `$${liveWholesale.toFixed(2)}`]],
+        body: [['Retail Price', `$${Number(item.retail).toFixed(2)}`, { content: `$${liveRetail.toFixed(2)}`, styles: { fontStyle: 'bold', textColor: [0, 0, 0] } }], ['Wholesale Cost', `$${Number(item.wholesale).toFixed(2)}`, { content: `$${liveWholesale.toFixed(2)}`, styles: { textColor: [0, 0, 0] } }]],
         theme: 'grid', headStyles: { fillColor: [165, 190, 172], textColor: 255, fontSize: 8 },
         styles: { fontSize: 8, cellPadding: 2 }, margin: { left: 14 }, tableWidth: 120
       });
 
       const breakdownLines = item.metals.map((m: any) => `${m.weight}${m.unit} ${m.type}`);
       if (item.other_costs_at_making > 0) breakdownLines.push(`Stones/Other: $${Number(item.other_costs_at_making).toFixed(2)}`);
-      if (labor > 0) breakdownLines.push(`Labor: $${Number(labor).toFixed(2)}`);
+      if (labor > 0) breakdownLines.push(`Labor Cost: $${Number(labor).toFixed(2)}`);
 
       doc.setFontSize(8); doc.setTextColor(80, 80, 80); doc.setFont("helvetica", "bold"); doc.text("BREAKDOWN:", 140, currentY + 12);
       doc.setFont("helvetica", "normal"); 
@@ -243,9 +243,9 @@ export default function Home() {
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Manual Price Edit</h3>
             <div className="space-y-4">
               <div><label className="text-[10px] font-black uppercase text-stone-400 mb-1 block">New Retail Price ($)</label>
-                <input type="number" className="w-full p-4 bg-stone-50 border rounded-2xl outline-none focus:border-[#A5BEAC] font-bold" value={manualRetail} onChange={(e) => setManualRetail(e.target.value)} /></div>
+              <input type="number" className="w-full p-4 bg-stone-50 border rounded-2xl outline-none focus:border-[#A5BEAC] font-bold" value={manualRetail} onChange={(e) => setManualRetail(e.target.value)} /></div>
               <div><label className="text-[10px] font-black uppercase text-stone-400 mb-1 block">New Wholesale Cost ($)</label>
-                <input type="number" className="w-full p-4 bg-stone-50 border rounded-2xl outline-none focus:border-[#A5BEAC] font-bold" value={manualWholesale} onChange={(e) => setManualWholesale(e.target.value)} /></div>
+              <input type="number" className="w-full p-4 bg-stone-50 border rounded-2xl outline-none focus:border-[#A5BEAC] font-bold" value={manualWholesale} onChange={(e) => setManualWholesale(e.target.value)} /></div>
             </div>
             <div className="flex gap-3">
               <button onClick={() => setEditingItem(null)} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
@@ -258,16 +258,9 @@ export default function Home() {
       <div className="max-w-7xl mx-auto space-y-6">
         {/* HEADER */}
         <div className="flex flex-col md:flex-row justify-between items-center bg-white px-6 py-8 rounded-[2rem] border-2 shadow-sm gap-8 mb-6 relative border-[#A5BEAC]">
-          
           <div className="hidden md:block md:w-1/4"></div>
-
           <div className="flex flex-col items-center justify-center text-center w-full md:w-2/4">
-            <img 
-              src="/icon.png?v=2" 
-              alt="Logo" 
-              className="w-12 h-12 object-contain bg-transparent block brightness-110 contrast-125 mb-3" 
-              style={{ mixBlendMode: 'multiply' }} 
-            />
+            <img src="/icon.png?v=2" alt="Logo" className="w-12 h-12 object-contain bg-transparent block brightness-110 contrast-125 mb-3" style={{ mixBlendMode: 'multiply' }} />
             <div className="flex flex-col items-center leading-none">
               <div className="flex items-center justify-center gap-2 mb-2">
                 <h1 className="text-3xl font-black uppercase italic tracking-[0.1em] text-slate-900 leading-none">THE VAULT</h1>
@@ -359,8 +352,68 @@ export default function Home() {
                   <div className="flex justify-between items-center py-2"><span className="text-stone-500 font-bold uppercase text-[10px]">Labor Total ({hours || 0}h)</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts).labor.toFixed(2)}</span></div>
                 </div>
                 <div className="grid grid-cols-1 gap-4 mb-6 w-full">
-                  <button onClick={() => setStrategy('A')} className={`group flex flex-col sm:flex-row sm:items-center sm:justify-between p-5 rounded-[2rem] border-2 transition-all ${strategy === 'A' ? 'border-[#2d4a22] bg-stone-50 shadow-md' : 'border-stone-100 bg-white hover:border-stone-200'}`}><div className="text-left mb-4 sm:mb-0"><p className="text-[10px] font-black opacity-40 uppercase tracking-tighter mb-1 text-slate-900">Retail A</p><p className="text-3xl font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts).retailA.toFixed(2)}</p></div><div className="flex items-center gap-2"><span className="text-[10px] font-black text-[#2d4a22] uppercase italic whitespace-nowrap">Retail: W ×</span><input type="number" className="w-12 bg-white border-2 border-[#2d4a22] rounded-xl text-xs font-black py-1.5 text-center outline-none" value={retailMultA} onChange={(e) => setRetailMultA(Number(e.target.value))} onClick={(e) => e.stopPropagation()} /></div></button>
-                  <button onClick={() => setStrategy('B')} className={`group relative flex flex-col sm:flex-row sm:items-center sm:justify-between p-5 rounded-[2rem] border-2 transition-all ${strategy === 'B' ? 'border-[#2d4a22] bg-stone-50 shadow-md' : 'border-stone-100 bg-white hover:border-stone-200'}`}><div className="text-left mb-4 sm:mb-0"><p className="text-[10px] font-black opacity-40 uppercase tracking-tighter mb-1 text-slate-900">Retail B</p><p className="text-3xl font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts).retailB.toFixed(2)}</p></div><div className="flex flex-col items-start sm:items-end"><div className="flex items-center gap-1 text-[#2d4a22] italic font-black text-[10px] uppercase whitespace-nowrap"><span>Wholesale: (M ×</span><input type="number" className="w-12 bg-white border-2 border-[#2d4a22] rounded-xl text-xs font-black py-1.5 text-center outline-none" value={markupB} onChange={(e) => setMarkupB(Number(e.target.value))} onClick={(e) => e.stopPropagation()} /><span>) + L</span></div><p className="text-[9px] font-bold text-stone-400 uppercase mt-1">Retail: W × 2</p></div></button>
+                  {/* STRATEGY A */}
+                  <button 
+                    onClick={() => setStrategy('A')} 
+                    className={`group flex flex-col sm:flex-row sm:items-center sm:justify-between p-5 rounded-[2rem] border-2 transition-all ${strategy === 'A' ? 'border-[#A5BEAC] bg-stone-50 shadow-md' : 'border-stone-100 bg-white hover:border-stone-200'}`}
+                  >
+                    <div className="text-left mb-4 sm:mb-0">
+                      <div className="mb-1">
+                        <p className="text-[8px] font-black text-stone-400 uppercase tracking-widest">Wholesale A</p>
+                        <p className="text-lg font-bold text-slate-500">${calculateFullBreakdown(metalList, hours, rate, otherCosts).wholesaleA.toFixed(2)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter mb-1">Retail A</p>
+                        <p className="text-3xl font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts).retailA.toFixed(2)}</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-start sm:items-end">
+                      <div className="flex items-center gap-1 text-[#A5BEAC] italic font-black text-[10px] uppercase whitespace-nowrap">
+                        <span>Wholesale: M + L</span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[10px] font-black text-[#A5BEAC] uppercase italic whitespace-nowrap">Retail: W ×</span>
+                        <input 
+                          type="number" 
+                          className="w-12 bg-white border-2 border-[#A5BEAC] rounded-xl text-xs font-black py-1.5 text-center outline-none" 
+                          value={retailMultA} 
+                          onChange={(e) => setRetailMultA(Number(e.target.value))} 
+                          onClick={(e) => e.stopPropagation()} 
+                        />
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* STRATEGY B */}
+                  <button 
+                    onClick={() => setStrategy('B')} 
+                    className={`group relative flex flex-col sm:flex-row sm:items-center sm:justify-between p-5 rounded-[2rem] border-2 transition-all ${strategy === 'B' ? 'border-[#A5BEAC] bg-stone-50 shadow-md' : 'border-stone-100 bg-white hover:border-stone-200'}`}
+                  >
+                    <div className="text-left mb-4 sm:mb-0">
+                      <div className="mb-1">
+                        <p className="text-[8px] font-black text-stone-400 uppercase tracking-widest">Wholesale B</p>
+                        <p className="text-lg font-bold text-slate-500">${calculateFullBreakdown(metalList, hours, rate, otherCosts).wholesaleB.toFixed(2)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter mb-1">Retail B</p>
+                        <p className="text-3xl font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts).retailB.toFixed(2)}</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-start sm:items-end">
+                      <div className="flex items-center gap-1 text-[#A5BEAC] italic font-black text-[10px] uppercase whitespace-nowrap">
+                        <span>Wholesale: (M ×</span>
+                        <input 
+                          type="number" 
+                          className="w-12 bg-white border-2 border-[#A5BEAC] rounded-xl text-xs font-black py-1.5 text-center outline-none" 
+                          value={markupB} 
+                          onChange={(e) => setMarkupB(Number(e.target.value))} 
+                          onClick={(e) => e.stopPropagation()} 
+                        />
+                        <span>) + L</span>
+                      </div>
+                      <p className="text-[10px] font-black text-[#A5BEAC] italic uppercase whitespace-nowrap mt-1">Retail: W × 2</p>
+                    </div>
+                  </button>
                 </div>
                 <button onClick={addToInventory} disabled={!token} className={`w-full py-5 rounded-[1.8rem] font-black uppercase tracking-[0.15em] text-sm transition-all ${!token ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-[#A5BEAC] text-white shadow-xl hover:bg-slate-900 active:scale-[0.97]'}`}>{token ? "Save to Vault" : "Verifying Human..."}</button>
                 {!token && <div className="w-full flex justify-center mt-4 h-auto overflow-hidden animate-in fade-in slide-in-from-top-1"><Turnstile siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!} onSuccess={(token) => setToken(token)} options={{ theme: 'light', appearance: 'interaction-only' }} /></div>}
@@ -469,16 +522,16 @@ export default function Home() {
           </div>
         </div>
 
-        {/* BOTTOM SECTIONS */}
+        {/* BOTTOM SECTIONS - RESTORED ORIGINAL BOXED EQUATIONS */}
         <div className="grid grid-cols-1 gap-8 pt-10">
           <div className="bg-white p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC]">
             <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">1. MATERIAL CALCULATION DETAIL</h2>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 text-left">
               <div className="space-y-6">
-                <div className="bg-stone-50 p-8 rounded-[2rem] border border-stone-100 text-left">
+                <div className="bg-stone-50 p-8 rounded-[2rem] border border-stone-100 text-left overflow-x-auto">
                   <h3 className="text-xs font-black text-[#A5BEAC] uppercase tracking-widest mb-6">THE LOGIC</h3>
-                  <div className="font-mono text-sm bg-white p-6 rounded-2xl border border-stone-100 text-center shadow-sm">
-                    <p className="text-slate-900 font-bold">Cost = (Spot ÷ 31.1035) × Grams × Purity</p>
+                  <div className="font-mono text-sm bg-white p-6 rounded-2xl border border-stone-100 text-center shadow-sm min-w-fit">
+                    <p className="text-slate-900 font-bold whitespace-nowrap">Cost = (Spot ÷ 31.1035) × Grams × Purity</p>
                   </div>
                 </div>
                 <p className="text-xs text-stone-500 leading-relaxed italic px-2">Spot prices are quoted per Troy Ounce. We divide by 31.1035 to get the price per gram, then multiply by the specific metal purity.</p>
@@ -498,33 +551,54 @@ export default function Home() {
               </div>
             </div>
           </div>
+
           <div className="bg-white p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC]">
             <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">2. PRICE STRATEGY DETAIL</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
-              <div className="p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all">
-                <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-4">STRATEGY A (STANDARD MULTIPLIER)</h3>
-                <div className="space-y-3 text-xs text-stone-600">
-                  <p><strong className="text-slate-900 uppercase font-black text-[10px]">Wholesale:</strong> Materials + Labor</p>
-                  <p><strong className="text-slate-900 uppercase font-black text-[10px]">Retail:</strong> Wholesale × {retailMultA}</p>
+              {/* STRATEGY A - ORIGINAL UI EQUATIONS */}
+              <div className="p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all overflow-x-auto">
+                <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6">STRATEGY A (STANDARD MULTIPLIER)</h3>
+                <div className="space-y-4 min-w-fit">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-white border border-stone-200 flex items-center justify-center font-black text-xs">W</div>
+                    <span className="text-xs font-bold text-stone-400">=</span>
+                    <span className="text-xs font-bold text-slate-900">Materials (M) + Labor (L)</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-black text-xs">R</div>
+                    <span className="text-xs font-bold text-stone-400">=</span>
+                    <span className="text-xs font-bold text-slate-900">Wholesale (W) × {retailMultA}</span>
+                  </div>
                 </div>
               </div>
-              <div className="p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all text-left">
-                <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-4">STRATEGY B (MATERIALS MARKUP)</h3>
-                <div className="space-y-3 text-xs text-stone-600">
-                  <p><strong className="text-slate-900 uppercase font-black text-[10px]">Wholesale:</strong> (Materials × {markupB}) + Labor</p>
-                  <p><strong className="text-slate-900 uppercase font-black text-[10px]">Retail:</strong> Wholesale × 2</p>
+
+              {/* STRATEGY B - ORIGINAL UI EQUATIONS */}
+              <div className="p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all text-left overflow-x-auto">
+                <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6">STRATEGY B (MATERIALS MARKUP)</h3>
+                <div className="space-y-4 min-w-fit">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-white border border-stone-200 flex items-center justify-center font-black text-xs">W</div>
+                    <span className="text-xs font-bold text-stone-400">=</span>
+                    <span className="text-xs font-bold text-slate-900">(Materials × {markupB}) + Labor</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-black text-xs">R</div>
+                    <span className="text-xs font-bold text-stone-400">=</span>
+                    <span className="text-xs font-bold text-slate-900">Wholesale (W) × 2</span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
+
           <div className="flex flex-col items-center justify-center gap-2 py-8 border-t border-stone-200 mt-10">
             <a href="https://bearsilverandstone.com" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400">Powered by</span>
-              <img 
-                src="/icon.png?v=2" 
-                alt="Bear Silver and Stone" 
-                className="w-6 h-6 object-contain brightness-110 contrast-125" 
-                style={{ mixBlendMode: 'multiply' }} 
+              <img
+                src="/icon.png?v=2"
+                alt="Bear Silver and Stone"
+                className="w-6 h-6 object-contain brightness-110 contrast-125 mb-3"
+                style={{ mixBlendMode: 'multiply' }}
               />
               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900">Bear Silver and Stone</span>
             </a>
