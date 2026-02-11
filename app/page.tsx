@@ -185,8 +185,8 @@ export default function Home() {
     <div className="min-h-screen bg-stone-50 p-4 md:p-10 text-slate-900 font-sans">
       <div className="max-w-7xl mx-auto space-y-6">
 
-        {/* HEADER */}
-        <div className="flex flex-col md:flex-row justify-between items-center bg-white px-4 py-6 md:px-6 rounded-[2rem] border shadow-sm gap-4 mb-6 relative">
+        {/* HEADER - Updated with Outline */}
+        <div className="flex flex-col md:flex-row justify-between items-center bg-white px-4 py-6 md:px-6 rounded-[2rem] border-2 shadow-sm gap-4 mb-6 relative" style={{ borderColor: '#A5BEAC' }}>
           <div className="flex flex-col items-center w-full md:w-auto">
             <div className="flex flex-col items-center leading-none">
               <h1 className="text-2xl font-black uppercase italic tracking-[0.1em] text-slate-900 leading-none ml-[0.1em]">
@@ -261,7 +261,8 @@ export default function Home() {
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           <div className="lg:col-span-5 space-y-6">
-            <div className="bg-white p-8 rounded-[2rem] shadow-xl space-y-5 border border-stone-100">
+            {/* JEWELRY CALCULATOR BOX - Updated with Outline */}
+            <div className="bg-white p-8 rounded-[2rem] shadow-xl space-y-5 border-2" style={{ borderColor: '#A5BEAC' }}>
               <h2 className="text-2xl font-black uppercase italic tracking-tighter text-slate-900">Jewelry Calculator</h2>
               <input placeholder="Product Name" className="w-full p-4 bg-stone-50 border border-stone-200 rounded-2xl outline-none focus:border-[#A5BEAC] transition-all" value={itemName} onChange={e => setItemName(e.target.value)} />
               <div className="p-4 bg-stone-50 rounded-2xl border-2 border-dotted border-stone-300 space-y-3">
@@ -387,7 +388,8 @@ export default function Home() {
           </div>
 
           <div className="lg:col-span-7 space-y-6">
-            <div className="flex justify-between items-center bg-white px-6 py-4 rounded-2xl border border-stone-100 shadow-sm">
+            {/* SAVED PIECES BOX - Updated with Outline */}
+            <div className="flex justify-between items-center bg-white px-6 py-4 rounded-2xl border-2 shadow-sm" style={{ borderColor: '#A5BEAC' }}>
               <h2 className="text-lg font-black uppercase tracking-tight text-slate-900">Saved Pieces</h2>
               <button onClick={exportToPDF} disabled={inventory.length === 0} className="px-6 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase hover:bg-[#A5BEAC] transition-colors">Export PDF</button>
             </div>
