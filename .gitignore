@@ -55,3 +55,16 @@ build/
 # System files
 .DS_Store
 *.log
+
+# Local Price Data (to prevent push/pull conflicts)
+prices.json
+
+# IDE / Editor folders
+.vscode/
+.idea/
+
+# OS metadata
+Thumbs.db
+
+# Optional: If you use Husky for git hooks
+.husky/_/
