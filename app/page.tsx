@@ -19,7 +19,7 @@ export default function Home() {
 
   const [tempMetal, setTempMetal] = useState('Sterling Silver');
   const [tempWeight, setTempWeight] = useState(0);
-  const [tempUnit, setTempUnit] = useState('Grams');
+  const [tempUnit, setTempUnit] = useState('Ounces (std)');
 
   const [hours, setHours] = useState<number | ''>('');
   const [rate, setRate] = useState<number | ''>('');
@@ -63,7 +63,19 @@ export default function Home() {
   }, []);
 
   async function fetchInventory() {
-    const { data, error } = await supabase.from('inventory').select('*').order('created_at', { ascending: false });
+    const { data: { session } } = await supabase.auth.getSession();
+    const currentUserId = session?.user?.id;
+
+    if (!currentUserId) {
+      setLoading(false);
+      return;
+    }
+
+    const { data, error } = await supabase.from('inventory')
+      .select('*')
+      .eq('user_id', currentUserId)
+      .order('created_at', { ascending: false });
+
     if (!error && data) setInventory(data);
     setLoading(false);
   }
@@ -148,12 +160,28 @@ export default function Home() {
   const addToInventory = async () => {
     if (!itemName || metalList.length === 0) return alert("Missing info");
     if (!user) return alert("Session not ready");
-    const newItem = { name: itemName, metals: metalList, wholesale: activeWholesale, retail: activeRetail, strategy: strategy, user_id: user.id };
+
+    const newItem = {
+      name: itemName,
+      metals: metalList,
+      wholesale: activeWholesale,
+      retail: activeRetail,
+      strategy: strategy,
+      multiplier: retailMultA,
+      user_id: user.id
+    };
+
     const { data, error } = await supabase.from('inventory').insert([newItem]).select();
-    if (error) alert(error.message);
-    else if (data) {
+
+    if (error) {
+      console.error("DB Error:", error);
+      alert(error.message);
+    } else if (data) {
       setInventory([data[0], ...inventory]);
-      setItemName(''); setMetalList([]); setHours(''); setOtherCosts('');
+      setItemName('');
+      setMetalList([]);
+      setHours('');
+      setOtherCosts('');
     }
   };
 
@@ -185,7 +213,7 @@ export default function Home() {
                   onClick={() => setShowAuth(!showAuth)}
                   className="text-[10px] font-black uppercase bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
                 >
-                  {user?.is_anonymous ? 'Save to Cloud' : 'Login / Sign Up'}
+                  Save to Cloud
                 </button>
               ) : (
                 <button
@@ -284,10 +312,10 @@ export default function Home() {
               </div>
               <input type="number" placeholder="Other Costs ($)" className="w-full p-3 border rounded-xl" value={otherCosts} onChange={e => setOtherCosts(e.target.value === '' ? '' : Number(e.target.value))} />
 
-              {/* STRATEGY BUTTONS - PREVENTS TEXT CUTOFF */}
+              {/* STRATEGY BUTTONS - WRAPPING FIX APPLIED */}
               <div className="grid grid-cols-2 gap-4">
-                <button 
-                  onClick={() => setStrategy('A')} 
+                <button
+                  onClick={() => setStrategy('A')}
                   className={`p-4 rounded-2xl border-2 text-left transition-all ${strategy === 'A' ? 'border-blue-600 bg-blue-50' : 'border-slate-100'}`}
                 >
                   <p className="text-[10px] font-black opacity-50 uppercase tracking-tighter">Strategy A</p>
@@ -296,25 +324,26 @@ export default function Home() {
                     <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter leading-tight">Wholesale: Materials + Labor</p>
                     <div className="flex items-center gap-1 flex-wrap">
                       <span className="text-[8px] font-bold text-slate-400 uppercase whitespace-nowrap">Retail: Wholesale ×</span>
-                      <input 
-                        type="number" 
-                        step="0.1" 
-                        className="w-10 bg-white border rounded text-[10px] font-black text-blue-600" 
-                        value={retailMultA} 
-                        onChange={(e) => setRetailMultA(Number(e.target.value))} 
-                        onClick={(e) => e.stopPropagation()} 
+                      <input
+                        type="number"
+                        step="0.1"
+                        className="w-10 bg-white border rounded text-[10px] font-black text-blue-600"
+                        value={retailMultA}
+                        onChange={(e) => setRetailMultA(Number(e.target.value))}
+                        onClick={(e) => e.stopPropagation()}
                       />
                     </div>
                   </div>
                 </button>
-                <button 
-                  onClick={() => setStrategy('B')} 
+                <button
+                  onClick={() => setStrategy('B')}
                   className={`p-4 rounded-2xl border-2 text-left transition-all ${strategy === 'B' ? 'border-blue-600 bg-blue-50' : 'border-slate-100'}`}
                 >
                   <p className="text-[10px] font-black opacity-50 uppercase tracking-tighter">Strategy B</p>
                   <p className="text-xl font-black">${b.retailB.toFixed(2)}</p>
                   <div className="mt-1 space-y-1 flex flex-col">
-                    <p className="text-[8px] font-bold text-blue-600 uppercase italic tracking-tighter leading-tight whitespace-nowrap">Wholesale: (Materials × 1.8) + Labor</p>
+                    {/* FIXED: Removed whitespace-nowrap to allow text to wrap in the box */}
+                    <p className="text-[8px] font-bold text-blue-600 uppercase italic tracking-tighter leading-tight">Wholesale: (Materials × 1.8) + Labor</p>
                     <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">Retail: Wholesale × 2</p>
                   </div>
                 </button>
@@ -334,10 +363,34 @@ export default function Home() {
                 inventory.length === 0 ? <div className="bg-white p-12 rounded-[2rem] border-2 border-dotted text-center text-slate-400 font-bold uppercase text-xs">Your vault is empty.</div> :
                   inventory.map(item => (
                     <div key={item.id} className="bg-white p-6 rounded-[2rem] border shadow-sm flex flex-col sm:flex-row justify-between items-center gap-4 hover:border-blue-200 transition">
-                      <div className="flex-1 w-full"><div className="flex justify-between items-start"><p className="text-xl font-black text-slate-800">{item.name}</p><button onClick={() => deleteInventoryItem(item.id)} className="text-[9px] font-black text-red-300 uppercase hover:text-red-600 tracking-tighter">[ Remove ]</button></div><p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">{new Date(item.created_at).toLocaleDateString()}</p></div>
+                      <div className="flex-1 w-full">
+                        {/* Name stays on top */}
+                        <p className="text-xl font-black text-slate-800">{item.name}</p>
+
+                        {/* Date and Remove button stack vertically here */}
+                        <div className="mt-1 flex flex-col items-start gap-1">
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                            {new Date(item.created_at).toLocaleDateString()}
+                          </p>
+                          <button
+                            onClick={() => deleteInventoryItem(item.id)}
+                            className="text-[9px] font-black text-red-300 uppercase hover:text-red-600 tracking-tighter transition-colors"
+                          >
+                            [ Remove ]
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Price section remains on the right */}
                       <div className="flex gap-8 w-full sm:w-auto text-right">
-                        <div><p className="text-[9px] font-black text-slate-400 uppercase">Wholesale</p><p className="text-lg font-black text-slate-600">${Number(item.wholesale).toFixed(2)}</p></div>
-                        <div><p className="text-[9px] font-black text-blue-600 uppercase italic">Retail MSRP</p><p className="text-3xl font-black text-slate-900">${Number(item.retail).toFixed(2)}</p></div>
+                        <div>
+                          <p className="text-[9px] font-black text-slate-400 uppercase">Wholesale</p>
+                          <p className="text-lg font-black text-slate-600">${Number(item.wholesale).toFixed(2)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[9px] font-black text-blue-600 uppercase italic">Retail</p>
+                          <p className="text-3xl font-black text-slate-900">${Number(item.retail).toFixed(2)}</p>
+                        </div>
                       </div>
                     </div>
                   ))}
