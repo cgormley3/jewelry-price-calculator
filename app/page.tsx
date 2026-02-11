@@ -31,15 +31,29 @@ export default function Home() {
 
   const [inventory, setInventory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
-    async function fetchData() {
+    async function initSession() {
+      // 1. Get or Create Anonymous Session
+      const { data: { session } } = await supabase.auth.getSession();
+      let currentUserId = session?.user?.id;
+
+      if (!session) {
+        const { data, error } = await supabase.auth.signInAnonymously();
+        if (error) console.error("Auth Error:", error);
+        currentUserId = data.user?.id;
+      }
+      setUserId(currentUserId || null);
+
+      // 2. Fetch Prices
       try {
         const res = await fetch('/api/gold-price');
-        const data = await res.json();
-        if (data.gold) setPrices(data);
+        const priceData = await res.json();
+        if (priceData.gold) setPrices(priceData);
       } catch (e) { console.error("Price fetch failed", e); }
 
+      // 3. Fetch Inventory
       const { data, error } = await supabase
         .from('inventory')
         .select('*')
@@ -49,7 +63,7 @@ export default function Home() {
       else if (data) setInventory(data);
       setLoading(false);
     }
-    fetchData();
+    initSession();
   }, []);
 
   const addMetalToPiece = () => {
@@ -73,21 +87,17 @@ export default function Home() {
     metals.forEach(m => {
       let spot = 0;
       let purity = 1.0;
-      
       if (m.type.includes('Gold')) spot = prices.gold;
       else if (m.type.includes('Silver')) spot = prices.silver;
       else if (m.type.includes('Platinum')) spot = prices.platinum;
       else if (m.type.includes('Palladium')) spot = prices.palladium;
 
-      if (m.type === '10K Gold') purity = 0.417;
-      else if (m.type === '14K Gold') purity = 0.583;
-      else if (m.type === '18K Gold') purity = 0.750;
-      else if (m.type === '22K Gold') purity = 0.916;
-      else if (m.type === '24K Gold') purity = 0.999;
-      else if (m.type === 'Sterling Silver') purity = 0.925;
-      else if (m.type === 'Platinum 950') purity = 0.950;
-      else if (m.type === 'Palladium') purity = 0.950;
-
+      const purities: any = {
+        '10K Gold': 0.417, '14K Gold': 0.583, '18K Gold': 0.750, 
+        '22K Gold': 0.916, '24K Gold': 0.999, 'Sterling Silver': 0.925, 
+        'Platinum 950': 0.950, 'Palladium': 0.950
+      };
+      purity = purities[m.type] || 1.0;
       rawMaterialCost += (spot / 31.1035) * (m.weight * UNIT_TO_GRAMS[m.unit]) * purity;
     });
 
@@ -107,6 +117,8 @@ export default function Home() {
 
   const addToInventory = async () => {
     if (!itemName || metalList.length === 0) return alert("Missing info");
+    if (!userId) return alert("Session not initialized");
+
     const newItem = {
       name: itemName,
       metals: metalList,
@@ -116,8 +128,10 @@ export default function Home() {
       multiplier: retailMultA,
       labor_rate: Number(rate) || 0,
       labor_hours: Number(hours) || 0,
-      other_costs: Number(otherCosts) || 0
+      other_costs: Number(otherCosts) || 0,
+      user_id: userId
     };
+
     const { data, error } = await supabase.from('inventory').insert([newItem]).select();
     if (error) alert("Database error: " + error.message);
     else if (data) {
@@ -143,50 +157,48 @@ export default function Home() {
     <div className="min-h-screen bg-slate-100 p-4 md:p-10 text-slate-900">
       <div className="max-w-7xl mx-auto space-y-6">
         
+        {/* DISCREET STATUS BAR */}
+        <div className="flex items-center gap-2 bg-white/50 w-fit px-4 py-1.5 rounded-full border border-slate-200">
+            <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
+            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">Private Vault Active</p>
+        </div>
+
         {/* METAL PRICE TICKER */}
-        <div>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-            {Object.entries(prices).map(([name, p]) => {
-              if (name === 'lastUpdated') return null;
-              return (
-                <div key={name} className="bg-white p-3 md:p-4 rounded-xl border-l-4 border-blue-600 shadow-sm">
-                  <p className="text-[9px] md:text-[10px] font-black uppercase text-slate-400">{name}</p>
-                  <p className="text-lg md:text-xl font-bold">${Number(p).toLocaleString()}</p>
-                </div>
-              );
-            })}
-          </div>
-          {prices.lastUpdated && (
-            <p className="text-[10px] font-bold text-slate-400 mt-3 uppercase tracking-widest text-right">
-              Live Feed Synced: {new Date(prices.lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </p>
-          )}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+          {Object.entries(prices).map(([name, p]) => {
+            if (name === 'lastUpdated') return null;
+            return (
+              <div key={name} className="bg-white p-3 md:p-4 rounded-xl border-l-4 border-blue-600 shadow-sm">
+                <p className="text-[9px] md:text-[10px] font-black uppercase text-slate-400">{name}</p>
+                <p className="text-lg md:text-xl font-bold">${Number(p).toLocaleString()}</p>
+              </div>
+            );
+          })}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8">
-          
-          {/* CALCULATOR SIDE (Left) */}
+          {/* CALCULATOR SIDE */}
           <div className="lg:col-span-5 space-y-6">
             <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-xl space-y-5">
               <h2 className="text-xl md:text-2xl font-black uppercase italic tracking-tighter">Jewelry Calculator</h2>
-              <input placeholder="Product Name" className="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:ring-2 focus:ring-blue-500" value={itemName} onChange={e => setItemName(e.target.value)} />
+              <input placeholder="Product Name" className="w-full p-4 bg-slate-50 border rounded-2xl outline-none" value={itemName} onChange={e => setItemName(e.target.value)} />
               
               <div className="p-4 bg-slate-50 rounded-2xl border-2 border-dotted border-slate-300 space-y-3">
-                <select className="w-full p-3 border rounded-xl font-bold bg-white outline-none" value={tempMetal} onChange={e => setTempMetal(e.target.value)}>
+                <select className="w-full p-3 border rounded-xl font-bold bg-white" value={tempMetal} onChange={e => setTempMetal(e.target.value)}>
                   <option>Sterling Silver</option>
                   <option>10K Gold</option><option>14K Gold</option><option>18K Gold</option>
                   <option>22K Gold</option><option>24K Gold</option>
                   <option>Platinum 950</option><option>Palladium</option>
                 </select>
                 <div className="flex gap-2">
-                  <input type="number" placeholder="Weight" className="w-full p-3 border rounded-xl outline-none" value={tempWeight || ''} onChange={e => setTempWeight(Number(e.target.value))} />
-                  <select className="p-3 border rounded-xl text-[10px] font-bold outline-none" value={tempUnit} onChange={e => setTempUnit(e.target.value)}>
+                  <input type="number" placeholder="Weight" className="w-full p-3 border rounded-xl" value={tempWeight || ''} onChange={e => setTempWeight(Number(e.target.value))} />
+                  <select className="p-3 border rounded-xl text-[10px] font-bold" value={tempUnit} onChange={e => setTempUnit(e.target.value)}>
                     {Object.keys(UNIT_TO_GRAMS).map(u => <option key={u}>{u}</option>)}
                   </select>
                 </div>
-                <button onClick={addMetalToPiece} className="w-full bg-slate-900 text-white py-3 rounded-xl font-black text-xs hover:bg-black transition uppercase tracking-widest">+ Add Component</button>
+                <button onClick={addMetalToPiece} className="w-full bg-slate-900 text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest">+ Add Component</button>
                 {metalList.map((m, i) => (
-                  <div key={i} className="text-[10px] font-bold bg-white p-2 rounded border flex justify-between items-center animate-in slide-in-from-left-2">
+                  <div key={i} className="text-[10px] font-bold bg-white p-2 rounded border flex justify-between items-center">
                     <span>{m.weight}{m.unit} {m.type}</span>
                     <button onClick={() => setMetalList(metalList.filter((_, idx) => idx !== i))} className="text-red-500 text-lg">×</button>
                   </div>
@@ -194,15 +206,12 @@ export default function Home() {
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <input type="number" placeholder="Labor $/hr" className="p-3 border rounded-xl outline-none" value={rate} onChange={e => setRate(e.target.value === '' ? '' : Number(e.target.value))} />
-                <input type="number" placeholder="Hours" className="p-3 border rounded-xl outline-none" value={hours} onChange={e => setHours(e.target.value === '' ? '' : Number(e.target.value))} />
+                <input type="number" placeholder="Labor $/hr" className="p-3 border rounded-xl" value={rate} onChange={e => setRate(e.target.value === '' ? '' : Number(e.target.value))} />
+                <input type="number" placeholder="Hours" className="p-3 border rounded-xl" value={hours} onChange={e => setHours(e.target.value === '' ? '' : Number(e.target.value))} />
               </div>
-              <input type="number" placeholder="Other Costs ($)" className="w-full p-3 border rounded-xl outline-none" value={otherCosts} onChange={e => setOtherCosts(e.target.value === '' ? '' : Number(e.target.value))} />
+              <input type="number" placeholder="Other Costs ($)" className="w-full p-3 border rounded-xl" value={otherCosts} onChange={e => setOtherCosts(e.target.value === '' ? '' : Number(e.target.value))} />
 
-              {/* DIVIDER: INPUTS VS BREAKDOWN */}
-              <hr className="border-slate-100" />
-              
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-4 pt-2">
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                   <p className="text-[9px] font-black uppercase text-slate-400">Pure Materials</p>
                   <p className="text-lg font-black text-slate-800">${b.totalMaterials.toFixed(2)}</p>
@@ -213,12 +222,9 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* DIVIDER: BREAKDOWN VS RETAIL OPTIONS */}
-              <hr className="border-slate-100" />
-
               <div className="grid grid-cols-2 gap-4">
-                <button onClick={() => setStrategy('A')} className={`p-4 rounded-2xl border-2 text-left relative transition-all ${strategy === 'A' ? 'border-blue-600 bg-blue-50' : 'border-slate-100'}`}>
-                  <p className="text-[10px] font-black opacity-50 uppercase">Retail A</p>
+                <button onClick={() => setStrategy('A')} className={`p-4 rounded-2xl border-2 text-left transition-all ${strategy === 'A' ? 'border-blue-600 bg-blue-50' : 'border-slate-100'}`}>
+                  <p className="text-[10px] font-black opacity-50 uppercase tracking-tighter">Retail A (Standard)</p>
                   <p className="text-lg md:text-xl font-black">${b.retailA.toFixed(2)}</p>
                   <div className="flex items-center gap-1 mt-1">
                       <span className="text-[9px] font-bold text-slate-400">Mult: x</span>
@@ -226,31 +232,31 @@ export default function Home() {
                   </div>
                 </button>
                 <button onClick={() => setStrategy('B')} className={`p-4 rounded-2xl border-2 text-left transition-all ${strategy === 'B' ? 'border-blue-600 bg-blue-50' : 'border-slate-100'}`}>
-                  <p className="text-[10px] font-black opacity-50 uppercase">Retail B</p>
+                  <p className="text-[10px] font-black opacity-50 uppercase tracking-tighter">Retail B (Markup)</p>
                   <p className="text-lg md:text-xl font-black">${b.retailB.toFixed(2)}</p>
                   <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase">Mat x1.8 | Ret x2</p>
                 </button>
               </div>
-              <button onClick={addToInventory} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black shadow-lg hover:bg-blue-700 active:scale-95 transition-all">PUSH TO INVENTORY</button>
+              <button onClick={addToInventory} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black shadow-lg hover:bg-blue-700 transition-all uppercase">Save to Vault</button>
             </div>
           </div>
 
-          {/* INVENTORY SIDE (Right) */}
+          {/* INVENTORY SIDE */}
           <div className="lg:col-span-7 space-y-6">
             <div className="flex justify-between items-center bg-white px-6 py-4 rounded-2xl border shadow-sm">
-              <h2 className="text-lg font-black uppercase tracking-tight">Active Inventory</h2>
+              <h2 className="text-lg font-black uppercase tracking-tight">Saved Pieces</h2>
               <button onClick={exportToPDF} disabled={inventory.length === 0} className="px-6 py-2 bg-green-600 text-white rounded-xl text-[10px] font-black uppercase shadow-md hover:bg-green-700 transition">Export PDF</button>
             </div>
             
             <div className="space-y-4">
               {loading ? (
-                <div className="p-20 text-center animate-pulse text-slate-400 font-bold uppercase tracking-widest">Accessing Database...</div>
+                <div className="p-20 text-center animate-pulse text-slate-400 font-bold uppercase tracking-widest">Opening Vault...</div>
               ) : inventory.length === 0 ? (
-                <div className="bg-white p-12 rounded-[2rem] border-2 border-dotted text-center text-slate-400 font-bold">Your vault is empty. Save a piece to begin.</div>
+                <div className="bg-white p-12 rounded-[2rem] border-2 border-dotted text-center text-slate-400 font-bold">Your vault is empty.</div>
               ) : (
                 inventory.map(item => (
-                  <div key={item.id} className="bg-white p-6 rounded-[2rem] border shadow-sm flex flex-col sm:row justify-between items-center gap-4 hover:border-blue-200 transition">
-                    <div className="flex-1 w-full">
+                  <div key={item.id} className="bg-white p-6 rounded-[2rem] border shadow-sm flex flex-col sm:flex-row justify-between items-center gap-4 hover:border-blue-200 transition">
+                    <div className="flex-1 w-full text-left">
                       <div className="flex justify-between items-start">
                         <p className="text-xl font-black text-slate-800">{item.name}</p>
                         <button onClick={() => deleteInventoryItem(item.id)} className="text-[9px] font-black text-red-300 uppercase hover:text-red-600 transition tracking-tighter">[ Remove ]</button>
@@ -276,7 +282,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* --- CALCULATION REFERENCE (Bottom Part) --- */}
+        {/* --- EXPLANATION BOXES --- */}
         <div className="space-y-6 pt-10">
           <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200">
             <h2 className="text-xl font-black uppercase italic tracking-tighter mb-6 text-slate-800 underline decoration-blue-500 decoration-4 underline-offset-8">1. Material Calculation Detail</h2>
@@ -289,8 +295,7 @@ export default function Home() {
                   </div>
                 </div>
                 <p className="text-xs text-slate-600 leading-relaxed">
-                  We convert the market <strong>Spot Price</strong> (quoted per Troy Ounce) into a <strong>Price per Gram</strong> by dividing by 31.1035. 
-                  This is then multiplied by weight and metal purity (e.g., 58.3% for 14K Gold).
+                  Spot prices are quoted per Troy Ounce. We divide by 31.1035 to get the price per gram, then multiply by the specific metal purity.
                 </p>
               </div>
               <div className="bg-slate-50 p-6 rounded-2xl space-y-3">
@@ -306,10 +311,10 @@ export default function Home() {
           </div>
 
           <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200">
-            <h2 className="text-xl font-black uppercase italic tracking-tighter mb-6 text-slate-800 underline decoration-blue-500 decoration-4 underline-offset-8">2. Price Calculation Detail</h2>
+            <h2 className="text-xl font-black uppercase italic tracking-tighter mb-6 text-slate-800 underline decoration-blue-500 decoration-4 underline-offset-8">2. Price Strategy Detail</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className={`p-6 rounded-2xl border-2 transition-all ${strategy === 'A' ? 'border-blue-600 bg-blue-50' : 'bg-slate-50 border-transparent'}`}>
-                <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-2">Strategy A (Standard x{retailMultA})</h3>
+                <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-2">Strategy A (Standard Multiplier)</h3>
                 <div className="space-y-2 text-xs text-slate-700">
                   <p><strong>Wholesale:</strong> Materials + Labor</p>
                   <p><strong>Retail:</strong> Wholesale × {retailMultA}</p>
@@ -318,14 +323,13 @@ export default function Home() {
               <div className={`p-6 rounded-2xl border-2 transition-all ${strategy === 'B' ? 'border-blue-600 bg-blue-50' : 'bg-slate-50 border-transparent'}`}>
                 <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-2">Strategy B (Materials Markup)</h3>
                 <div className="space-y-2 text-xs text-slate-700">
-                  <p><strong>Wholesale:</strong> (Materials × {markupB}) + Labor</p>
-                  <p><strong>Retail:</strong> Wholesale × {retailMultB}</p>
+                  <p><strong>Wholesale:</strong> (Materials × 1.8) + Labor</p>
+                  <p><strong>Retail:</strong> Wholesale × 2</p>
                 </div>
               </div>
             </div>
           </div>
         </div>
-
       </div>
     </div>
   );
