@@ -39,3 +39,19 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Security: Hide your private database keys
+.env*.local
+.env
+
+# Dependencies: Don't upload the heavy library folders
+node_modules/
+
+# Build files: Don't upload the temporary Next.js output
+.next/
+out/
+build/
+
+# System files
+.DS_Store
+*.log

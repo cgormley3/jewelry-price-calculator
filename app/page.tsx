@@ -1,65 +1,325 @@
-import Image from "next/image";
+"use client";
+import { useState, useEffect } from 'react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { supabase } from '../lib/supabase'; // Make sure your lib/supabase.ts exists!
+
+const UNIT_TO_GRAMS: { [key: string]: number } = {
+  "Grams": 1,
+  "Pennyweights (dwt)": 1.55517,
+  "Troy Ounces": 31.1035,
+  "Ounces (std)": 28.3495
+};
 
 export default function Home() {
+  const [prices, setPrices] = useState({ gold: 0, silver: 0, platinum: 0, palladium: 0 });
+  const [itemName, setItemName] = useState('');
+  const [metalList, setMetalList] = useState<{type: string, weight: number, unit: string}[]>([]);
+  
+  const [tempMetal, setTempMetal] = useState('Sterling Silver');
+  const [tempWeight, setTempWeight] = useState(0);
+  const [tempUnit, setTempUnit] = useState('Grams');
+
+  const [hours, setHours] = useState<number | ''>('');
+  const [rate, setRate] = useState<number | ''>(''); 
+  const [otherCosts, setOtherCosts] = useState<number | ''>('');
+  
+  const [strategy, setStrategy] = useState<'A' | 'B'>('A'); 
+  const [retailMultA, setRetailMultA] = useState(3);
+  const markupB = 1.8; 
+  const retailMultB = 2;
+
+  const [inventory, setInventory] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // 1. Fetch Metal Prices & Inventory from Supabase on load
+  useEffect(() => {
+    async function fetchData() {
+      // Fetch Live Prices
+      try {
+        const res = await fetch('/api/gold-price');
+        const data = await res.json();
+        if (data.gold) setPrices(data);
+      } catch (e) { console.error("Price fetch failed", e); }
+
+      // Fetch Inventory from Supabase
+      const { data, error } = await supabase
+        .from('inventory')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) console.error("DB Fetch Error:", error);
+      else if (data) setInventory(data);
+      setLoading(false);
+    }
+    fetchData();
+  }, []);
+
+  const addMetalToPiece = () => {
+    if (tempWeight <= 0) return;
+    setMetalList([...metalList, { type: tempMetal, weight: tempWeight, unit: tempUnit }]);
+    setTempWeight(0);
+  };
+
+  // 2. Delete from Supabase
+  const deleteInventoryItem = async (id: string) => {
+    const { error } = await supabase
+      .from('inventory')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      alert("Error deleting item");
+    } else {
+      setInventory(inventory.filter(item => item.id !== id));
+    }
+  };
+
+  const calculateFullBreakdown = (metals: any[], h: any, r: any, o: any) => {
+    let rawMaterialCost = 0;
+    const numH = Number(h) || 0;
+    const numR = Number(r) || 0;
+    const numO = Number(o) || 0;
+
+    metals.forEach(m => {
+      let spot = 0;
+      let purity = 1.0;
+      
+      if (m.type.includes('Gold')) spot = prices.gold;
+      else if (m.type.includes('Silver')) spot = prices.silver;
+      else if (m.type.includes('Platinum')) spot = prices.platinum;
+      else if (m.type.includes('Palladium')) spot = prices.palladium;
+
+      if (m.type === '10K Gold') purity = 0.417;
+      else if (m.type === '14K Gold') purity = 0.583;
+      else if (m.type === '18K Gold') purity = 0.750;
+      else if (m.type === '22K Gold') purity = 0.916;
+      else if (m.type === '24K Gold') purity = 0.999;
+      else if (m.type === 'Sterling Silver') purity = 0.925;
+      else if (m.type === 'Platinum 950') purity = 0.950;
+      else if (m.type === 'Palladium') purity = 0.950;
+
+      rawMaterialCost += (spot / 31.1035) * (m.weight * UNIT_TO_GRAMS[m.unit]) * purity;
+    });
+
+    const totalMaterials = rawMaterialCost + numO;
+    const labor = numH * numR;
+    const wholesaleA = totalMaterials + labor;
+    const retailA = wholesaleA * retailMultA;
+    const wholesaleB = (totalMaterials * markupB) + labor;
+    const retailB = wholesaleB * retailMultB;
+
+    return { wholesaleA, retailA, wholesaleB, retailB, totalMaterials, labor };
+  };
+
+  const b = calculateFullBreakdown(metalList, hours, rate, otherCosts);
+  const activeRetail = strategy === 'A' ? b.retailA : b.retailB;
+  const activeWholesale = strategy === 'A' ? b.wholesaleA : b.wholesaleB;
+
+  // 3. Save to Supabase
+  const addToInventory = async () => {
+    if (!itemName || metalList.length === 0) return alert("Missing info");
+
+    const newItem = {
+      name: itemName,
+      metals: metalList,
+      wholesale: activeWholesale,
+      retail: activeRetail,
+      strategy: strategy,
+      multiplier: retailMultA,
+      labor_rate: Number(rate) || 0,
+      labor_hours: Number(hours) || 0,
+      other_costs: Number(otherCosts) || 0
+    };
+
+    const { data, error } = await supabase
+      .from('inventory')
+      .insert([newItem])
+      .select();
+
+    if (error) {
+      console.error(error);
+      alert("Database error: " + error.message);
+    } else if (data) {
+      setInventory([data[0], ...inventory]);
+      setItemName(''); setMetalList([]); setHours(''); setOtherCosts('');
+    }
+  };
+
+  const exportToPDF = () => {
+    const doc = new jsPDF();
+    doc.text('Inventory Report', 14, 20);
+    const tableData = inventory.map(item => [
+      item.name,
+      `$${Number(item.wholesale).toFixed(2)}`,
+      `$${Number(item.retail).toFixed(2)}`,
+      new Date(item.created_at).toLocaleDateString()
+    ]);
+    autoTable(doc, { startY: 30, head: [['Item', 'Wholesale', 'Retail', 'Date']], body: tableData });
+    doc.save('inventory.pdf');
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="min-h-screen bg-slate-100 p-10 text-slate-900">
+      <div className="max-w-7xl mx-auto space-y-6">
+        
+        {/* TOP BAR: METAL PRICES */}
+        <div className="grid grid-cols-4 gap-4">
+          {Object.entries(prices).map(([name, p]) => (
+            <div key={name} className="bg-white p-4 rounded-xl border-l-4 border-blue-600 shadow-sm">
+              <p className="text-[10px] font-black uppercase text-slate-400">{name}</p>
+              <p className="text-xl font-bold">${p.toLocaleString()}</p>
+            </div>
+          ))}
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        <div className="grid grid-cols-12 gap-8">
+          {/* CALCULATOR COLUMN */}
+          <div className="col-span-5 bg-white p-8 rounded-[2rem] shadow-xl space-y-5">
+            <h2 className="text-2xl font-black uppercase italic tracking-tighter">Calculator</h2>
+            <input placeholder="Product Name" className="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:ring-2 focus:ring-blue-500" value={itemName} onChange={e => setItemName(e.target.value)} />
+            
+            <div className="p-4 bg-slate-50 rounded-2xl border-2 border-dotted border-slate-300 space-y-3">
+              <select className="w-full p-3 border rounded-xl font-bold bg-white outline-none" value={tempMetal} onChange={e => setTempMetal(e.target.value)}>
+                <option>Sterling Silver</option>
+                <option>10K Gold</option><option>14K Gold</option><option>18K Gold</option>
+                <option>22K Gold</option><option>24K Gold</option>
+                <option>Platinum 950</option><option>Palladium</option>
+              </select>
+              <div className="flex gap-2">
+                <input type="number" placeholder="Weight" className="w-full p-3 border rounded-xl outline-none" value={tempWeight || ''} onChange={e => setTempWeight(Number(e.target.value))} />
+                <select className="p-3 border rounded-xl text-[10px] font-bold outline-none" value={tempUnit} onChange={e => setTempUnit(e.target.value)}>
+                  {Object.keys(UNIT_TO_GRAMS).map(u => <option key={u}>{u}</option>)}
+                </select>
+              </div>
+              <button onClick={addMetalToPiece} className="w-full bg-slate-900 text-white py-3 rounded-xl font-black text-xs hover:bg-black transition">+ ADD METAL</button>
+              {metalList.map((m, i) => (
+                <div key={i} className="text-[10px] font-bold bg-white p-2 rounded border flex justify-between items-center">
+                   <span>{m.weight}{m.unit} {m.type}</span>
+                   <button onClick={() => setMetalList(metalList.filter((_, idx) => idx !== i))} className="text-red-500 text-lg">×</button>
+                </div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <input type="number" placeholder="Labor $/hr" className="p-3 border rounded-xl outline-none" value={rate} onChange={e => setRate(e.target.value === '' ? '' : Number(e.target.value))} />
+              <input type="number" placeholder="Hours" className="p-3 border rounded-xl outline-none" value={hours} onChange={e => setHours(e.target.value === '' ? '' : Number(e.target.value))} />
+            </div>
+            <input type="number" placeholder="Other Costs ($)" className="w-full p-3 border rounded-xl outline-none" value={otherCosts} onChange={e => setOtherCosts(e.target.value === '' ? '' : Number(e.target.value))} />
+
+            <div className="grid grid-cols-2 gap-4">
+              <button onClick={() => setStrategy('A')} className={`p-4 rounded-2xl border-2 text-left relative transition-all ${strategy === 'A' ? 'border-blue-600 bg-blue-50' : 'border-slate-100 hover:border-slate-300'}`}>
+                <p className="text-[10px] font-black">STRATEGY A</p>
+                <p className="text-xl font-black">${b.retailA.toFixed(2)}</p>
+                <div className="flex items-center gap-1 mt-1" onClick={(e) => e.stopPropagation()}>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase">Mult: x</span>
+                    <input 
+                        type="number" step="0.1"
+                        className="w-10 bg-white border border-slate-200 rounded px-1 text-[10px] font-black text-blue-600"
+                        value={retailMultA}
+                        onChange={(e) => setRetailMultA(Number(e.target.value))}
+                    />
+                </div>
+              </button>
+              <button onClick={() => setStrategy('B')} className={`p-4 rounded-2xl border-2 text-left transition-all ${strategy === 'B' ? 'border-blue-600 bg-blue-50' : 'border-slate-100 hover:border-slate-300'}`}>
+                <p className="text-[10px] font-black">STRATEGY B</p>
+                <p className="text-xl font-black">${b.retailB.toFixed(2)}</p>
+                <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase">Mat x1.8 | Ret x2</p>
+              </button>
+            </div>
+            <button onClick={addToInventory} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black shadow-lg hover:bg-blue-700 transition active:scale-95">SAVE TO DATABASE</button>
+          </div>
+
+          {/* INVENTORY COLUMN */}
+          <div className="col-span-7 space-y-4">
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-black uppercase tracking-tight">Inventory</h2>
+              <button 
+                onClick={exportToPDF}
+                disabled={inventory.length === 0}
+                className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase transition ${
+                  inventory.length === 0 ? 'bg-slate-200 text-slate-400 cursor-not-allowed border border-slate-300' : 'bg-green-600 text-white hover:bg-green-700 shadow-md active:scale-95'
+                }`}
+              >
+                Download PDF Report
+              </button>
+            </div>
+            
+            {loading ? (
+              <div className="p-20 text-center animate-pulse text-slate-400 font-bold uppercase tracking-widest">Connecting to Database...</div>
+            ) : inventory.length === 0 ? (
+              <div className="bg-white p-12 rounded-[2rem] border-2 border-dotted text-center text-slate-400 font-bold">No items saved in database yet.</div>
+            ) : (
+              inventory.map(item => (
+                <div key={item.id} className="bg-white p-6 rounded-[2rem] border shadow-sm flex justify-between items-center hover:shadow-md transition-shadow">
+                  <div>
+                    <p className="text-xl font-black">{item.name}</p>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                      {new Date(item.created_at).toLocaleString()} | Strategy {item.strategy}
+                    </p>
+                    <button onClick={() => deleteInventoryItem(item.id)} className="mt-2 text-[9px] font-bold text-red-400 uppercase hover:text-red-600 transition">[ Delete ]</button>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] font-black text-blue-600 uppercase">Retail Price</p>
+                    <p className="text-3xl font-black text-slate-900">${Number(item.retail).toFixed(2)}</p>
+                    <p className="text-[9px] font-bold text-slate-400 uppercase">Wholesale: ${Number(item.wholesale).toFixed(2)}</p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
-      </main>
+
+        {/* --- CALCULATION REFERENCE --- */}
+        <div className="space-y-6 opacity-80 hover:opacity-100 transition-opacity">
+          <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200">
+            <h2 className="text-xl font-black uppercase italic tracking-tighter mb-6 text-slate-800 underline decoration-blue-500 decoration-4 underline-offset-8">1. Material Calculation Detail</h2>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+              <div className="space-y-6">
+                <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                  <h3 className="text-xs font-black text-blue-600 uppercase tracking-widest mb-4">The Logic</h3>
+                  <div className="font-mono text-sm space-y-2 bg-white p-4 rounded-xl border border-slate-200 text-center">
+                    <p className="text-blue-900 font-bold underline">Cost Calculation</p>
+                    <p className="text-[11px] mt-2">(Market Spot ÷ 31.1035) × Grams × Purity</p>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Spot prices are converted from Troy Ounces to Grams. Then the purity percentage is applied to calculate the cost of the actual precious metal content.
+                </p>
+              </div>
+              <div className="bg-slate-50 p-6 rounded-2xl space-y-3">
+                <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest">Purity Constants Used:</h3>
+                <div className="grid grid-cols-2 gap-2 text-[10px] font-bold text-slate-500">
+                  <p>Sterling: 92.5%</p><p>24K Gold: 99.9%</p>
+                  <p>22K Gold: 91.6%</p><p>18K Gold: 75.0%</p>
+                  <p>14K Gold: 58.3%</p><p>10K Gold: 41.7%</p>
+                  <p>Plat 950: 95.0%</p><p>Palladium: 95.0%</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200">
+            <h2 className="text-xl font-black uppercase italic tracking-tighter mb-6 text-slate-800 underline decoration-blue-500 decoration-4 underline-offset-8">2. Price Calculation Detail</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className={`p-6 rounded-2xl border-2 transition-all ${strategy === 'A' ? 'border-blue-600 bg-blue-50' : 'bg-slate-50 border-transparent'}`}>
+                <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-2">Strategy A (Standard)</h3>
+                <div className="space-y-2 text-xs text-slate-700 font-bold">
+                  <p>Wholesale: Materials + Labor</p>
+                  <p className="text-blue-600">Retail: Wholesale × {retailMultA}</p>
+                </div>
+              </div>
+              <div className={`p-6 rounded-2xl border-2 transition-all ${strategy === 'B' ? 'border-blue-600 bg-blue-50' : 'bg-slate-50 border-transparent'}`}>
+                <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-2">Strategy B (Markup)</h3>
+                <div className="space-y-2 text-xs text-slate-700 font-bold">
+                  <p>Wholesale: (Materials × 1.8) + Labor</p>
+                  <p>Retail: Wholesale × 2</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
