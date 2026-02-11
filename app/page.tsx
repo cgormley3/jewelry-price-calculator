@@ -74,7 +74,7 @@ export default function Home() {
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    let result = isSignUp 
+    let result = isSignUp
       ? await supabase.auth.signUp({ email, password, options: { data: { is_converted_from_anonymous: true } } })
       : await supabase.auth.signInWithPassword({ email, password });
     if (result.error) alert(result.error.message);
@@ -82,7 +82,12 @@ export default function Home() {
   };
 
   const loginWithGoogle = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { 
+        redirectTo: window.location.origin // This detects vault.bearsilverandstone.com automatically
+      },
+    });
     if (error) alert(error.message);
   };
 
@@ -150,7 +155,7 @@ export default function Home() {
     const labor = item.labor_at_making || 0;
     const liveWholesale = item.strategy === 'A' ? current.wholesaleA + labor : current.wholesaleB;
     const liveRetail = item.strategy === 'A' ? (current.totalMaterials + labor) * (item.multiplier || 3) : ((current.totalMaterials * (item.markup_b || 1.8)) + labor) * 2;
-    
+
     const { error } = await supabase.from('inventory').update({ wholesale: liveWholesale, retail: liveRetail }).eq('id', item.id);
     if (!error) fetchInventory();
   };
@@ -210,11 +215,11 @@ export default function Home() {
               ) : (
                 <button onClick={async () => { await supabase.auth.signOut(); window.location.reload(); }} className="w-full md:w-auto text-[10px] font-black uppercase bg-stone-100 text-slate-900 px-8 py-3 rounded-xl hover:bg-stone-200 transition">Logout</button>
               )}
-              
+
               {showAuth && (
                 <div className="absolute left-0 right-0 md:left-auto md:right-0 mt-4 w-full md:w-80 bg-white p-6 rounded-3xl border-2 border-[#A5BEAC] shadow-2xl z-[100] animate-in fade-in slide-in-from-top-2 mx-auto">
                   {/* NEW: CLOSE BUTTON */}
-                  <button 
+                  <button
                     onClick={() => setShowAuth(false)}
                     className="absolute top-4 right-4 text-stone-300 hover:text-[#A5BEAC] transition-colors font-black text-sm"
                   >
@@ -319,48 +324,48 @@ export default function Home() {
                         <div className="p-6 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6">
                           <div className="flex-1 min-w-0 text-left">
                             <div className="flex items-center gap-2 mb-1">
-                                <p className="text-xl font-black text-slate-800 truncate">{item.name}</p>
-                                <span className={`text-[8px] font-bold px-2 py-0.5 rounded-full border shrink-0 transition-opacity duration-500 ${pricesLoaded ? 'opacity-100' : 'opacity-0'} ${isUp ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
-                                    {isUp ? '▲' : '▼'} ${Math.abs(priceDiff).toFixed(2)}
-                                </span>
+                              <p className="text-xl font-black text-slate-800 truncate">{item.name}</p>
+                              <span className={`text-[8px] font-bold px-2 py-0.5 rounded-full border shrink-0 transition-opacity duration-500 ${pricesLoaded ? 'opacity-100' : 'opacity-0'} ${isUp ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                                {isUp ? '▲' : '▼'} ${Math.abs(priceDiff).toFixed(2)}
+                              </span>
                             </div>
                             <p className="text-[10px] text-stone-400 font-bold uppercase tracking-widest leading-none mb-3">{new Date(item.created_at).toLocaleDateString()} | Strategy: {item.strategy}</p>
                             <button onClick={() => deleteInventoryItem(item.id, item.name)} className="text-[10px] font-black text-red-300 uppercase hover:text-red-600 transition-colors px-2 py-1 bg-stone-50 rounded-lg">[ Remove Piece ]</button>
                           </div>
                           <div className="flex flex-wrap items-center gap-8 xl:gap-12 shrink-0 text-right">
-                                <div className="flex gap-6 border-r border-stone-100 pr-8">
-                                    <div><p className="text-[8px] font-black text-stone-300 uppercase tracking-widest mb-1">Prev. Wholesale</p><p className="text-sm font-bold text-stone-400">${Number(item.wholesale).toFixed(2)}</p></div>
-                                    <div><p className="text-[8px] font-black text-stone-300 uppercase tracking-widest mb-1">Prev. Retail</p><p className="text-sm font-bold text-stone-400">${Number(item.retail).toFixed(2)}</p></div>
-                                </div>
-                                <div className="flex gap-8 items-center">
-                                    <div><p className="text-[8px] font-black text-[#A5BEAC] uppercase tracking-widest mb-1">Live Wholesale</p><p className={`text-lg font-black transition-all ${pricesLoaded ? 'text-slate-600' : 'text-stone-200'}`}>{pricesLoaded ? `$${liveWholesale.toFixed(2)}` : "--.--"}</p></div>
-                                    <div><p className="text-[8px] font-black text-[#2d4a22] uppercase tracking-widest mb-1 italic">Live Retail</p><p className="text-3xl font-black text-slate-900 leading-none transition-all duration-300">{pricesLoaded ? `$${liveRetail.toFixed(2)}` : "--.--"}</p></div>
-                                </div>
+                            <div className="flex gap-6 border-r border-stone-100 pr-8">
+                              <div><p className="text-[8px] font-black text-stone-300 uppercase tracking-widest mb-1">Prev. Wholesale</p><p className="text-sm font-bold text-stone-400">${Number(item.wholesale).toFixed(2)}</p></div>
+                              <div><p className="text-[8px] font-black text-stone-300 uppercase tracking-widest mb-1">Prev. Retail</p><p className="text-sm font-bold text-stone-400">${Number(item.retail).toFixed(2)}</p></div>
+                            </div>
+                            <div className="flex gap-8 items-center">
+                              <div><p className="text-[8px] font-black text-[#A5BEAC] uppercase tracking-widest mb-1">Live Wholesale</p><p className={`text-lg font-black transition-all ${pricesLoaded ? 'text-slate-600' : 'text-stone-200'}`}>{pricesLoaded ? `$${liveWholesale.toFixed(2)}` : "--.--"}</p></div>
+                              <div><p className="text-[8px] font-black text-[#2d4a22] uppercase tracking-widest mb-1 italic">Live Retail</p><p className="text-3xl font-black text-slate-900 leading-none transition-all duration-300">{pricesLoaded ? `$${liveRetail.toFixed(2)}` : "--.--"}</p></div>
+                            </div>
                           </div>
                         </div>
                         <details className="group border-t border-stone-50">
-                            <summary className="list-none cursor-pointer py-2 text-center text-[8px] font-black uppercase tracking-[0.2em] text-stone-300 hover:text-[#A5BEAC] transition-colors">Breakdown & Snapshot</summary>
-                            <div className="p-6 bg-stone-50/50 space-y-6">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
-                                    <div className="space-y-3">
-                                        <h4 className="text-[10px] font-black uppercase text-stone-400">Materials</h4>
-                                        {item.metals?.map((m: any, idx: number) => (<div key={idx} className="flex justify-between text-[10px] font-bold border-b border-stone-100 pb-1 uppercase"><span>{m.weight}{m.unit} {m.type}</span><span className="text-stone-400">{m.isManual ? 'Manual' : 'Spot'}</span></div>))}
-                                        {item.other_costs_at_making > 0 && (<div className="flex justify-between text-[10px] font-bold border-b border-stone-100 pb-1 uppercase"><span>Stones/Other</span><span>${Number(item.other_costs_at_making).toFixed(2)}</span></div>)}
-                                    </div>
-                                    <div className="space-y-4">
-                                        <div className="grid grid-cols-2 gap-2 text-center">
-                                            <div className="bg-white p-3 rounded-xl border border-stone-100"><p className="text-[8px] font-black text-stone-400 uppercase">Materials Total (Orig)</p><p className="text-xs font-black text-slate-700">${(Number(item.materials_at_making || 0) + Number(item.other_costs_at_making || 0)).toFixed(2)}</p></div>
-                                            <div className="bg-white p-3 rounded-xl border border-stone-100"><p className="text-[8px] font-black text-stone-400 uppercase">Labor Cost</p><p className="text-xs font-black text-slate-700">${Number(labor).toFixed(2)}</p></div>
-                                        </div>
-                                        <button onClick={() => syncToMarket(item)} className="w-full py-2 bg-[#2d4a22] text-white rounded-lg font-black text-[9px] uppercase tracking-widest hover:bg-slate-900 transition-all shadow-sm">Sync Vault Item to Market</button>
-                                    </div>
+                          <summary className="list-none cursor-pointer py-2 text-center text-[8px] font-black uppercase tracking-[0.2em] text-stone-300 hover:text-[#A5BEAC] transition-colors">Breakdown & Snapshot</summary>
+                          <div className="p-6 bg-stone-50/50 space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
+                              <div className="space-y-3">
+                                <h4 className="text-[10px] font-black uppercase text-stone-400">Materials</h4>
+                                {item.metals?.map((m: any, idx: number) => (<div key={idx} className="flex justify-between text-[10px] font-bold border-b border-stone-100 pb-1 uppercase"><span>{m.weight}{m.unit} {m.type}</span><span className="text-stone-400">{m.isManual ? 'Manual' : 'Spot'}</span></div>))}
+                                {item.other_costs_at_making > 0 && (<div className="flex justify-between text-[10px] font-bold border-b border-stone-100 pb-1 uppercase"><span>Stones/Other</span><span>${Number(item.other_costs_at_making).toFixed(2)}</span></div>)}
+                              </div>
+                              <div className="space-y-4">
+                                <div className="grid grid-cols-2 gap-2 text-center">
+                                  <div className="bg-white p-3 rounded-xl border border-stone-100"><p className="text-[8px] font-black text-stone-400 uppercase">Materials Total (Orig)</p><p className="text-xs font-black text-slate-700">${(Number(item.materials_at_making || 0) + Number(item.other_costs_at_making || 0)).toFixed(2)}</p></div>
+                                  <div className="bg-white p-3 rounded-xl border border-stone-100"><p className="text-[8px] font-black text-stone-400 uppercase">Labor Cost</p><p className="text-xs font-black text-slate-700">${Number(labor).toFixed(2)}</p></div>
                                 </div>
-                                <div className="bg-white p-4 rounded-2xl border border-stone-200 text-left">
-                                  <h4 className="text-[9px] font-black uppercase text-stone-400 mb-2">Vault Notes</h4>
-                                  <textarea className="w-full p-3 bg-stone-50 border border-stone-100 rounded-xl text-xs italic text-slate-600 resize-none h-20 outline-none focus:border-[#A5BEAC] transition-all" placeholder="Click to add notes about this piece (stones, customer, history)..." defaultValue={item.notes || ''} onBlur={(e) => saveNote(item.id, e.target.value)} />
-                                  <p className="text-[8px] text-stone-300 mt-1 uppercase font-bold tracking-tighter">Changes save automatically on click-away</p>
-                                </div>
+                                <button onClick={() => syncToMarket(item)} className="w-full py-2 bg-[#2d4a22] text-white rounded-lg font-black text-[9px] uppercase tracking-widest hover:bg-slate-900 transition-all shadow-sm">Sync Vault Item to Market</button>
+                              </div>
                             </div>
+                            <div className="bg-white p-4 rounded-2xl border border-stone-200 text-left">
+                              <h4 className="text-[9px] font-black uppercase text-stone-400 mb-2">Vault Notes</h4>
+                              <textarea className="w-full p-3 bg-stone-50 border border-stone-100 rounded-xl text-xs italic text-slate-600 resize-none h-20 outline-none focus:border-[#A5BEAC] transition-all" placeholder="Click to add notes about this piece (stones, customer, history)..." defaultValue={item.notes || ''} onBlur={(e) => saveNote(item.id, e.target.value)} />
+                              <p className="text-[8px] text-stone-300 mt-1 uppercase font-bold tracking-tighter">Changes save automatically on click-away</p>
+                            </div>
+                          </div>
                         </details>
                       </div>
                     );
