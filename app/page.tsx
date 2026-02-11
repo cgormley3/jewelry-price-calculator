@@ -15,7 +15,8 @@ export default function Home() {
   const [prices, setPrices] = useState<any>({ gold: null, silver: null, platinum: null, palladium: null, updated_at: null });
   const [itemName, setItemName] = useState('');
   const [metalList, setMetalList] = useState<{ type: string, weight: number, unit: string }[]>([]);
-
+  const [isResetMode, setIsResetMode] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
   const [tempMetal, setTempMetal] = useState('Sterling Silver');
   const [tempWeight, setTempWeight] = useState(0);
   const [tempUnit, setTempUnit] = useState('Ounces (std)');
@@ -96,6 +97,16 @@ export default function Home() {
     }
   };
 
+  const loginWithGoogle = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin,
+      },
+    });
+    if (error) alert(error.message);
+  };
+
   const handleResetPassword = async () => {
     if (!email || email.trim() === "") {
       alert("Please type your email address into the Email field first.");
@@ -108,6 +119,19 @@ export default function Home() {
     else alert(`Success! Reset link sent to ${email}.`);
   };
 
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      // This tells Supabase where to send the user after they click the email link
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+
+    if (error) {
+      alert(error.message);
+    } else {
+      setResetSent(true);
+    }
+  };
   const calculateFullBreakdown = (metals: any[], h: any, r: any, o: any) => {
     let rawMaterialCost = 0;
     const numH = Number(h) || 0;
@@ -219,22 +243,111 @@ export default function Home() {
               )}
             </div>
             {showAuth && (
-              <div className="absolute right-0 mt-2 w-80 bg-white p-6 rounded-3xl border-2 border-blue-600 shadow-2xl animate-in fade-in slide-in-from-top-2 z-[100]">
-                <h3 className="text-sm font-black uppercase mb-4 text-slate-800">
-                  {isSignUp ? 'Create Account' : 'Login'}
-                </h3>
-                <form onSubmit={handleAuth} className="space-y-3">
-                  <input type="email" placeholder="Email" className="w-full p-3 border rounded-xl text-sm outline-none" value={email} onChange={e => setEmail(e.target.value)} required />
-                  <input type="password" placeholder="Password" className="w-full p-3 border rounded-xl text-sm outline-none" value={password} onChange={e => setPassword(e.target.value)} required />
-                  <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded-xl font-black text-xs uppercase hover:bg-blue-700">
-                    {isSignUp ? 'Confirm & Sync Data' : 'Login'}
-                  </button>
-                </form>
-                <div className="mt-4 space-y-2 text-center">
-                  <p onClick={() => setIsSignUp(!isSignUp)} className="text-[10px] font-bold text-slate-400 cursor-pointer uppercase">
-                    {isSignUp ? 'Already have an account? Login' : 'Need an account? Sign up'}
-                  </p>
-                </div>
+              <div className="absolute right-0 mt-2 w-80 bg-white p-6 rounded-3xl border-2 border-blue-600 shadow-2xl z-[100] animate-in fade-in slide-in-from-top-2">
+
+                {/* 1. RESET PASSWORD MODE */}
+                {isResetMode ? (
+                  <div className="space-y-4">
+                    <h3 className="text-sm font-black uppercase text-center text-slate-800 tracking-tight">Reset Vault Access</h3>
+                    <p className="text-[10px] text-slate-400 font-bold text-center leading-tight uppercase">
+                      Enter your email and we'll send a secure link to reset your password.
+                    </p>
+
+                    {resetSent ? (
+                      <div className="bg-green-50 p-4 rounded-xl border border-green-100">
+                        <p className="text-[10px] text-green-600 font-black text-center uppercase leading-tight">
+                          Success! Check your inbox for the reset link.
+                        </p>
+                      </div>
+                    ) : (
+                      <form onSubmit={handleForgotPassword} className="space-y-3">
+                        <input
+                          type="email"
+                          placeholder="Email Address"
+                          className="w-full p-3 border rounded-xl text-sm outline-none focus:border-blue-500 transition"
+                          value={email}
+                          onChange={e => setEmail(e.target.value)}
+                          required
+                        />
+                        <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded-xl font-black text-xs uppercase hover:bg-blue-700 transition shadow-md">
+                          Send Reset Link
+                        </button>
+                      </form>
+                    )}
+
+                    <button
+                      onClick={() => { setIsResetMode(false); setResetSent(false); }}
+                      className="w-full text-[10px] font-black text-slate-400 uppercase hover:text-blue-600 transition"
+                    >
+                      ← Back to Login
+                    </button>
+                  </div>
+                ) : (
+                  /* 2. REGULAR LOGIN / SIGN UP MODE */
+                  <>
+                    <h3 className="text-sm font-black uppercase mb-4 text-slate-800 text-center tracking-tight">
+                      {isSignUp ? 'Create Vault Account' : 'Secure Vault Access'}
+                    </h3>
+
+                    {/* GMAIL OPTION */}
+                    <button
+                      onClick={loginWithGoogle}
+                      className="w-full flex items-center justify-center gap-3 bg-white border-2 border-slate-100 py-3 rounded-xl hover:bg-slate-50 transition mb-4 shadow-sm"
+                    >
+                      <img src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png" className="w-4 h-4" alt="G" />
+                      <span className="text-[10px] font-black uppercase text-slate-700">Continue with Google</span>
+                    </button>
+
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="h-[1px] bg-slate-100 flex-1"></div>
+                      <span className="text-[9px] font-bold text-slate-300 uppercase">OR</span>
+                      <div className="h-[1px] bg-slate-100 flex-1"></div>
+                    </div>
+
+                    {/* EMAIL FORM */}
+                    <form onSubmit={handleAuth} className="space-y-3">
+                      <input
+                        type="email"
+                        placeholder="Email"
+                        className="w-full p-3 border rounded-xl text-sm outline-none focus:border-blue-500 transition"
+                        value={email}
+                        onChange={e => setEmail(e.target.value)}
+                        required
+                      />
+                      <input
+                        type="password"
+                        placeholder="Password"
+                        className="w-full p-3 border rounded-xl text-sm outline-none focus:border-blue-500 transition"
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                        required
+                      />
+                      <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded-xl font-black text-xs uppercase hover:bg-blue-700 transition shadow-md">
+                        {isSignUp ? 'Confirm & Sync Data' : 'Login'}
+                      </button>
+                    </form>
+
+                    <div className="mt-6 flex flex-col gap-4 text-center">
+                      {/* Main Toggle - Blue and Bigger */}
+                      <p
+                        onClick={() => setIsSignUp(!isSignUp)}
+                        className="text-[11px] font-black text-blue-600 cursor-pointer uppercase tracking-wider hover:text-blue-800 transition"
+                      >
+                        {isSignUp ? 'Already have an account? Login' : 'Need an account? Sign up'}
+                      </p>
+
+                      {/* Forgot Password - Gray and Smaller */}
+                      {!isSignUp && (
+                        <p
+                          onClick={() => setIsResetMode(true)}
+                          className="text-[9px] font-bold text-slate-400 cursor-pointer uppercase hover:text-slate-600 transition tracking-widest"
+                        >
+                          Forgot Password?
+                        </p>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>
