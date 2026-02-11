@@ -15,12 +15,14 @@ const UNIT_TO_GRAMS: { [key: string]: number } = {
 export default function Home() {
   const [prices, setPrices] = useState<any>({ gold: null, silver: null, platinum: null, palladium: null, updated_at: null });
   const [itemName, setItemName] = useState('');
-  const [metalList, setMetalList] = useState<{ type: string, weight: number, unit: string }[]>([]);
+  const [metalList, setMetalList] = useState<{ type: string, weight: number, unit: string, isManual?: boolean, manualPrice?: number }[]>([]);
   const [isResetMode, setIsResetMode] = useState(false);
   const [resetSent, setResetSent] = useState(false);
   const [tempMetal, setTempMetal] = useState('Sterling Silver');
   const [tempWeight, setTempWeight] = useState(0);
   const [tempUnit, setTempUnit] = useState('Ounces (std)');
+  const [useManualPrice, setUseManualPrice] = useState(false);
+  const [manualPriceInput, setManualPriceInput] = useState<number | ''>('');
   const [token, setToken] = useState<string | null>(null);
   const [hours, setHours] = useState<number | ''>('');
   const [rate, setRate] = useState<number | ''>('');
@@ -107,18 +109,24 @@ export default function Home() {
     const numR = Number(r) || 0;
     const numO = Number(o) || 0;
     metals.forEach(m => {
-      let spot = 0;
-      if (m.type.includes('Gold')) spot = prices.gold;
-      else if (m.type.includes('Silver')) spot = prices.silver;
-      else if (m.type.includes('Platinum')) spot = prices.platinum;
-      else if (m.type.includes('Palladium')) spot = prices.palladium;
-      const purities: any = {
-        '10K Gold': 0.417, '14K Gold': 0.583, '18K Gold': 0.750,
-        '22K Gold': 0.916, '24K Gold': 0.999, 'Sterling Silver': 0.925,
-        'Platinum 950': 0.950, 'Palladium': 0.950
-      };
-      const purity = purities[m.type] || 1.0;
-      rawMaterialCost += (spot / 31.1035) * (m.weight * UNIT_TO_GRAMS[m.unit]) * purity;
+      let pricePerGram = 0;
+      if (m.isManual && m.manualPrice) {
+        pricePerGram = m.manualPrice / UNIT_TO_GRAMS[m.unit];
+      } else {
+        let spot = 0;
+        if (m.type.includes('Gold')) spot = prices.gold;
+        else if (m.type.includes('Silver')) spot = prices.silver;
+        else if (m.type.includes('Platinum')) spot = prices.platinum;
+        else if (m.type.includes('Palladium')) spot = prices.palladium;
+        const purities: any = {
+          '10K Gold': 0.417, '14K Gold': 0.583, '18K Gold': 0.750,
+          '22K Gold': 0.916, '24K Gold': 0.999, 'Sterling Silver': 0.925,
+          'Platinum 950': 0.950, 'Palladium': 0.950
+        };
+        const purity = purities[m.type] || 1.0;
+        pricePerGram = (spot / 31.1035) * purity;
+      }
+      rawMaterialCost += pricePerGram * (m.weight * UNIT_TO_GRAMS[m.unit]);
     });
     const totalMaterials = rawMaterialCost + numO;
     const labor = numH * numR;
@@ -136,8 +144,16 @@ export default function Home() {
 
   const addMetalToPiece = () => {
     if (tempWeight <= 0) return;
-    setMetalList([...metalList, { type: tempMetal, weight: tempWeight, unit: tempUnit }]);
+    setMetalList([...metalList, { 
+      type: tempMetal, 
+      weight: tempWeight, 
+      unit: tempUnit,
+      isManual: useManualPrice,
+      manualPrice: useManualPrice ? Number(manualPriceInput) : undefined
+    }]);
     setTempWeight(0);
+    setManualPriceInput('');
+    setUseManualPrice(false);
   };
 
   const deleteInventoryItem = async (id: string) => {
@@ -185,8 +201,8 @@ export default function Home() {
     <div className="min-h-screen bg-stone-50 p-4 md:p-10 text-slate-900 font-sans">
       <div className="max-w-7xl mx-auto space-y-6">
 
-        {/* HEADER - Updated with Outline */}
-        <div className="flex flex-col md:flex-row justify-between items-center bg-white px-4 py-6 md:px-6 rounded-[2rem] border-2 shadow-sm gap-4 mb-6 relative" style={{ borderColor: '#A5BEAC' }}>
+        {/* HEADER */}
+        <div className="flex flex-col md:flex-row justify-between items-center bg-white px-4 py-6 md:px-6 rounded-[2rem] border-2 shadow-sm gap-4 mb-6 relative border-[#A5BEAC]">
           <div className="flex flex-col items-center w-full md:w-auto">
             <div className="flex flex-col items-center leading-none">
               <h1 className="text-2xl font-black uppercase italic tracking-[0.1em] text-slate-900 leading-none ml-[0.1em]">
@@ -261,8 +277,7 @@ export default function Home() {
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           <div className="lg:col-span-5 space-y-6">
-            {/* JEWELRY CALCULATOR BOX - Updated with Outline */}
-            <div className="bg-white p-8 rounded-[2rem] shadow-xl space-y-5 border-2" style={{ borderColor: '#A5BEAC' }}>
+            <div className="bg-white p-8 rounded-[2rem] shadow-xl space-y-5 border-2 border-[#A5BEAC]">
               <h2 className="text-2xl font-black uppercase italic tracking-tighter text-slate-900">Jewelry Calculator</h2>
               <input placeholder="Product Name" className="w-full p-4 bg-stone-50 border border-stone-200 rounded-2xl outline-none focus:border-[#A5BEAC] transition-all" value={itemName} onChange={e => setItemName(e.target.value)} />
               <div className="p-4 bg-stone-50 rounded-2xl border-2 border-dotted border-stone-300 space-y-3">
@@ -275,10 +290,35 @@ export default function Home() {
                     {Object.keys(UNIT_TO_GRAMS).map(u => <option key={u}>{u}</option>)}
                   </select>
                 </div>
+                
+                <div className="space-y-2">
+                  <select 
+                    className="w-full p-3 border border-stone-200 rounded-xl text-[10px] font-bold bg-white focus:border-[#A5BEAC]"
+                    value={useManualPrice ? "manual" : "spot"}
+                    onChange={(e) => setUseManualPrice(e.target.value === "manual")}
+                  >
+                    <option value="spot">Use Live Spot Price</option>
+                    <option value="manual">Use Manual Input</option>
+                  </select>
+
+                  {useManualPrice && (
+                    <input 
+                      type="number" 
+                      placeholder={`Custom Price per ${tempUnit}`} 
+                      className="w-full p-3 border border-[#A5BEAC] rounded-xl text-sm outline-none animate-in fade-in"
+                      value={manualPriceInput}
+                      onChange={(e) => setManualPriceInput(e.target.value === '' ? '' : Number(e.target.value))}
+                    />
+                  )}
+                </div>
+
                 <button onClick={addMetalToPiece} className="w-full bg-slate-900 text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#A5BEAC] transition-colors">+ Add Component</button>
                 {metalList.map((m, i) => (
                   <div key={i} className="text-[10px] font-bold bg-white p-2 rounded border border-stone-100 flex justify-between items-center">
-                    <span className="text-slate-700">{m.weight}{m.unit} {m.type}</span>
+                    <span className="text-slate-700">
+                      {m.weight}{m.unit} {m.type}
+                      <span className="text-[#A5BEAC] ml-1">{m.isManual ? `($${m.manualPrice} Manual)` : "(Spot)"}</span>
+                    </span>
                     <button onClick={() => setMetalList(metalList.filter((_, idx) => idx !== i))} className="text-red-500 text-lg hover:text-red-700 transition-colors">×</button>
                   </div>
                 ))}
@@ -302,7 +342,6 @@ export default function Home() {
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 mb-6 w-full">
-                  {/* STRATEGY A */}
                   <button
                     onClick={() => setStrategy('A')}
                     className={`group flex flex-col sm:flex-row sm:items-center sm:justify-between p-5 rounded-[2rem] border-2 transition-all ${strategy === 'A' ? 'border-[#A5BEAC] bg-stone-50 shadow-md' : 'border-stone-100 bg-white hover:border-stone-200'
@@ -310,11 +349,8 @@ export default function Home() {
                   >
                     <div className="text-left mb-4 sm:mb-0">
                       <p className="text-[10px] font-black opacity-40 uppercase tracking-tighter mb-1 text-slate-900">Retail A</p>
-                      <p className="text-3xl font-black text-slate-900">
-                        ${a?.retailA ? a.retailA.toFixed(2) : '0.00'}
-                      </p>
+                      <p className="text-3xl font-black text-slate-900">${a?.retailA ? a.retailA.toFixed(2) : '0.00'}</p>
                     </div>
-
                     <div className="text-left sm:text-right space-y-2">
                       <p className="text-[9px] font-bold text-stone-400 uppercase">Wholesale: M + L</p>
                       <div className="flex items-center sm:justify-end gap-2">
@@ -330,7 +366,6 @@ export default function Home() {
                     </div>
                   </button>
 
-                  {/* STRATEGY B */}
                   <button
                     onClick={() => setStrategy('B')}
                     className={`group relative flex flex-col sm:flex-row sm:items-center sm:justify-between p-5 rounded-[2rem] border-2 transition-all ${strategy === 'B' ? 'border-[#A5BEAC] bg-stone-50 shadow-md' : 'border-stone-100 bg-white hover:border-stone-200'
@@ -338,11 +373,8 @@ export default function Home() {
                   >
                     <div className="text-left mb-4 sm:mb-0">
                       <p className="text-[10px] font-black opacity-40 uppercase tracking-tighter mb-1 text-slate-900">Retail B</p>
-                      <p className="text-3xl font-black text-slate-900">
-                        ${b?.retailB ? b.retailB.toFixed(2) : '0.00'}
-                      </p>
+                      <p className="text-3xl font-black text-slate-900">${b?.retailB ? b.retailB.toFixed(2) : '0.00'}</p>
                     </div>
-
                     <div className="flex flex-col items-start sm:items-end">
                       <div className="flex items-center gap-1 text-[#A5BEAC] italic font-black text-[10px] uppercase whitespace-nowrap">
                         <span>Wholesale: (M ×</span>
@@ -360,7 +392,6 @@ export default function Home() {
                   </button>
                 </div>
 
-                {/* UNIFIED SAVE TO VAULT SECTION */}
                 <div className="w-full flex flex-col items-center transition-all duration-300">
                   <button
                     onClick={addToInventory}
@@ -372,14 +403,9 @@ export default function Home() {
                   >
                     {token ? "Save to Vault" : "Verifying Human..."}
                   </button>
-
                   {!token && (
                     <div className="w-full flex justify-center mt-4 h-auto overflow-hidden animate-in fade-in slide-in-from-top-1">
-                      <Turnstile
-                        siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
-                        onSuccess={(token) => setToken(token)}
-                        options={{ theme: 'light', appearance: 'interaction-only' }}
-                      />
+                      <Turnstile siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!} onSuccess={(token) => setToken(token)} options={{ theme: 'light', appearance: 'interaction-only' }} />
                     </div>
                   )}
                 </div>
@@ -388,8 +414,7 @@ export default function Home() {
           </div>
 
           <div className="lg:col-span-7 space-y-6">
-            {/* SAVED PIECES BOX - Updated with Outline */}
-            <div className="flex justify-between items-center bg-white px-6 py-4 rounded-2xl border-2 shadow-sm" style={{ borderColor: '#A5BEAC' }}>
+            <div className="flex justify-between items-center bg-white px-6 py-4 rounded-2xl border-2 shadow-sm border-[#A5BEAC]">
               <h2 className="text-lg font-black uppercase tracking-tight text-slate-900">Saved Pieces</h2>
               <button onClick={exportToPDF} disabled={inventory.length === 0} className="px-6 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase hover:bg-[#A5BEAC] transition-colors">Export PDF</button>
             </div>
@@ -421,9 +446,7 @@ export default function Home() {
 
         <div className="grid grid-cols-1 gap-6 pt-10">
           <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-stone-100">
-            <h2 className="text-xl font-black uppercase italic tracking-tighter mb-6 text-slate-900 underline decoration-[#A5BEAC] decoration-4 underline-offset-8">
-              1. MATERIAL CALCULATION DETAIL
-            </h2>
+            <h2 className="text-xl font-black uppercase italic tracking-tighter mb-6 text-slate-900 underline decoration-[#A5BEAC] decoration-4 underline-offset-8">1. MATERIAL CALCULATION DETAIL</h2>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
               <div className="space-y-6">
                 <div className="bg-stone-50 p-6 rounded-2xl border border-stone-100">
@@ -432,52 +455,32 @@ export default function Home() {
                     <p className="text-slate-900 font-bold">Cost = (Spot ÷ 31.1035) × Grams × Purity</p>
                   </div>
                 </div>
-                <p className="text-xs text-stone-600 leading-relaxed italic">
-                  Spot prices are quoted per Troy Ounce. We divide by 31.1035 to get the price per gram, then multiply by the specific metal purity.
-                </p>
+                <p className="text-xs text-stone-600 leading-relaxed italic">Spot prices are quoted per Troy Ounce. We divide by 31.1035 to get the price per gram, then multiply by the specific metal purity.</p>
               </div>
               <div className="bg-stone-50 p-6 rounded-2xl space-y-3 border border-stone-100">
                 <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest">PURITY CONSTANTS:</h3>
                 <div className="grid grid-cols-2 gap-2 text-[10px] font-bold text-stone-400">
-                  <p>24K Gold: 99.9%</p><p>22K Gold: 91.6%</p>
-                  <p>18K Gold: 75.0%</p><p>14K Gold: 58.3%</p>
-                  <p>10K Gold: 41.7%</p><p>Sterling Silver: 92.5%</p>
-                  <p>Plat 950: 95.0%</p><p>Palladium: 95.0%</p>
+                  <p>24K Gold: 99.9%</p><p>22K Gold: 91.6%</p><p>18K Gold: 75.0%</p><p>14K Gold: 58.3%</p><p>10K Gold: 41.7%</p><p>Sterling Silver: 92.5%</p><p>Plat 950: 95.0%</p><p>Palladium: 95.0%</p>
                 </div>
               </div>
             </div>
           </div>
 
           <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-stone-100">
-            <h2 className="text-xl font-black uppercase italic tracking-tighter mb-6 text-slate-900 underline decoration-[#A5BEAC] decoration-4 underline-offset-8">
-              2. PRICE STRATEGY DETAIL
-            </h2>
+            <h2 className="text-xl font-black uppercase italic tracking-tighter mb-6 text-slate-900 underline decoration-[#A5BEAC] decoration-4 underline-offset-8">2. PRICE STRATEGY DETAIL</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className={`p-6 rounded-2xl border-2 transition-all ${strategy === 'A' ? 'border-[#A5BEAC] bg-stone-50' : 'bg-stone-50 border-stone-100'}`}>
                 <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-2">STRATEGY A (STANDARD MULTIPLIER)</h3>
                 <div className="space-y-2 text-xs text-stone-700">
                   <p><strong className="text-slate-900">Wholesale:</strong> Materials + Labor</p>
                   <p><strong className="text-slate-900">Retail:</strong> Wholesale × {retailMultA}</p>
-                  <div className="mt-4 p-3 bg-white/50 rounded-xl border border-stone-100">
-                    <p className="text-[10px] text-stone-500 leading-relaxed">
-                      <span className="font-black text-[#A5BEAC] uppercase text-[8px] block mb-1">Industry Standard:</span>
-                      Standard industry retail markup is typically 2.0 to 3.0 times the wholesale cost.
-                    </p>
-                  </div>
                 </div>
               </div>
-
               <div className={`p-6 rounded-2xl border-2 transition-all ${strategy === 'B' ? 'border-[#A5BEAC] bg-stone-50' : 'bg-stone-50 border-stone-100'}`}>
                 <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-2">STRATEGY B (MATERIALS MARKUP)</h3>
                 <div className="space-y-2 text-xs text-stone-700">
                   <p><strong className="text-slate-900">Wholesale:</strong> (Materials × {markupB}) + Labor</p>
                   <p><strong className="text-slate-900">Retail:</strong> Wholesale × 2</p>
-                  <div className="mt-4 p-3 bg-white/50 rounded-xl border border-stone-100">
-                    <p className="text-[10px] text-stone-500 leading-relaxed">
-                      <span className="font-black text-[#A5BEAC] uppercase text-[8px] block mb-1">Industry Standard:</span>
-                      A production markup of 1.5 to 1.8 is standard to account for metal loss, consumables, and market volatility.
-                    </p>
-                  </div>
                 </div>
               </div>
             </div>
