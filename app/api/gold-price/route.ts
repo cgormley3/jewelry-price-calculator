@@ -1,95 +1,55 @@
 import { NextResponse } from 'next/server';
-import * as cheerio from 'cheerio';
-import backupPrices from '@/prices.json';
+import { createClient } from '@supabase/supabase-js';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  const tickers = {
-    gold: 'https://www.google.com/finance/quote/GCW00:COMEX',
-    silver: 'https://www.google.com/finance/quote/SIW00:COMEX',
-    platinum: 'https://www.google.com/finance/quote/PLW00:NYMEX',
-    palladium: 'https://www.google.com/finance/quote/PAW00:NYMEX'
-  };
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY! // Use the Secret Key you found
+  );
 
-  const fetchGooglePrice = async (url: string) => {
-    try {
-      const res = await fetch(url, { cache: 'no-store', headers: { 'User-Agent': 'Mozilla/5.0' } });
-      const html = await res.text();
-      const $ = cheerio.load(html);
-      const priceText = $('.YMlKec.fxKbKc').first().text().replace(/[^0-9.]/g, '');
-      const price = parseFloat(priceText);
-      return isNaN(price) ? null : price;
-    } catch { return null; }
-  };
-
-  const fetchRioGrandePrices = async () => {
-    try {
-      const res = await fetch('https://www.riogrande.com/metal-market-prices/', {
-        cache: 'no-store',
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
-      });
-      const html = await res.text();
-      const $ = cheerio.load(html);
-      const text = $('body').text();
-
-      const findPrice = (regex: RegExp) => {
-        const match = text.match(regex);
-        if (!match) return null;
-        const price = parseFloat(match[1].replace(/,/g, ''));
-        return isNaN(price) ? null : price;
-      };
-
-      return {
-        gold: findPrice(/Gold\s*\$?([\d,]+\.\d{2})/i),
-        silver: findPrice(/Silver\s*\$?([\d,]+\.\d{2})/i),
-        platinum: findPrice(/Platinum\s*\$?([\d,]+\.\d{2})/i),
-        palladium: findPrice(/Palladium\s*\$?([\d,]+\.\d{2})/i),
-      };
-    } catch { return null; }
-  };
+  const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRCIKyw7uQpytVE7GayB_rMY8qqMwSjat28AwLj9rSSD64OrZRqDSIuIcDIdAob_BK81rrempUgTO-H/pub?gid=1610736361&single=true&output=csv";
 
   try {
-    const [gGold, gSilver, gPlat, gPall] = await Promise.all([
-      fetchGooglePrice(tickers.gold),
-      fetchGooglePrice(tickers.silver),
-      fetchGooglePrice(tickers.platinum),
-      fetchGooglePrice(tickers.palladium)
-    ]);
+    const res = await fetch(CSV_URL, { cache: 'no-store' });
+    const text = await res.text();
+    
+    // Split text into rows and then into columns
+    const rows = text.split('\n').map(row => row.split(','));
 
-    // 1. Google Finance Path
-    if (gGold !== null) {
-      return NextResponse.json({
-        gold: gGold,
-        silver: gSilver ?? backupPrices.silver,
-        platinum: gPlat ?? backupPrices.platinum,
-        palladium: gPall ?? backupPrices.palladium,
-        lastUpdated: new Date().toISOString()
-        // source omitted
-      });
-    }
+    const parsePrice = (rowIndex: number) => {
+      const row = rows[rowIndex];
+      if (!row) return 0;
+      
+      // We join the row back together in case Google added extra commas inside quotes
+      const fullRowText = row.join(''); 
+      // This regex removes everything except numbers and the decimal point
+      const cleanValue = fullRowText.replace(/[^0-9.]/g, '');
+      
+      return parseFloat(cleanValue) || 0;
+    };
 
-    // 2. Rio Grande Path
-    const rioPrices = await fetchRioGrandePrices();
-    if (rioPrices && rioPrices.gold !== null) {
-      return NextResponse.json({
-        gold: rioPrices.gold,
-        silver: rioPrices.silver ?? backupPrices.silver,
-        platinum: rioPrices.platinum ?? backupPrices.platinum,
-        palladium: rioPrices.palladium ?? backupPrices.palladium,
-        lastUpdated: new Date().toISOString()
-        // source omitted
-      });
-    }
+    const priceData = {
+      gold: parsePrice(1),      // Row 2: Gold
+      silver: parsePrice(2),    // Row 3: Silver
+      platinum: parsePrice(3),  // Row 4: Platinum
+      palladium: parsePrice(4), // Row 5: Palladium
+      updated_at: new Date().toISOString() 
+    };
 
-    // 3. GitHub JSON Fallback
-    // We destructure to remove 'source' from backupPrices if it exists there
-    const { source: _, ...cleanBackup } = backupPrices;
-    return NextResponse.json({
-      ...cleanBackup,
-      lastUpdated: new Date().toISOString()
-    });
+    console.log("Saving to Tank:", priceData);
 
-  } catch (error) {
-    const { source: _, ...cleanBackup } = backupPrices;
-    return NextResponse.json(cleanBackup);
+    const { error: dbError } = await supabase
+      .from('metal_prices')
+      .upsert({ id: 1, ...priceData });
+
+    if (dbError) throw new Error(dbError.message);
+
+    return NextResponse.json({ success: true, ...priceData });
+
+  } catch (err: any) {
+    console.error("Tank Error:", err.message);
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
