@@ -343,16 +343,16 @@ export default function Home() {
                             <div className="p-6 bg-stone-50/50 space-y-6">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
                                     <div className="space-y-3">
-                                        <h4 className="text-[10px] font-black uppercase text-stone-400">Metal Composition</h4>
+                                        <h4 className="text-[10px] font-black uppercase text-stone-400">Materials</h4>
                                         {item.metals?.map((m: any, idx: number) => (<div key={idx} className="flex justify-between text-[10px] font-bold border-b border-stone-100 pb-1 uppercase"><span>{m.weight}{m.unit} {m.type}</span><span className="text-stone-400">{m.isManual ? 'Manual' : 'Spot'}</span></div>))}
                                         {item.other_costs_at_making > 0 && (<div className="flex justify-between text-[10px] font-bold border-b border-stone-100 pb-1 uppercase"><span>Stones/Other</span><span>${Number(item.other_costs_at_making).toFixed(2)}</span></div>)}
                                     </div>
                                     <div className="space-y-4">
                                         <div className="grid grid-cols-2 gap-2 text-center">
-                                            <div className="bg-white p-3 rounded-xl border border-stone-100"><p className="text-[8px] font-black text-stone-400 uppercase">Materials (Orig)</p><p className="text-xs font-black text-slate-700">${(Number(item.materials_at_making || 0) + Number(item.other_costs_at_making || 0)).toFixed(2)}</p></div>
+                                            <div className="bg-white p-3 rounded-xl border border-stone-100"><p className="text-[8px] font-black text-stone-400 uppercase">Materials Total (Orig)</p><p className="text-xs font-black text-slate-700">${(Number(item.materials_at_making || 0) + Number(item.other_costs_at_making || 0)).toFixed(2)}</p></div>
                                             <div className="bg-white p-3 rounded-xl border border-stone-100"><p className="text-[8px] font-black text-stone-400 uppercase">Labor Cost</p><p className="text-xs font-black text-slate-700">${Number(labor).toFixed(2)}</p></div>
                                         </div>
-                                        <button onClick={() => syncToMarket(item)} className="w-full py-2 bg-[#2d4a22] text-white rounded-lg font-black text-[9px] uppercase tracking-widest hover:bg-slate-900 transition-all shadow-sm">Sync Vault to Market</button>
+                                        <button onClick={() => syncToMarket(item)} className="w-full py-2 bg-[#2d4a22] text-white rounded-lg font-black text-[9px] uppercase tracking-widest hover:bg-slate-900 transition-all shadow-sm">Sync Vault Item to Market</button>
                                     </div>
                                 </div>
                                 <div className="bg-white p-4 rounded-2xl border border-stone-200 text-left">
