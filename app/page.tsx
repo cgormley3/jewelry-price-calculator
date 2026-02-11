@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { supabase } from '../lib/supabase';
+import { Turnstile } from '@marsidev/react-turnstile';
+
 
 const UNIT_TO_GRAMS: { [key: string]: number } = {
   "Grams": 1,
@@ -21,6 +23,7 @@ export default function Home() {
   const [tempWeight, setTempWeight] = useState(0);
   const [tempUnit, setTempUnit] = useState('Ounces (std)');
 
+  const [token, setToken] = useState<string | null>(null);
 
   const [hours, setHours] = useState<number | ''>('');
   const [rate, setRate] = useState<number | ''>('');
@@ -96,6 +99,16 @@ export default function Home() {
       setShowAuth(false);
       fetchInventory();
     }
+  };
+
+  const handleSave = async () => {
+    if (!token) {
+      alert("Please verify you are human first!");
+      return;
+    }
+
+    // Your existing Supabase save logic here
+    console.log("Saving with token:", token);
   };
 
   const loginWithGoogle = async () => {
@@ -402,6 +415,22 @@ export default function Home() {
                 <input type="number" placeholder="Hours" className="p-3 border rounded-xl" value={hours} onChange={e => setHours(e.target.value === '' ? '' : Number(e.target.value))} />
               </div>
               <input type="number" placeholder="Other Costs ($)" className="w-full p-3 border rounded-xl" value={otherCosts} onChange={e => setOtherCosts(e.target.value === '' ? '' : Number(e.target.value))} />
+
+              <div className="mt-4 flex flex-col items-center gap-4">
+                <Turnstile
+                  siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
+                  onSuccess={(token) => setToken(token)}
+                />
+
+                <button
+                  onClick={handleSave}
+                  disabled={!token}
+                  className={`w-full p-4 rounded-xl font-bold uppercase transition-all ${!token ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-blue-600 text-white shadow-lg'
+                    }`}
+                >
+                  Save to Vault
+                </button>
+              </div>
 
               {/* RE-ADDED WORKSHOP BREAKDOWN SECTION */}
               <div className="mt-6 p-4 rounded-xl bg-stone-100 border border-stone-200 space-y-3">
