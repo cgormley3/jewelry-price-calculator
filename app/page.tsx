@@ -260,12 +260,19 @@ export default function Home() {
               alt="Logo"
               className="w-10 h-10 object-contain block brightness-110 contrast-125"
             />
-            <div className="flex flex-col leading-none">
-              <div className="flex items-center gap-2">
+            <div className="flex flex-col items-center md:items-start leading-none">
+              <div className="flex items-center justify-center md:justify-start gap-2">
                 <h1 className="text-2xl font-black uppercase italic tracking-[0.1em] text-slate-900 leading-none">THE VAULT</h1>
                 {isPro && <span className="bg-[#A5BEAC] text-white text-[8px] font-black px-2 py-0.5 rounded-full">PRO</span>}
               </div>
-              <a href="https://bearsilverandstone.com" target="_blank" rel="noopener noreferrer" className="text-[8px] font-black uppercase tracking-[0.12em] text-stone-400 mt-1 hover:text-[#A5BEAC] transition-colors cursor-pointer">BY BEAR SILVER AND STONE</a>
+              <a
+                href="https://bearsilverandstone.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[8px] font-black uppercase tracking-[0.12em] text-stone-400 mt-1 hover:text-[#A5BEAC] transition-colors cursor-pointer text-center md:text-left"
+              >
+                BY BEAR SILVER AND STONE
+              </a>
             </div>
           </div>
           <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
@@ -301,15 +308,15 @@ export default function Home() {
               <h2 className="text-2xl font-black uppercase italic tracking-tighter text-slate-900">Calculator</h2>
               <input placeholder="Product Name" className="w-full p-4 bg-stone-50 border rounded-2xl outline-none focus:border-[#A5BEAC] transition-all" value={itemName} onChange={e => setItemName(e.target.value)} />
               <div className="p-4 bg-stone-50 rounded-2xl border-2 border-dotted border-stone-300 space-y-3">
-                <select className="w-full p-3 border rounded-xl font-bold bg-white focus:border-[#2d4a22]" value={tempMetal} onChange={e => setTempMetal(e.target.value)}>
+                <select className="w-full p-3 border rounded-xl font-bold bg-white focus:border-[#A5BEAC]" value={tempMetal} onChange={e => setTempMetal(e.target.value)}>
                   <option>Sterling Silver</option><option>10K Gold</option><option>14K Gold</option><option>18K Gold</option><option>22K Gold</option><option>24K Gold</option><option>Platinum 950</option><option>Palladium</option>
                 </select>
                 <div className="flex gap-2">
-                  <input type="number" placeholder="Weight" className="w-full p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22]" value={tempWeight || ''} onChange={e => setTempWeight(Number(e.target.value))} />
-                  <select className="p-3 border border-stone-200 rounded-xl text-[10px] font-bold focus:border-[#2d4a22]" value={tempUnit} onChange={e => setTempUnit(e.target.value)}>{Object.keys(UNIT_TO_GRAMS).map(u => <option key={u}>{u}</option>)}</select>
+                  <input type="number" placeholder="Weight" className="w-full p-3 border border-stone-200 rounded-xl focus:border-[#A5BEAC]" value={tempWeight || ''} onChange={e => setTempWeight(Number(e.target.value))} />
+                  <select className="p-3 border border-stone-200 rounded-xl text-[10px] font-bold focus:border-[#A5BEAC]" value={tempUnit} onChange={e => setTempUnit(e.target.value)}>{Object.keys(UNIT_TO_GRAMS).map(u => <option key={u}>{u}</option>)}</select>
                 </div>
                 <div className="space-y-2">
-                  <select className="w-full p-3 border border-stone-200 rounded-xl text-[10px] font-bold bg-white focus:border-[#2d4a22]" value={useManualPrice ? "manual" : "spot"} onChange={(e) => setUseManualPrice(e.target.value === "manual")}>
+                  <select className="w-full p-3 border border-stone-200 rounded-xl text-[10px] font-bold bg-white focus:border-[#A5BEAC]" value={useManualPrice ? "manual" : "spot"} onChange={(e) => setUseManualPrice(e.target.value === "manual")}>
                     <option value="spot">Use Live Spot Price</option><option value="manual">Use Manual Input</option>
                   </select>
                   {useManualPrice && <input type="number" placeholder={`Price per ${tempUnit}`} className="w-full p-3 border border-[#A5BEAC] rounded-xl text-sm outline-none animate-in fade-in" value={manualPriceInput} onChange={(e) => setManualPriceInput(e.target.value === '' ? '' : Number(e.target.value))} />}
@@ -333,8 +340,8 @@ export default function Home() {
                   <div className="flex justify-between items-center py-2"><span className="text-stone-500 font-bold uppercase text-[10px]">Labor Total ({hours || 0}h)</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts).labor.toFixed(2)}</span></div>
                 </div>
                 <div className="grid grid-cols-1 gap-4 mb-6 w-full">
-                  <button onClick={() => setStrategy('A')} className={`group flex flex-col sm:flex-row sm:items-center sm:justify-between p-5 rounded-[2rem] border-2 transition-all ${strategy === 'A' ? 'border-[#2d4a22] bg-stone-50 shadow-md' : 'border-stone-100 bg-white hover:border-stone-200'}`}><div className="text-left mb-4 sm:mb-0"><p className="text-[10px] font-black opacity-40 uppercase tracking-tighter mb-1 text-slate-900">Retail A</p><p className="text-3xl font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts).retailA.toFixed(2)}</p></div><div className="flex items-center gap-2"><span className="text-[10px] font-black text-[#2d4a22] uppercase italic whitespace-nowrap">Retail: W ×</span><input type="number" className="w-12 bg-white border-2 border-[#2d4a22] rounded-xl text-xs font-black py-1.5 text-center outline-none" value={retailMultA} onChange={(e) => setRetailMultA(Number(e.target.value))} onClick={(e) => e.stopPropagation()} /></div></button>
-                  <button onClick={() => setStrategy('B')} className={`group relative flex flex-col sm:flex-row sm:items-center sm:justify-between p-5 rounded-[2rem] border-2 transition-all ${strategy === 'B' ? 'border-[#2d4a22] bg-stone-50 shadow-md' : 'border-stone-100 bg-white hover:border-stone-200'}`}><div className="text-left mb-4 sm:mb-0"><p className="text-[10px] font-black opacity-40 uppercase tracking-tighter mb-1 text-slate-900">Retail B</p><p className="text-3xl font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts).retailB.toFixed(2)}</p></div><div className="flex flex-col items-start sm:items-end"><div className="flex items-center gap-1 text-[#2d4a22] italic font-black text-[10px] uppercase whitespace-nowrap"><span>Wholesale: (M ×</span><input type="number" className="w-12 bg-white border-2 border-[#2d4a22] rounded-xl text-xs font-black py-1.5 text-center outline-none" value={markupB} onChange={(e) => setMarkupB(Number(e.target.value))} onClick={(e) => e.stopPropagation()} /><span>) + L</span></div><p className="text-[9px] font-bold text-stone-400 uppercase mt-1">Retail: W × 2</p></div></button>
+                  <button onClick={() => setStrategy('A')} className={`group flex flex-col sm:flex-row sm:items-center sm:justify-between p-5 rounded-[2rem] border-2 transition-all ${strategy === 'A' ? 'border-[#A5BEAC] bg-stone-50 shadow-md' : 'border-stone-100 bg-white hover:border-stone-200'}`}><div className="text-left mb-4 sm:mb-0"><p className="text-[10px] font-black opacity-40 uppercase tracking-tighter mb-1 text-slate-900">Retail A</p><p className="text-3xl font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts).retailA.toFixed(2)}</p></div><div className="flex items-center gap-2"><span className="text-[10px] font-black text-[#A5BEAC] uppercase italic whitespace-nowrap">Retail: W ×</span><input type="number" className="w-12 bg-white border-2 border-[#A5BEAC] rounded-xl text-xs font-black py-1.5 text-center outline-none" value={retailMultA} onChange={(e) => setRetailMultA(Number(e.target.value))} onClick={(e) => e.stopPropagation()} /></div></button>
+                  <button onClick={() => setStrategy('B')} className={`group relative flex flex-col sm:flex-row sm:items-center sm:justify-between p-5 rounded-[2rem] border-2 transition-all ${strategy === 'B' ? 'border-[#A5BEAC] bg-stone-50 shadow-md' : 'border-stone-100 bg-white hover:border-stone-200'}`}><div className="text-left mb-4 sm:mb-0"><p className="text-[10px] font-black opacity-40 uppercase tracking-tighter mb-1 text-slate-900">Retail B</p><p className="text-3xl font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts).retailB.toFixed(2)}</p></div><div className="flex flex-col items-start sm:items-end"><div className="flex items-center gap-1 text-[#A5BEAC] italic font-black text-[10px] uppercase whitespace-nowrap"><span>Wholesale: (M ×</span><input type="number" className="w-12 bg-white border-2 border-[#A5BEAC] rounded-xl text-xs font-black py-1.5 text-center outline-none" value={markupB} onChange={(e) => setMarkupB(Number(e.target.value))} onClick={(e) => e.stopPropagation()} /><span>) + L</span></div><p className="text-[9px] font-bold text-stone-400 uppercase mt-1">Retail: W × 2</p></div></button>
                 </div>
                 <button onClick={addToInventory} disabled={!token} className={`w-full py-5 rounded-[1.8rem] font-black uppercase tracking-[0.15em] text-sm transition-all ${!token ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-[#A5BEAC] text-white shadow-xl hover:bg-slate-900 active:scale-[0.97]'}`}>{token ? "Save to Vault" : "Verifying Human..."}</button>
                 {!token && <div className="w-full flex justify-center mt-4 h-auto overflow-hidden animate-in fade-in slide-in-from-top-1"><Turnstile siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!} onSuccess={(token) => setToken(token)} options={{ theme: 'light', appearance: 'interaction-only' }} /></div>}
@@ -347,7 +354,7 @@ export default function Home() {
             <div className="bg-white p-6 rounded-[2rem] border-2 shadow-sm border-[#A5BEAC] space-y-4">
               <div className="flex justify-between items-center text-left">
                 <div><h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Vault Inventory</h2><p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">{inventory.length} Pieces Stored</p></div>
-                <div className="text-right"><p className="text-[9px] font-black text-[#2d4a22] uppercase italic">Total Vault Value</p><p className="text-2xl font-black text-slate-900">${pricesLoaded ? totalVaultValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "--.--"}</p></div>
+                <div className="text-right"><p className="text-[9px] font-black text-[#A5BEAC] uppercase italic">Total Vault Value</p><p className="text-2xl font-black text-slate-900">${pricesLoaded ? totalVaultValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "--.--"}</p></div>
               </div>
               <div className="flex flex-col sm:flex-row gap-4">
                 <div className="relative flex-1"><span className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-300 text-xs">🔍</span><input type="text" placeholder="Search items..." className="w-full pl-10 pr-4 py-3 bg-stone-50 border rounded-xl text-xs font-bold outline-none focus:border-[#A5BEAC] transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
@@ -442,7 +449,7 @@ export default function Home() {
                                 </div>
                               </div>
                               <div className="relative">
-                                <button onClick={() => setOpenEditId(openEditId === item.id ? null : item.id)} className="w-full py-3 bg-[#2d4a22] text-white rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-slate-900 transition-all shadow-sm">
+                                <button onClick={() => setOpenEditId(openEditId === item.id ? null : item.id)} className="w-full py-3 bg-[#A5BEAC] text-white rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-slate-900 transition-all shadow-sm">
                                   Edit Prices {openEditId === item.id ? '▲' : '▼'}
                                 </button>
                                 {openEditId === item.id && (
