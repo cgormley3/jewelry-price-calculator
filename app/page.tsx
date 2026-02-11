@@ -213,7 +213,7 @@ export default function Home() {
                   onClick={() => setShowAuth(!showAuth)}
                   className="text-[10px] font-black uppercase bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
                 >
-                  Save to Cloud
+                  Login / Sign Up
                 </button>
               ) : (
                 <button
