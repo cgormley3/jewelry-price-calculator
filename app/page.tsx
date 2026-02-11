@@ -18,8 +18,7 @@ export default function Home() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [openEditId, setOpenEditId] = useState<string | null>(null);
-  
-  // NEW: Manual Edit Modal States
+
   const [editingItem, setEditingItem] = useState<any>(null);
   const [manualRetail, setManualRetail] = useState('');
   const [manualWholesale, setManualWholesale] = useState('');
@@ -45,6 +44,9 @@ export default function Home() {
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
   const [markupB, setMarkupB] = useState(1.8);
+
+  const SHOPIFY_PRO_URL = "https://bearsilverandstone.com/products/the-vault-pro";
+  const isPro = user?.user_metadata?.is_pro || false;
 
   useEffect(() => {
     async function initSession() {
@@ -89,9 +91,6 @@ export default function Home() {
 
   const calculateFullBreakdown = (metals: any[], h: any, r: any, o: any, customMult?: number, customMarkup?: number) => {
     let rawMaterialCost = 0;
-    const numH = Number(h) || 0;
-    const numR = Number(r) || 0;
-    const numO = Number(o) || 0;
     metals.forEach(m => {
       let pricePerGram = 0;
       if (m.isManual && m.manualPrice) pricePerGram = m.manualPrice / UNIT_TO_GRAMS[m.unit];
@@ -102,8 +101,8 @@ export default function Home() {
       }
       rawMaterialCost += pricePerGram * (m.weight * UNIT_TO_GRAMS[m.unit]);
     });
-    const totalMaterials = rawMaterialCost + numO;
-    const labor = numH * numR;
+    const totalMaterials = rawMaterialCost + (Number(o) || 0);
+    const labor = (Number(h) || 0) * (Number(r) || 0);
     const wholesaleA = totalMaterials + labor;
     const retailA = wholesaleA * (customMult ?? retailMultA);
     const wholesaleB = (totalMaterials * (customMarkup ?? markupB)) + labor;
@@ -133,21 +132,14 @@ export default function Home() {
     if (!error) { fetchInventory(); setOpenEditId(null); }
   };
 
-  // Custom Inline Save
   const handleManualPriceSave = async () => {
     if (!editingItem) return;
-    const { error } = await supabase.from('inventory').update({ 
-      wholesale: Number(manualWholesale), 
-      retail: Number(manualRetail) 
-    }).eq('id', editingItem.id);
-    if (!error) { 
-      fetchInventory(); 
-      setEditingItem(null); 
-      setOpenEditId(null); 
-    }
+    const { error } = await supabase.from('inventory').update({ wholesale: Number(manualWholesale), retail: Number(manualRetail) }).eq('id', editingItem.id);
+    if (!error) { fetchInventory(); setEditingItem(null); setOpenEditId(null); }
   };
 
   const addToInventory = async () => {
+    if (!isPro && inventory.length >= 5) return alert("Vault Limit Reached (5 items). Upgrade for unlimited space.");
     if (!token || !itemName || metalList.length === 0 || !user) return alert("Missing verification");
     const a = calculateFullBreakdown(metalList, hours, rate, otherCosts);
     const newItem = {
@@ -173,14 +165,14 @@ export default function Home() {
   }, [inventory, prices]);
 
   const exportToCSV = () => {
-    const headers = ["Item Name", "Retail (Live)", "Wholesale (Live)", "Retail (Orig)", "Wholesale (Orig)", "Notes", "Date Created", "Strategy", "Metals"];
+    const headers = ["Item Name", "Market Retail", "Market Wholesale", "Established Retail", "Established Wholesale", "Notes", "Date Created", "Strategy", "Metals"];
     const rows = filteredInventory.map(item => {
       const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
       const labor = item.labor_at_making || 0;
       const liveWholesale = item.strategy === 'A' ? current.wholesaleA + labor : current.wholesaleB;
       const liveRetail = item.strategy === 'A' ? (current.totalMaterials + labor) * (item.multiplier || 3) : ((current.totalMaterials * (item.markup_b || 1.8)) + labor) * 2;
-      const metalsStr = item.metals.map((m:any) => `${m.weight}${m.unit} ${m.type}`).join('; ');
-      return [`"${item.name}"`, liveRetail.toFixed(2), liveWholesale.toFixed(2), Number(item.retail).toFixed(2), Number(item.wholesale).toFixed(2), `"${item.notes?.replace(/"/g, '""') || ''}"`, new Date(item.created_at).toLocaleDateString(), item.strategy, `"${metalsStr}"` ];
+      const metalsStr = item.metals.map((m: any) => `${m.weight}${m.unit} ${m.type}`).join('; ');
+      return [`"${item.name}"`, liveRetail.toFixed(2), liveWholesale.toFixed(2), Number(item.retail).toFixed(2), Number(item.wholesale).toFixed(2), `"${item.notes?.replace(/"/g, '""') || ''}"`, new Date(item.created_at).toLocaleDateString(), item.strategy, `"${metalsStr}"`];
     });
     const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
     const encodedUri = encodeURI(csvContent);
@@ -193,7 +185,7 @@ export default function Home() {
     const doc = new jsPDF();
     doc.setFontSize(22); doc.setTextColor(45, 74, 34); doc.text('THE VAULT INVENTORY REPORT', 14, 20);
     doc.setFontSize(9); doc.setTextColor(100, 100, 100); doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 26);
-    doc.text(`Total Vault Retail Value: $${totalVaultValue.toLocaleString(undefined, {minimumFractionDigits: 2})}`, 14, 31);
+    doc.text(`Total Vault Market Value: $${totalVaultValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, 14, 31);
     let currentY = 40;
     filteredInventory.forEach((item, index) => {
       if (currentY > 230) { doc.addPage(); currentY = 20; }
@@ -204,18 +196,20 @@ export default function Home() {
 
       doc.setFont("helvetica", "bold"); doc.setFontSize(14); doc.setTextColor(0, 0, 0); doc.text(`${item.name.toUpperCase()}`, 14, currentY);
       doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(150, 150, 150);
-      doc.text(`ID: ${item.id.slice(0,8)} | Strategy: ${item.strategy} | Saved: ${new Date(item.created_at).toLocaleDateString()}`, 14, currentY + 5);
+      doc.text(`Strategy: ${item.strategy} | Saved: ${new Date(item.created_at).toLocaleDateString()}`, 14, currentY + 5);
 
       autoTable(doc, {
-        startY: currentY + 8, head: [['Financial Metric', 'Saved (Original)', 'Current Market (Live)']],
+        startY: currentY + 8, head: [['Financial Metric', 'Established (Basis)', 'Market Value (Live)']],
         body: [['Retail Price', `$${Number(item.retail).toFixed(2)}`, { content: `$${liveRetail.toFixed(2)}`, styles: { fontStyle: 'bold' } }], ['Wholesale Cost', `$${Number(item.wholesale).toFixed(2)}`, `$${liveWholesale.toFixed(2)}`]],
         theme: 'grid', headStyles: { fillColor: [165, 190, 172], textColor: 255, fontSize: 8 },
         styles: { fontSize: 8, cellPadding: 2 }, margin: { left: 14 }, tableWidth: 120
       });
 
-      const componentLines = item.metals.map((m: any) => `${m.weight}${m.unit} ${m.type} (${m.isManual ? 'Manual' : 'Spot'})`);
+      const componentLines = item.metals.map((m: any) => `${m.weight}${m.unit} ${m.type}`);
       doc.setFontSize(8); doc.setTextColor(80, 80, 80); doc.setFont("helvetica", "bold"); doc.text("COMPOSITION:", 140, currentY + 12);
-      doc.setFont("helvetica", "normal"); componentLines.forEach((line, i) => doc.text(line, 140, currentY + 17 + (i * 4)));
+      doc.setFont("helvetica", "normal");
+      componentLines.forEach((line: string, i: number) => doc.text(line, 140, currentY + 17 + (i * 4)));
+
       if (item.notes) {
         doc.setFont("helvetica", "bold"); doc.text("NOTES:", 14, (doc as any).lastAutoTable.finalY + 6);
         doc.setFont("helvetica", "italic"); doc.setTextColor(100, 100, 100);
@@ -224,7 +218,12 @@ export default function Home() {
       } else { currentY = Math.max((doc as any).lastAutoTable.finalY + 12, currentY + 25 + (componentLines.length * 4)); }
       doc.setDrawColor(220); doc.line(14, currentY - 4, 196, currentY - 4);
     });
-    doc.save(`Vault_Report_${new Date().toISOString().split('T')[0]}.pdf`); setShowExportMenu(false);
+    doc.save(`Vault_Report.pdf`); setShowExportMenu(false);
+  };
+
+  const loginWithGoogle = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
+    if (error) alert(error.message);
   };
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -233,24 +232,17 @@ export default function Home() {
     if (result.error) alert(result.error.message); else { setShowAuth(false); fetchInventory(); }
   };
 
-  const loginWithGoogle = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
-    if (error) alert(error.message);
-  };
-
   return (
     <div className="min-h-screen bg-stone-50 p-4 md:p-10 text-slate-900 font-sans text-left relative">
-      
-      {/* MODAL: MANUAL PRICE EDIT */}
       {editingItem && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-6">
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Manual Price Edit</h3>
             <div className="space-y-4">
               <div><label className="text-[10px] font-black uppercase text-stone-400 mb-1 block">New Retail Price ($)</label>
-              <input type="number" className="w-full p-4 bg-stone-50 border rounded-2xl outline-none focus:border-[#A5BEAC] font-bold" value={manualRetail} onChange={(e) => setManualRetail(e.target.value)} /></div>
+                <input type="number" className="w-full p-4 bg-stone-50 border rounded-2xl outline-none focus:border-[#A5BEAC] font-bold" value={manualRetail} onChange={(e) => setManualRetail(e.target.value)} /></div>
               <div><label className="text-[10px] font-black uppercase text-stone-400 mb-1 block">New Wholesale Cost ($)</label>
-              <input type="number" className="w-full p-4 bg-stone-50 border rounded-2xl outline-none focus:border-[#A5BEAC] font-bold" value={manualWholesale} onChange={(e) => setManualWholesale(e.target.value)} /></div>
+                <input type="number" className="w-full p-4 bg-stone-50 border rounded-2xl outline-none focus:border-[#A5BEAC] font-bold" value={manualWholesale} onChange={(e) => setManualWholesale(e.target.value)} /></div>
             </div>
             <div className="flex gap-3">
               <button onClick={() => setEditingItem(null)} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
@@ -261,12 +253,18 @@ export default function Home() {
       )}
 
       <div className="max-w-7xl mx-auto space-y-6">
-        {/* HEADER - PERFECT NO-INDENT ALIGNMENT */}
         <div className="flex flex-col md:flex-row justify-between items-center bg-white px-6 py-6 rounded-[2rem] border-2 shadow-sm gap-4 mb-6 relative border-[#A5BEAC]">
           <div className="flex items-center gap-4 w-full md:w-auto">
-            <img src="/icon.png" alt="Logo" className="w-10 h-10 object-contain" />
+            <img
+              src="/icon.png"
+              alt="Logo"
+              className="w-10 h-10 object-contain block brightness-110 contrast-125"
+            />
             <div className="flex flex-col leading-none">
-              <h1 className="text-2xl font-black uppercase italic tracking-[0.1em] text-slate-900 leading-none">THE VAULT</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-black uppercase italic tracking-[0.1em] text-slate-900 leading-none">THE VAULT</h1>
+                {isPro && <span className="bg-[#A5BEAC] text-white text-[8px] font-black px-2 py-0.5 rounded-full">PRO</span>}
+              </div>
               <a href="https://bearsilverandstone.com" target="_blank" rel="noopener noreferrer" className="text-[8px] font-black uppercase tracking-[0.12em] text-stone-400 mt-1 hover:text-[#A5BEAC] transition-colors cursor-pointer">BY BEAR SILVER AND STONE</a>
             </div>
           </div>
@@ -275,29 +273,19 @@ export default function Home() {
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400">{!user ? 'Vault Locked' : (user.is_anonymous ? 'Guest Mode' : `Vault: ${user.email?.split('@')[0]}`)}</p>
               <div className={`w-2 h-2 rounded-full ${user ? 'bg-[#A5BEAC] animate-pulse' : 'bg-stone-300'}`}></div>
             </div>
-            <div className="relative w-full md:w-auto order-2">
+            <div className="relative w-full md:w-auto order-2 flex gap-2">
+              {!isPro && user && !user.is_anonymous && (
+                <button onClick={() => window.open(SHOPIFY_PRO_URL, '_blank')} className="text-[10px] font-black uppercase bg-[#A5BEAC] text-white px-6 py-3 rounded-xl shadow-sm hover:scale-105 transition">Upgrade</button>
+              )}
               {(!user || user.is_anonymous) ? (
                 <button onClick={() => setShowAuth(!showAuth)} className="w-full md:w-auto text-[10px] font-black uppercase bg-slate-900 text-white px-8 py-3 rounded-xl hover:bg-[#A5BEAC] transition shadow-sm">Login / Sign Up</button>
               ) : (
                 <button onClick={async () => { await supabase.auth.signOut(); window.location.reload(); }} className="w-full md:w-auto text-[10px] font-black uppercase bg-stone-100 text-slate-900 px-8 py-3 rounded-xl hover:bg-stone-200 transition">Logout</button>
               )}
-              {showAuth && (
-                <div className="absolute left-0 right-0 md:left-auto md:right-0 mt-4 w-full md:w-80 bg-white p-6 rounded-3xl border-2 border-[#A5BEAC] shadow-2xl z-[100] animate-in fade-in slide-in-from-top-2 mx-auto">
-                  <button onClick={() => setShowAuth(false)} className="absolute top-4 right-4 text-stone-300 hover:text-[#A5BEAC] font-black text-sm">✕</button>
-                  <h3 className="text-sm font-black uppercase mb-4 text-slate-900 text-center tracking-tight">Vault Access</h3>
-                  <button onClick={loginWithGoogle} className="w-full flex items-center justify-center gap-3 bg-white border-2 border-stone-100 py-3 rounded-xl hover:bg-stone-50 transition mb-4 shadow-sm"><img src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png" className="w-4 h-4" alt="G" /><span className="text-[10px] font-black uppercase text-slate-700">Continue with Google</span></button>
-                  <form onSubmit={handleAuth} className="space-y-3">
-                    <input type="email" placeholder="Email" className="w-full p-3 border rounded-xl text-sm outline-none focus:border-[#A5BEAC] transition" value={email} onChange={e => setEmail(e.target.value)} required />
-                    <input type="password" placeholder="Password" className="w-full p-3 border rounded-xl text-sm outline-none focus:border-[#A5BEAC] transition" value={password} onChange={e => setPassword(e.target.value)} required />
-                    <button type="submit" className="w-full bg-[#A5BEAC] text-white py-3 rounded-xl font-black text-xs uppercase hover:bg-slate-900 transition shadow-md">{isSignUp ? 'Create Vault Account' : 'Open The Vault'}</button>
-                  </form>
-                </div>
-              )}
             </div>
           </div>
         </div>
 
-        {/* MARKET TICKER */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {Object.entries(prices).filter(([name]) => ['gold', 'silver', 'platinum', 'palladium'].includes(name)).map(([name, p]) => (
             <div key={name} className="bg-white p-4 rounded-xl border-l-4 border-[#A5BEAC] shadow-sm text-center lg:text-left">
@@ -308,13 +296,12 @@ export default function Home() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* CALCULATOR */}
           <div className="lg:col-span-5 space-y-6">
-            <div className="bg-white p-8 rounded-[2rem] shadow-xl space-y-5 border-2 border-[#A5BEAC] lg:sticky lg:top-6">
+            <div className="bg-white p-8 rounded-[2rem] shadow-xl border-2 border-[#A5BEAC] lg:sticky lg:top-6 space-y-5">
               <h2 className="text-2xl font-black uppercase italic tracking-tighter text-slate-900">Calculator</h2>
-              <input placeholder="Product Name" className="w-full p-4 bg-stone-50 border border-stone-200 rounded-2xl outline-none focus:border-[#A5BEAC] transition-all" value={itemName} onChange={e => setItemName(e.target.value)} />
+              <input placeholder="Product Name" className="w-full p-4 bg-stone-50 border rounded-2xl outline-none focus:border-[#A5BEAC] transition-all" value={itemName} onChange={e => setItemName(e.target.value)} />
               <div className="p-4 bg-stone-50 rounded-2xl border-2 border-dotted border-stone-300 space-y-3">
-                <select className="w-full p-3 border border-stone-200 rounded-xl font-bold bg-white" value={tempMetal} onChange={e => setTempMetal(e.target.value)}>
+                <select className="w-full p-3 border rounded-xl font-bold bg-white focus:border-[#2d4a22]" value={tempMetal} onChange={e => setTempMetal(e.target.value)}>
                   <option>Sterling Silver</option><option>10K Gold</option><option>14K Gold</option><option>18K Gold</option><option>22K Gold</option><option>24K Gold</option><option>Platinum 950</option><option>Palladium</option>
                 </select>
                 <div className="flex gap-2">
@@ -336,17 +323,17 @@ export default function Home() {
                 ))}
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <input type="number" placeholder="Labor $/hr" className="p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22]" value={rate} onChange={e => setRate(e.target.value === '' ? '' : Number(e.target.value))} />
-                <input type="number" placeholder="Hours" className="p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22]" value={hours} onChange={e => setHours(e.target.value === '' ? '' : Number(e.target.value))} />
+                <input type="number" placeholder="Labor $/hr" className="p-3 border rounded-xl focus:border-[#A5BEAC]" value={rate} onChange={e => setRate(e.target.value === '' ? '' : Number(e.target.value))} />
+                <input type="number" placeholder="Hours" className="p-3 border rounded-xl focus:border-[#A5BEAC]" value={hours} onChange={e => setHours(e.target.value === '' ? '' : Number(e.target.value))} />
               </div>
-              <input type="number" placeholder="Stones/Other Costs ($)" className="w-full p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22]" value={otherCosts} onChange={e => setOtherCosts(e.target.value === '' ? '' : Number(e.target.value))} />
+              <input type="number" placeholder="Stones/Other Costs ($)" className="w-full p-3 border rounded-xl focus:border-[#A5BEAC]" value={otherCosts} onChange={e => setOtherCosts(e.target.value === '' ? '' : Number(e.target.value))} />
               <div className="mt-4 flex flex-col items-center gap-4">
                 <div className="w-full p-4 rounded-xl bg-stone-100 border border-stone-200 space-y-3 text-left">
                   <div className="flex justify-between items-center py-2 border-b border-stone-200"><span className="text-stone-500 font-bold uppercase text-[10px]">Materials Total</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts).totalMaterials.toFixed(2)}</span></div>
                   <div className="flex justify-between items-center py-2"><span className="text-stone-500 font-bold uppercase text-[10px]">Labor Total ({hours || 0}h)</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts).labor.toFixed(2)}</span></div>
                 </div>
                 <div className="grid grid-cols-1 gap-4 mb-6 w-full">
-                  <button onClick={() => setStrategy('A')} className={`group flex flex-col sm:flex-row sm:items-center sm:justify-between p-5 rounded-[2rem] border-2 transition-all ${strategy === 'A' ? 'border-[#2d4a22] bg-stone-50 shadow-md' : 'border-stone-100 bg-white hover:border-stone-200'}`}><div className="text-left mb-4 sm:mb-0"><p className="text-[10px] font-black opacity-40 uppercase tracking-tighter mb-1 text-slate-900">Retail A</p><p className="text-3xl font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts).retailA.toFixed(2)}</p></div><div className="text-left sm:text-right space-y-2"><p className="text-[9px] font-bold text-stone-400 uppercase">Wholesale: M + L</p><div className="flex items-center sm:justify-end gap-2"><span className="text-[10px] font-black text-[#2d4a22] uppercase italic whitespace-nowrap">Retail: W ×</span><input type="number" className="w-12 bg-white border-2 border-[#2d4a22] rounded-xl text-xs font-black py-1.5 text-center outline-none" value={retailMultA} onChange={(e) => setRetailMultA(Number(e.target.value))} onClick={(e) => e.stopPropagation()} /></div></div></button>
+                  <button onClick={() => setStrategy('A')} className={`group flex flex-col sm:flex-row sm:items-center sm:justify-between p-5 rounded-[2rem] border-2 transition-all ${strategy === 'A' ? 'border-[#2d4a22] bg-stone-50 shadow-md' : 'border-stone-100 bg-white hover:border-stone-200'}`}><div className="text-left mb-4 sm:mb-0"><p className="text-[10px] font-black opacity-40 uppercase tracking-tighter mb-1 text-slate-900">Retail A</p><p className="text-3xl font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts).retailA.toFixed(2)}</p></div><div className="flex items-center gap-2"><span className="text-[10px] font-black text-[#2d4a22] uppercase italic whitespace-nowrap">Retail: W ×</span><input type="number" className="w-12 bg-white border-2 border-[#2d4a22] rounded-xl text-xs font-black py-1.5 text-center outline-none" value={retailMultA} onChange={(e) => setRetailMultA(Number(e.target.value))} onClick={(e) => e.stopPropagation()} /></div></button>
                   <button onClick={() => setStrategy('B')} className={`group relative flex flex-col sm:flex-row sm:items-center sm:justify-between p-5 rounded-[2rem] border-2 transition-all ${strategy === 'B' ? 'border-[#2d4a22] bg-stone-50 shadow-md' : 'border-stone-100 bg-white hover:border-stone-200'}`}><div className="text-left mb-4 sm:mb-0"><p className="text-[10px] font-black opacity-40 uppercase tracking-tighter mb-1 text-slate-900">Retail B</p><p className="text-3xl font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts).retailB.toFixed(2)}</p></div><div className="flex flex-col items-start sm:items-end"><div className="flex items-center gap-1 text-[#2d4a22] italic font-black text-[10px] uppercase whitespace-nowrap"><span>Wholesale: (M ×</span><input type="number" className="w-12 bg-white border-2 border-[#2d4a22] rounded-xl text-xs font-black py-1.5 text-center outline-none" value={markupB} onChange={(e) => setMarkupB(Number(e.target.value))} onClick={(e) => e.stopPropagation()} /><span>) + L</span></div><p className="text-[9px] font-bold text-stone-400 uppercase mt-1">Retail: W × 2</p></div></button>
                 </div>
                 <button onClick={addToInventory} disabled={!token} className={`w-full py-5 rounded-[1.8rem] font-black uppercase tracking-[0.15em] text-sm transition-all ${!token ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-[#A5BEAC] text-white shadow-xl hover:bg-slate-900 active:scale-[0.97]'}`}>{token ? "Save to Vault" : "Verifying Human..."}</button>
@@ -355,111 +342,198 @@ export default function Home() {
             </div>
           </div>
 
+          {/* INVENTORY LIST - REFACTORED FOR MOBILE READABILITY */}
           <div className="lg:col-span-7 space-y-4">
-             <div className="bg-white p-6 rounded-[2rem] border-2 shadow-sm border-[#A5BEAC] space-y-4">
-               <div className="flex justify-between items-center">
-                  <div><h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Vault Inventory</h2><p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">{inventory.length} Pieces Stored</p></div>
-                  <div className="text-right"><p className="text-[9px] font-black text-[#2d4a22] uppercase italic">Current Vault Value</p><p className="text-2xl font-black text-slate-900">${pricesLoaded ? totalVaultValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : "--.--"}</p></div>
-               </div>
-               
-               <div className="flex flex-col sm:flex-row gap-4">
-                 <div className="relative flex-1">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-300 text-xs">🔍</span>
-                    <input type="text" placeholder="Search items..." className="w-full pl-10 pr-4 py-3 bg-stone-50 border rounded-xl text-xs font-bold outline-none focus:border-[#A5BEAC] transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-                 </div>
-                 <div className="relative">
-                    <button onClick={() => setShowExportMenu(!showExportMenu)} className="w-full sm:w-auto px-6 py-3 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase hover:bg-[#A5BEAC] transition-colors flex items-center justify-center gap-2">Export {showExportMenu ? '▲' : '▼'}</button>
-                    {showExportMenu && (
-                      <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[50] overflow-hidden animate-in fade-in slide-in-from-top-2">
-                        <button onClick={exportDetailedPDF} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 transition-colors border-b border-stone-100">Export PDF Report</button>
-                        <button onClick={exportToCSV} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 transition-colors">Export CSV Spreadsheet</button>
-                      </div>
-                    )}
-                 </div>
-               </div>
+            <div className="bg-white p-6 rounded-[2rem] border-2 shadow-sm border-[#A5BEAC] space-y-4">
+              <div className="flex justify-between items-center text-left">
+                <div><h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Vault Inventory</h2><p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">{inventory.length} Pieces Stored</p></div>
+                <div className="text-right"><p className="text-[9px] font-black text-[#2d4a22] uppercase italic">Total Vault Value</p><p className="text-2xl font-black text-slate-900">${pricesLoaded ? totalVaultValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "--.--"}</p></div>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="relative flex-1"><span className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-300 text-xs">🔍</span><input type="text" placeholder="Search items..." className="w-full pl-10 pr-4 py-3 bg-stone-50 border rounded-xl text-xs font-bold outline-none focus:border-[#A5BEAC] transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
+                <div className="relative">
+                  <button onClick={() => setShowExportMenu(!showExportMenu)} className="w-full sm:w-auto px-6 py-3 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase hover:bg-[#A5BEAC] transition-colors flex items-center justify-center gap-2">Export {showExportMenu ? '▲' : '▼'}</button>
+                  {showExportMenu && (<div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[50] overflow-hidden animate-in fade-in"><button onClick={exportDetailedPDF} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b transition-colors">Export PDF</button><button onClick={exportToCSV} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 transition-colors">Export CSV</button></div>)}
+                </div>
+              </div>
             </div>
 
             <div className="space-y-4 overflow-y-auto max-h-[850px] pr-2 custom-scrollbar">
-              {loading ? <div className="p-20 text-center text-stone-400 font-bold uppercase tracking-widest text-xs">Opening Vault...</div> :
-                filteredInventory.length === 0 ? <div className="bg-white p-12 rounded-[2rem] border-2 border-dotted border-stone-200 text-center text-stone-400 font-bold uppercase text-xs">No matches.</div> :
-                  filteredInventory.map(item => {
-                    const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
-                    const labor = item.labor_at_making || 0;
-                    const liveWholesale = item.strategy === 'A' ? current.wholesaleA + labor : current.wholesaleB;
-                    const liveRetail = item.strategy === 'A' ? (current.totalMaterials + labor) * (item.multiplier || 3) : ((current.totalMaterials * (item.markup_b || 1.8)) + labor) * 2;
-                    const priceDiff = liveRetail - item.retail;
-                    const isUp = priceDiff >= 0;
+              {loading ? <div className="p-20 text-center text-stone-400 font-bold uppercase text-xs tracking-widest animate-pulse">Opening Vault...</div> :
+                filteredInventory.map(item => {
+                  const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
+                  const labor = item.labor_at_making || 0;
+                  const liveWholesale = item.strategy === 'A' ? current.wholesaleA + labor : current.wholesaleB;
+                  const liveRetail = item.strategy === 'A' ? (current.totalMaterials + labor) * (item.multiplier || 3) : ((current.totalMaterials * (item.markup_b || 1.8)) + labor) * 2;
+                  const priceDiff = liveRetail - item.retail;
+                  const isUp = priceDiff >= 0;
 
-                    return (
-                      <div key={item.id} className="bg-white rounded-[2rem] border border-stone-100 shadow-sm overflow-hidden transition-all hover:shadow-md">
-                        <div className="p-6 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6">
-                          <div className="flex-1 min-w-0 text-left">
-                            <div className="flex items-center gap-2 mb-1">
-                                <p className="text-xl font-black text-slate-800 truncate">{item.name}</p>
-                                <span className={`text-[8px] font-bold px-2 py-0.5 rounded-full border shrink-0 transition-opacity duration-500 ${pricesLoaded ? 'opacity-100' : 'opacity-0'} ${isUp ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
-                                    {isUp ? '▲' : '▼'} ${Math.abs(priceDiff).toFixed(2)}
-                                </span>
-                            </div>
-                            <p className="text-[10px] text-stone-400 font-bold uppercase tracking-widest leading-none mb-3">{new Date(item.created_at).toLocaleDateString()} | Strategy: {item.strategy}</p>
-                            <button onClick={() => deleteInventoryItem(item.id, item.name)} className="text-[10px] font-black text-red-300 uppercase hover:text-red-600 transition-colors px-2 py-1 bg-stone-50 rounded-lg">[ Remove Piece ]</button>
+                  return (
+                    <div key={item.id} className="bg-white rounded-[2rem] border border-stone-100 shadow-sm overflow-hidden transition-all hover:shadow-md">
+                      {/* CARD HEADER SECTION - ADAPTIVE GRID */}
+                      <div className="p-5 md:p-6 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6">
+                        <div className="w-full xl:flex-1 text-left">
+                          <div className="flex items-start gap-2 mb-2">
+                            <p className="text-xl font-black text-slate-800 break-words leading-tight uppercase flex-1">{item.name}</p>
+                            <span className={`text-[8px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${isUp ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                              {isUp ? '▲' : '▼'} ${Math.abs(priceDiff).toFixed(2)}
+                            </span>
                           </div>
-                          <div className="flex flex-wrap items-center gap-8 xl:gap-12 shrink-0 text-right">
-                                <div className="flex gap-6 border-r border-stone-100 pr-8">
-                                    <div><p className="text-[8px] font-black text-stone-300 uppercase tracking-widest mb-1">Prev. Wholesale</p><p className="text-sm font-bold text-stone-400">${Number(item.wholesale).toFixed(2)}</p></div>
-                                    <div><p className="text-[8px] font-black text-stone-300 uppercase tracking-widest mb-1">Prev. Retail</p><p className="text-sm font-bold text-stone-400">${Number(item.retail).toFixed(2)}</p></div>
-                                </div>
-                                <div className="flex gap-8 items-center">
-                                    <div><p className="text-[8px] font-black text-[#A5BEAC] uppercase tracking-widest mb-1">Live Wholesale</p><p className={`text-lg font-black transition-all ${pricesLoaded ? 'text-slate-600' : 'text-stone-200'}`}>{pricesLoaded ? `$${liveWholesale.toFixed(2)}` : "--.--"}</p></div>
-                                    <div><p className="text-[8px] font-black text-[#2d4a22] uppercase tracking-widest mb-1 italic">Live Retail</p><p className="text-3xl font-black text-slate-900 leading-none transition-all duration-300">{pricesLoaded ? `$${liveRetail.toFixed(2)}` : "--.--"}</p></div>
-                                </div>
+                          <p className="text-[10px] text-stone-400 font-bold uppercase tracking-widest mb-3">{new Date(item.created_at).toLocaleDateString()} | Strategy: {item.strategy}</p>
+                          <button onClick={() => deleteInventoryItem(item.id, item.name)} className="text-[10px] font-black text-red-300 uppercase hover:text-red-600 transition-colors bg-stone-50 px-3 py-1.5 rounded-lg">[ Remove Piece ]</button>
+                        </div>
+
+                        {/* PRICE DATA - MOBILE STACKED / DESKTOP SIDE-BY-SIDE */}
+                        <div className="w-full xl:w-auto flex flex-col sm:flex-row items-start sm:items-center gap-6 sm:gap-10 xl:gap-12 text-left sm:text-right">
+                          <div className="w-full sm:w-auto flex gap-6 sm:border-r sm:border-stone-100 sm:pr-8">
+                            <div className="flex-1 sm:flex-none">
+                              <p className="text-[8px] font-black text-stone-300 uppercase tracking-widest mb-1">Saved Wholesale</p>
+                              <p className="text-sm font-bold text-stone-400">${Number(item.wholesale).toFixed(2)}</p>
+                            </div>
+                            <div className="flex-1 sm:flex-none">
+                              <p className="text-[8px] font-black text-stone-300 uppercase tracking-widest mb-1">Saved Retail</p>
+                              <p className="text-sm font-bold text-stone-400">${Number(item.retail).toFixed(2)}</p>
+                            </div>
+                          </div>
+                          <div className="w-full sm:w-auto flex gap-6 items-center">
+                            <div className="flex-1 sm:flex-none">
+                              <p className="text-[8px] font-black text-[#A5BEAC] uppercase tracking-widest mb-1">Live Wholesale</p>
+                              <p className={`text-lg font-black transition-all ${pricesLoaded ? 'text-slate-600' : 'text-stone-200'}`}>{pricesLoaded ? `$${liveWholesale.toFixed(2)}` : "--.--"}</p>
+                            </div>
+                            <div className="flex-1 sm:flex-none">
+                              <p className="text-[8px] font-black text-[#A5BEAC] uppercase tracking-widest mb-1 italic">Live Retail</p>
+                              <p className="text-3xl font-black text-slate-900 leading-none transition-all duration-300">{pricesLoaded ? `$${liveRetail.toFixed(2)}` : "--.--"}</p>
+                            </div>
                           </div>
                         </div>
-                        <details className="group border-t border-stone-50">
-                            <summary className="list-none cursor-pointer py-2 text-center text-[8px] font-black uppercase tracking-[0.2em] text-stone-300 hover:text-[#A5BEAC] transition-colors">Breakdown & Snapshot</summary>
-                            <div className="p-6 bg-stone-50/50 space-y-6">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
-                                    <div className="space-y-3">
-                                        <h4 className="text-[10px] font-black uppercase text-stone-400">Metal Composition</h4>
-                                        {item.metals?.map((m: any, idx: number) => (<div key={idx} className="flex justify-between text-[10px] font-bold border-b border-stone-100 pb-1 uppercase"><span>{m.weight}{m.unit} {m.type}</span><span className="text-stone-400">{m.isManual ? 'Manual' : 'Spot'}</span></div>))}
-                                        {item.other_costs_at_making > 0 && (<div className="flex justify-between text-[10px] font-bold border-b border-stone-100 pb-1 uppercase"><span>Stones/Other</span><span>${Number(item.other_costs_at_making).toFixed(2)}</span></div>)}
-                                    </div>
-                                    <div className="space-y-4">
-                                        <div className="grid grid-cols-2 gap-2 text-center">
-                                            <div className="bg-white p-3 rounded-xl border border-stone-100"><p className="text-[8px] font-black text-stone-400 uppercase">Materials (Orig)</p><p className="text-xs font-black text-slate-700">${(Number(item.materials_at_making || 0) + Number(item.other_costs_at_making || 0)).toFixed(2)}</p></div>
-                                            <div className="bg-white p-3 rounded-xl border border-stone-100"><p className="text-[8px] font-black text-stone-400 uppercase">Labor Cost</p><p className="text-xs font-black text-slate-700">${Number(labor).toFixed(2)}</p></div>
-                                        </div>
-                                        <div className="relative">
-                                          <button onClick={() => setOpenEditId(openEditId === item.id ? null : item.id)} className="w-full py-2 bg-[#2d4a22] text-white rounded-lg font-black text-[9px] uppercase tracking-widest hover:bg-slate-900 transition-all shadow-sm">
-                                            Edit Prices {openEditId === item.id ? '▲' : '▼'}
-                                          </button>
-                                          {openEditId === item.id && (
-                                            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#A5BEAC] rounded-xl shadow-xl z-20 overflow-hidden animate-in fade-in slide-in-from-top-1">
-                                              <button onClick={() => syncToMarket(item)} className="w-full py-3 px-4 text-left text-[9px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b transition-colors">Sync to Market</button>
-                                              <button onClick={() => { setEditingItem(item); setManualRetail(item.retail.toFixed(2)); setManualWholesale(item.wholesale.toFixed(2)); }} className="w-full py-3 px-4 text-left text-[9px] font-black uppercase text-slate-700 hover:bg-stone-50 transition-colors">Manual Edit</button>
-                                            </div>
-                                          )}
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="bg-white p-4 rounded-2xl border border-stone-200 text-left">
-                                  <h4 className="text-[9px] font-black uppercase text-stone-400 mb-2">Vault Notes</h4>
-                                  <textarea className="w-full p-3 bg-stone-50 border border-stone-100 rounded-xl text-xs italic text-slate-600 resize-none h-20 outline-none focus:border-[#A5BEAC] transition-all" placeholder="Click to add notes..." defaultValue={item.notes || ''} onBlur={(e) => saveNote(item.id, e.target.value)} />
-                                </div>
-                            </div>
-                        </details>
                       </div>
-                    );
-                  })}
+
+                      {/* DETAILS DRAWER */}
+                      <details className="group border-t border-stone-50">
+                        <summary className="list-none cursor-pointer py-3 text-center text-[8px] font-black uppercase tracking-[0.2em] text-stone-300 hover:text-[#A5BEAC] transition-colors">Breakdown & Snapshot</summary>
+                        <div className="p-5 md:p-6 bg-stone-50/50 space-y-6">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
+                            <div className="space-y-3">
+                              <h4 className="text-[10px] font-black uppercase text-stone-400">Breakdown</h4>
+                              <div className="space-y-1">
+                                {item.metals?.map((m: any, idx: number) => (
+                                  <div key={idx} className="flex justify-between text-[10px] font-bold border-b border-stone-100 pb-1.5 uppercase">
+                                    <span className="pr-4">{m.weight}{m.unit} {m.type}</span>
+                                    <span className="text-stone-400 shrink-0">{m.isManual ? 'Manual' : 'Spot'}</span>
+                                  </div>
+                                ))}
+                                {item.other_costs_at_making > 0 && (
+                                  <div className="flex justify-between text-[10px] font-bold border-b border-stone-100 pb-1.5 uppercase">
+                                    <span>Stones/Other</span>
+                                    <span className="shrink-0">${Number(item.other_costs_at_making).toFixed(2)}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <div className="space-y-5">
+                              <div className="grid grid-cols-2 gap-3 text-center">
+                                <div className="bg-white p-3.5 rounded-xl border border-stone-100 shadow-sm">
+                                  <p className="text-[8px] font-black text-stone-400 uppercase mb-1">Materials (Orig)</p>
+                                  <p className="text-xs font-black text-slate-700">${(Number(item.materials_at_making || 0) + Number(item.other_costs_at_making || 0)).toFixed(2)}</p>
+                                </div>
+                                <div className="bg-white p-3.5 rounded-xl border border-stone-100 shadow-sm">
+                                  <p className="text-[8px] font-black text-stone-400 uppercase mb-1">Labor Cost</p>
+                                  <p className="text-xs font-black text-slate-700">${Number(labor).toFixed(2)}</p>
+                                </div>
+                              </div>
+                              <div className="relative">
+                                <button onClick={() => setOpenEditId(openEditId === item.id ? null : item.id)} className="w-full py-3 bg-[#2d4a22] text-white rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-slate-900 transition-all shadow-sm">
+                                  Edit Prices {openEditId === item.id ? '▲' : '▼'}
+                                </button>
+                                {openEditId === item.id && (
+                                  <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-[#A5BEAC] rounded-xl shadow-xl z-20 overflow-hidden animate-in fade-in slide-in-from-top-1">
+                                    <button onClick={() => syncToMarket(item)} className="w-full py-4 px-4 text-left text-[9px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b transition-colors">Sync to Market</button>
+                                    <button onClick={() => { setEditingItem(item); setManualRetail(item.retail.toFixed(2)); setManualWholesale(item.wholesale.toFixed(2)); }} className="w-full py-4 px-4 text-left text-[9px] font-black uppercase text-slate-700 hover:bg-stone-50 transition-colors">Manual Edit</button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="bg-white p-4 rounded-2xl border border-stone-200 text-left">
+                            <h4 className="text-[9px] font-black uppercase text-stone-400 mb-2">Vault Notes</h4>
+                            <textarea className="w-full p-3 bg-stone-50 border border-stone-100 rounded-xl text-xs italic text-slate-600 resize-none h-24 outline-none focus:border-[#A5BEAC] transition-all" placeholder="Click to add notes..." defaultValue={item.notes || ''} onBlur={(e) => saveNote(item.id, (e.target as HTMLTextAreaElement).value)} />
+                          </div>
+                        </div>
+                      </details>
+                    </div>
+                  );
+                })}
             </div>
           </div>
         </div>
-        {/* Footers remain same as provided... */}
+
+        {/* BOTTOM SECTIONS */}
+        <div className="grid grid-cols-1 gap-8 pt-10">
+          <div className="bg-white p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC]">
+            <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">1. MATERIAL CALCULATION DETAIL</h2>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 text-left">
+              <div className="space-y-6">
+                <div className="bg-stone-50 p-8 rounded-[2rem] border border-stone-100 text-left">
+                  <h3 className="text-xs font-black text-[#A5BEAC] uppercase tracking-widest mb-6">THE LOGIC</h3>
+                  <div className="font-mono text-sm bg-white p-6 rounded-2xl border border-stone-100 text-center shadow-sm">
+                    <p className="text-slate-900 font-bold">Cost = (Spot ÷ 31.1035) × Grams × Purity</p>
+                  </div>
+                </div>
+                <p className="text-xs text-stone-500 leading-relaxed italic px-2">Spot prices are quoted per Troy Ounce. We divide by 31.1035 to get the price per gram, then multiply by the specific metal purity.</p>
+              </div>
+              <div className="bg-stone-50 p-8 rounded-[2rem] border border-stone-100 text-left">
+                <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6">PURITY CONSTANTS:</h3>
+                <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-[10px] font-bold text-stone-400 uppercase tracking-tighter">
+                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>24K Gold</span><span>99.9%</span></div>
+                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>22K Gold</span><span>91.6%</span></div>
+                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>18K Gold</span><span>75.0%</span></div>
+                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>14K Gold</span><span>58.3%</span></div>
+                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>10K Gold</span><span>41.7%</span></div>
+                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>Sterling Silver</span><span>92.5%</span></div>
+                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>Plat 950</span><span>95.0%</span></div>
+                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>Palladium</span><span>95.0%</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC]">
+            <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">2. PRICE STRATEGY DETAIL</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
+              <div className="p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all">
+                <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-4">STRATEGY A (STANDARD MULTIPLIER)</h3>
+                <div className="space-y-3 text-xs text-stone-600">
+                  <p><strong className="text-slate-900 uppercase font-black text-[10px]">Wholesale:</strong> Materials + Labor</p>
+                  <p><strong className="text-slate-900 uppercase font-black text-[10px]">Retail:</strong> Wholesale × {retailMultA}</p>
+                </div>
+              </div>
+              <div className="p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all text-left">
+                <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-4">STRATEGY B (MATERIALS MARKUP)</h3>
+                <div className="space-y-3 text-xs text-stone-600">
+                  <p><strong className="text-slate-900 uppercase font-black text-[10px]">Wholesale:</strong> (Materials × {markupB}) + Labor</p>
+                  <p><strong className="text-slate-900 uppercase font-black text-[10px]">Retail:</strong> Wholesale × 2</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-col items-center justify-center gap-2 py-8 border-t border-stone-200 mt-10">
+            <a href="https://bearsilverandstone.com" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400">Powered by</span>
+              <img
+                src="/icon.png"
+                alt="Bear Silver and Stone"
+                className="w-6 h-6 object-contain brightness-110 contrast-125"
+                style={{ mixBlendMode: 'multiply' }}
+              />
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900">Bear Silver and Stone</span>
+            </a>
+          </div>
+        </div>
       </div>
       <style jsx global>{`
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #A5BEAC; border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #2d4a22; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #A5BEAC; }
       `}</style>
     </div>
   );
