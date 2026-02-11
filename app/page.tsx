@@ -199,8 +199,9 @@ export default function Home() {
               </div>
               <input type="number" placeholder="Other Costs ($)" className="w-full p-3 border rounded-xl outline-none" value={otherCosts} onChange={e => setOtherCosts(e.target.value === '' ? '' : Number(e.target.value))} />
 
-              {/* INTEGRATED COST BREAKDOWN SECTION */}
+              {/* DIVIDER: INPUTS VS BREAKDOWN */}
               <hr className="border-slate-100" />
+              
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                   <p className="text-[9px] font-black uppercase text-slate-400">Pure Materials</p>
@@ -212,9 +213,12 @@ export default function Home() {
                 </div>
               </div>
 
+              {/* DIVIDER: BREAKDOWN VS RETAIL OPTIONS */}
+              <hr className="border-slate-100" />
+
               <div className="grid grid-cols-2 gap-4">
                 <button onClick={() => setStrategy('A')} className={`p-4 rounded-2xl border-2 text-left relative transition-all ${strategy === 'A' ? 'border-blue-600 bg-blue-50' : 'border-slate-100'}`}>
-                  <p className="text-[10px] font-black opacity-50 uppercase">Strategy A</p>
+                  <p className="text-[10px] font-black opacity-50 uppercase">Retail A</p>
                   <p className="text-lg md:text-xl font-black">${b.retailA.toFixed(2)}</p>
                   <div className="flex items-center gap-1 mt-1">
                       <span className="text-[9px] font-bold text-slate-400">Mult: x</span>
@@ -222,7 +226,7 @@ export default function Home() {
                   </div>
                 </button>
                 <button onClick={() => setStrategy('B')} className={`p-4 rounded-2xl border-2 text-left transition-all ${strategy === 'B' ? 'border-blue-600 bg-blue-50' : 'border-slate-100'}`}>
-                  <p className="text-[10px] font-black opacity-50 uppercase">Strategy B</p>
+                  <p className="text-[10px] font-black opacity-50 uppercase">Retail B</p>
                   <p className="text-lg md:text-xl font-black">${b.retailB.toFixed(2)}</p>
                   <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase">Mat x1.8 | Ret x2</p>
                 </button>
@@ -272,7 +276,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* --- CALCULATION REFERENCE --- */}
+        {/* --- CALCULATION REFERENCE (Bottom Part) --- */}
         <div className="space-y-6 pt-10">
           <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200">
             <h2 className="text-xl font-black uppercase italic tracking-tighter mb-6 text-slate-800 underline decoration-blue-500 decoration-4 underline-offset-8">1. Material Calculation Detail</h2>
