@@ -377,6 +377,7 @@ export default function Home() {
                           type="number" 
                           className="w-12 bg-white border-2 border-[#A5BEAC] text-[#A5BEAC] rounded-xl text-xs font-black py-1.5 text-center outline-none" 
                           value={retailMultA} 
+                          step="0.1"
                           onChange={(e) => setRetailMultA(Number(e.target.value))} 
                           onClick={(e) => e.stopPropagation()} 
                         />
@@ -405,6 +406,7 @@ export default function Home() {
                         <input 
                           type="number" 
                           className="w-12 bg-white border-2 border-[#A5BEAC] rounded-xl text-xs font-black py-1.5 text-center outline-none" 
+                          step="0.1"
                           value={markupB} 
                           onChange={(e) => setMarkupB(Number(e.target.value))} 
                           onClick={(e) => e.stopPropagation()} 
