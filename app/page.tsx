@@ -12,8 +12,7 @@ const UNIT_TO_GRAMS: { [key: string]: number } = {
 };
 
 export default function Home() {
-  // 1. UPDATED STATE: Initialized keys to match your API response
-  const [prices, setPrices] = useState<any>({ gold: 0, silver: 0, platinum: 0, palladium: 0, updated_at: null });
+  const [prices, setPrices] = useState<any>({ gold: null, silver: null, platinum: null, palladium: null, updated_at: null });
   const [itemName, setItemName] = useState('');
   const [metalList, setMetalList] = useState<{ type: string, weight: number, unit: string }[]>([]);
 
@@ -47,11 +46,9 @@ export default function Home() {
         setUser(session.user);
       }
 
-      // 2. UPDATED FETCH: Matches your /api/gold-price response
       try {
         const res = await fetch('/api/gold-price');
         const priceData = await res.json();
-        // If the API returns { success: true, gold: ... } we set the whole object
         if (priceData.gold) setPrices(priceData);
       } catch (e) {
         console.error("Price fetch failed", e);
@@ -203,9 +200,7 @@ export default function Home() {
               {!user ? 'Vault Locked' : (user.is_anonymous ? 'Guest' : `User: ${user.email || 'Syncing...'}`)}
             </p>
           </div>
-          {/* Auth section stays the same... */}
           <div className="relative">
-            {/* ...Auth Logic... */}
             <div className="flex gap-4">
               {(!user || user.is_anonymous) ? (
                 <button
@@ -245,23 +240,24 @@ export default function Home() {
           </div>
         </div>
 
-        {/* 3. UPDATED TICKER: Removed success and updated_at boxes */}
+        {/* 3. UPDATED TICKER */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {Object.entries(prices)
             .filter(([name]) => !['success', 'updated_at', 'lastUpdated', 'id'].includes(name))
             .map(([name, p]) => (
-              <div key={name} className="bg-white p-4 rounded-xl border-l-4 border-blue-600 shadow-sm">
+              <div key={name} className="bg-white p-4 rounded-xl border-l-4 border-blue-600 shadow-sm text-center lg:text-left">
                 <p className="text-[10px] font-black uppercase text-slate-400">{name}</p>
                 <p className="text-xl font-bold">
-                  ${Number(p).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {p !== null
+                    ? `$${Number(p).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                    : "--.--"}
                 </p>
               </div>
             ))}
         </div>
 
-        {/* REST OF YOUR UI (Calculator, Inventory, etc.) */}
+        {/* MAIN CALCULATOR UI */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* ... Calculator Section ... */}
           <div className="lg:col-span-5 space-y-6">
             <div className="bg-white p-8 rounded-[2rem] shadow-xl space-y-5">
               <h2 className="text-2xl font-black uppercase italic tracking-tighter">Jewelry Calculator</h2>
@@ -316,7 +312,7 @@ export default function Home() {
               <button onClick={addToInventory} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black shadow-lg uppercase">Save to Vault</button>
             </div>
           </div>
-          {/* ... Inventory Section ... */}
+
           <div className="lg:col-span-7 space-y-6">
             <div className="flex justify-between items-center bg-white px-6 py-4 rounded-2xl border shadow-sm">
               <h2 className="text-lg font-black uppercase tracking-tight">Saved Pieces</h2>
@@ -347,7 +343,8 @@ export default function Home() {
             </div>
           </div>
         </div>
-        {/* --- RE-ADDED: EXPLANATION BOXES --- */}
+
+        {/* EXPLANATION BOXES */}
         <div className="grid grid-cols-1 gap-6 pt-10">
           <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200">
             <h2 className="text-xl font-black uppercase italic tracking-tighter mb-6 text-slate-800 underline decoration-blue-500 decoration-4 underline-offset-8">
@@ -400,10 +397,14 @@ export default function Home() {
           </div>
         </div>
 
-        {/* 4. UPDATED TIMESTAMP: Showing the sync time nicely at the bottom */}
-        {prices.updated_at && (
-          <p className="text-center text-slate-400 text-[10px] font-bold uppercase tracking-widest pt-4">
+        {/* TIMESTAMP FOOTER */}
+        {prices.updated_at ? (
+          <p className="text-center text-slate-400 text-[10px] font-bold uppercase tracking-widest py-6">
             Live Market Sync: {new Date(prices.updated_at).toLocaleString()}
+          </p>
+        ) : (
+          <p className="text-center text-slate-400 text-[10px] font-bold uppercase tracking-widest py-6 animate-pulse">
+            Syncing with London Bullion Market...
           </p>
         )}
 
