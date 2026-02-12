@@ -386,8 +386,8 @@ export default function Home() {
                   >
                     <div className="text-left mb-4 sm:mb-0">
                       <div className="mb-1">
-                        <p className="text-[8px] font-black text-stone-400 uppercase tracking-widest">Wholesale A</p>
-                        <p className="text-lg font-bold text-slate-500">${calculateFullBreakdown(metalList, hours, rate, otherCosts).wholesaleA.toFixed(2)}</p>
+                        <p className="text-[8px] font-black text-black uppercase tracking-widest">Wholesale A</p>
+                        <p className="text-lg font-bold text-[slate-500]">${calculateFullBreakdown(metalList, hours, rate, otherCosts).wholesaleA.toFixed(2)}</p>
                       </div>
                       <div>
                         <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter mb-1">Retail A</p>
@@ -395,11 +395,11 @@ export default function Home() {
                       </div>
                     </div>
                     <div className="flex flex-col items-start sm:items-end">
-                      <div className="flex items-center gap-1 text-[#A5BEAC] italic font-black text-[10px] uppercase whitespace-nowrap">
+                      <div className="flex items-center gap-1 text-[#a8a29e] italic font-black text-[10px] uppercase whitespace-nowrap">
                         <span>Wholesale: M + L</span>
                       </div>
                       <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[10px] font-black text-[#A5BEAC] uppercase italic whitespace-nowrap">Retail: W ×</span>
+                        <span className="text-[10px] font-black text-[#a8a29e] uppercase italic whitespace-nowrap">Retail: W ×</span>
                         <input 
                           type="number" 
                           step="0.1"
@@ -420,7 +420,7 @@ export default function Home() {
                     <div className="text-left mb-4 sm:mb-0">
                       <div className="mb-1">
                         <p className="text-[8px] font-black text-stone-400 uppercase tracking-widest">Wholesale B</p>
-                        <p className="text-lg font-bold text-slate-500">${calculateFullBreakdown(metalList, hours, rate, otherCosts).wholesaleB.toFixed(2)}</p>
+                        <p className="text-lg font-bold text-[#8a8480]]">${calculateFullBreakdown(metalList, hours, rate, otherCosts).wholesaleB.toFixed(2)}</p>
                       </div>
                       <div>
                         <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter mb-1">Retail B</p>
@@ -428,7 +428,7 @@ export default function Home() {
                       </div>
                     </div>
                     <div className="flex flex-col items-start sm:items-end">
-                      <div className="flex items-center gap-1 text-[#A5BEAC] italic font-black text-[10px] uppercase whitespace-nowrap">
+                      <div className="flex items-center gap-1 text-[#a8a29e] italic font-black text-[10px] uppercase whitespace-nowrap">
                         <span>Wholesale: (M ×</span>
                         <input 
                           type="number" 
@@ -440,7 +440,7 @@ export default function Home() {
                         />
                         <span>) + L</span>
                       </div>
-                      <p className="text-[10px] font-black text-[#A5BEAC] italic uppercase whitespace-nowrap mt-1">Retail: W × 2</p>
+                      <p className="text-[10px] font-black text-[#a8a29e] italic uppercase whitespace-nowrap mt-1">Retail: W × 2</p>
                     </div>
                   </button>
                 </div>

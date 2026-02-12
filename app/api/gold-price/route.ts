@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY! 
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
   const uniqueId = Math.random().toString(36).substring(7);
@@ -15,39 +15,41 @@ export async function GET() {
   try {
     const res = await fetch(CSV_URL, { 
       method: 'GET',
-      headers: {
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0'
-      },
-      cache: 'no-store',
-      next: { revalidate: 0 } 
+      headers: { 'Cache-Control': 'no-cache' },
+      cache: 'no-store'
     });
-    const text = await res.text();
-    
-    // Split by newlines (handling potential \r\n from Google)
-    const rows = text.split(/\r?\n/).map(row => row.split(','));
 
-    const parsePrice = (rowIndex: number) => {
-      const row = rows[rowIndex];
-      if (!row || row.length < 2) return 0;
-      
-      // Target column index 1 (the second column) specifically
-      // Clean only that specific cell of quotes, spaces, or currency symbols
-      const cleanValue = row[1].replace(/[^0-9.]/g, '');
-      
-      return parseFloat(cleanValue) || 0;
+    const text = await res.text();
+    console.log("RAW CSV TEXT FROM GOOGLE:", text); // Check this in your terminal!
+
+    const lines = text.split(/\r?\n/);
+
+    const findPrice = (metalName: string) => {
+      // Find the line that CONTAINS the name (case insensitive)
+      const line = lines.find(l => l.toLowerCase().includes(metalName.toLowerCase()));
+      if (!line) return 0;
+
+      // Extract the price: Find the first number after the comma
+      // This regex looks for digits, commas, and dots, ignoring quotes and $
+      const match = line.match(/[\d,.]+/g);
+      if (match && match.length > 0) {
+        // We take the last match in the line (the price), 
+        // cleaning out any thousands-separator commas
+        const cleanValue = match[match.length - 1].replace(/,/g, '');
+        return parseFloat(cleanValue) || 0;
+      }
+      return 0;
     };
 
     const priceData = {
-      gold: parsePrice(1),      // Row 2
-      silver: parsePrice(2),    // Row 3
-      platinum: parsePrice(3),  // Row 4
-      palladium: parsePrice(4), // Row 5
+      gold: findPrice('Gold'),
+      silver: findPrice('Silver'),
+      platinum: findPrice('Platinum'),
+      palladium: findPrice('Palladium'),
       updated_at: new Date().toISOString() 
     };
 
-    console.log("Saving to Tank:", priceData);
+    console.log("PARSED DATA TO DATABASE:", priceData);
 
     const { error: dbError } = await supabase
       .from('metal_prices')
