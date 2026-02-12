@@ -25,20 +25,23 @@ export async function GET() {
     });
     const text = await res.text();
     
-    // Split text into rows and map columns
-    const rows = text.split('\n').map(row => row.split(','));
+    // Split by newlines (handling potential \r\n from Google)
+    const rows = text.split(/\r?\n/).map(row => row.split(','));
 
     const parsePrice = (rowIndex: number) => {
       const row = rows[rowIndex];
-      // Target the second column (index 1) where the actual numeric price lives
-      // We trim quotes and whitespace which Google CSVs often include
-      const rawValue = row && row[1] ? row[1].replace(/"/g, '').trim() : "0";
-      return parseFloat(rawValue) || 0;
+      if (!row || row.length < 2) return 0;
+      
+      // Target column index 1 (the second column) specifically
+      // Clean only that specific cell of quotes, spaces, or currency symbols
+      const cleanValue = row[1].replace(/[^0-9.]/g, '');
+      
+      return parseFloat(cleanValue) || 0;
     };
 
     const priceData = {
       gold: parsePrice(1),      // Row 2
-      silver: parsePrice(2),    // Row 3: Pulls exactly 83.33
+      silver: parsePrice(2),    // Row 3
       platinum: parsePrice(3),  // Row 4
       palladium: parsePrice(4), // Row 5
       updated_at: new Date().toISOString() 

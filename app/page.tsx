@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { supabase } from '../lib/supabase';
@@ -13,14 +13,13 @@ const UNIT_TO_GRAMS: { [key: string]: number } = {
 };
 
 export default function Home() {
-  const [prices, setPrices] = useState<any>({ gold: null, silver: null, platinum: null, palladium: null, updated_at: null });
+  // Fix 1: Initialize with 0 so math doesn't break
+  const [prices, setPrices] = useState<any>({ gold: 0, silver: 0, platinum: 0, palladium: 0, updated_at: null });
   const [itemName, setItemName] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [openEditId, setOpenEditId] = useState<string | null>(null);
 
-  const [hasFetched, setHasFetched] = useState(false);
-  
   const [editingItem, setEditingItem] = useState<any>(null);
   const [manualRetail, setManualRetail] = useState('');
   const [manualWholesale, setManualWholesale] = useState('');
@@ -49,7 +48,36 @@ export default function Home() {
 
   const SHOPIFY_PRO_URL = "https://bearsilverandstone.com/products/the-vault-pro";
 
-useEffect(() => {
+  // Fix 2: Wrap math in useCallback so it updates when prices state changes
+  const calculateFullBreakdown = useCallback((metals: any[], h: any, r: any, o: any, customMult?: number, customMarkup?: number) => {
+    let rawMaterialCost = 0;
+    metals.forEach(m => {
+      let pricePerGram = 0;
+      if (m.isManual && m.manualPrice) {
+        pricePerGram = m.manualPrice / UNIT_TO_GRAMS[m.unit];
+      } else {
+        let spot = 0;
+        const type = m.type.toLowerCase();
+        if (type.includes('gold')) spot = prices.gold;
+        else if (type.includes('silver')) spot = prices.silver;
+        else if (type.includes('platinum')) spot = prices.platinum;
+        else if (type.includes('palladium')) spot = prices.palladium;
+
+        const purities: any = { '10K Gold': 0.417, '14K Gold': 0.583, '18K Gold': 0.75, '22K Gold': 0.916, '24K Gold': 0.999, 'Sterling Silver': 0.925, 'Platinum 950': 0.95, 'Palladium': 0.95 };
+        pricePerGram = (spot / 31.1035) * (purities[m.type] || 1.0);
+      }
+      rawMaterialCost += pricePerGram * (m.weight * UNIT_TO_GRAMS[m.unit]);
+    });
+    const totalMaterials = rawMaterialCost + (Number(o) || 0);
+    const labor = (Number(h) || 0) * (Number(r) || 0);
+    const wholesaleA = totalMaterials + labor;
+    const retailA = wholesaleA * (customMult ?? retailMultA);
+    const wholesaleB = (totalMaterials * (customMarkup ?? markupB)) + labor;
+    const retailB = wholesaleB * 2;
+    return { wholesaleA, retailA, wholesaleB, retailB, totalMaterials, labor };
+  }, [prices, retailMultA, markupB]);
+
+  useEffect(() => {
     async function initSession() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
@@ -59,33 +87,35 @@ useEffect(() => {
         setUser(session.user);
       }
 
-      // --- SMART PRICE LOCK (5 MINUTE TTL) ---
       try {
         const cachedData = sessionStorage.getItem('vault_prices');
         const cacheTimestamp = sessionStorage.getItem('vault_prices_time');
         const now = Date.now();
-        const fiveMinutes = 5 * 60 * 1000;
+        const oneMinute = 60 * 1000;
 
-        if (cachedData && cacheTimestamp && (now - Number(cacheTimestamp) < fiveMinutes)) {
-          // Use stable cached price if it's less than 5 mins old
+        if (cachedData && cacheTimestamp && (now - Number(cacheTimestamp) < oneMinute)) {
           setPrices(JSON.parse(cachedData));
           setPricesLoaded(true);
         } else {
-          // Cache is expired or missing - pull fresh 83.33 data
           const res = await fetch('/api/gold-price');
           const priceData = await res.json();
-          if (priceData.gold) {
-            setPrices(priceData);
-            sessionStorage.setItem('vault_prices', JSON.stringify(priceData));
+          if (priceData.gold || priceData.silver) {
+            const freshPrices = {
+              gold: priceData.gold || 0,
+              silver: priceData.silver || 0,
+              platinum: priceData.platinum || 0,
+              palladium: priceData.palladium || 0,
+              updated_at: priceData.updated_at
+            };
+            setPrices(freshPrices);
+            sessionStorage.setItem('vault_prices', JSON.stringify(freshPrices));
             sessionStorage.setItem('vault_prices_time', now.toString());
-            setTimeout(() => setPricesLoaded(true), 800);
+            setPricesLoaded(true);
           }
         }
       } catch (e) { 
         console.error("Price fetch failed", e); 
       }
-      // ---------------------------------------
-
       fetchInventory();
     }
     initSession();
@@ -109,27 +139,6 @@ useEffect(() => {
     if (tempWeight <= 0) return;
     setMetalList([...metalList, { type: tempMetal, weight: tempWeight, unit: tempUnit, isManual: useManualPrice, manualPrice: useManualPrice ? Number(manualPriceInput) : undefined }]);
     setTempWeight(0); setManualPriceInput(''); setUseManualPrice(false);
-  };
-
-  const calculateFullBreakdown = (metals: any[], h: any, r: any, o: any, customMult?: number, customMarkup?: number) => {
-    let rawMaterialCost = 0;
-    metals.forEach(m => {
-      let pricePerGram = 0;
-      if (m.isManual && m.manualPrice) pricePerGram = m.manualPrice / UNIT_TO_GRAMS[m.unit];
-      else {
-        let spot = prices[m.type.includes('Gold') ? 'gold' : m.type.includes('Silver') ? 'silver' : m.type.includes('Platinum') ? 'platinum' : 'palladium'] || 0;
-        const purities: any = { '10K Gold': 0.417, '14K Gold': 0.583, '18K Gold': 0.75, '22K Gold': 0.916, '24K Gold': 0.999, 'Sterling Silver': 0.925, 'Platinum 950': 0.95, 'Palladium': 0.95 };
-        pricePerGram = (spot / 31.1035) * (purities[m.type] || 1.0);
-      }
-      rawMaterialCost += pricePerGram * (m.weight * UNIT_TO_GRAMS[m.unit]);
-    });
-    const totalMaterials = rawMaterialCost + (Number(o) || 0);
-    const labor = (Number(h) || 0) * (Number(r) || 0);
-    const wholesaleA = totalMaterials + labor;
-    const retailA = wholesaleA * (customMult ?? retailMultA);
-    const wholesaleB = (totalMaterials * (customMarkup ?? markupB)) + labor;
-    const retailB = wholesaleB * 2;
-    return { wholesaleA, retailA, wholesaleB, retailB, totalMaterials, labor };
   };
 
   const deleteInventoryItem = async (id: string, name: string) => {
@@ -183,7 +192,7 @@ useEffect(() => {
       const liveRetail = item.strategy === 'A' ? (current.totalMaterials + labor) * (item.multiplier || 3) : ((current.totalMaterials * (item.markup_b || 1.8)) + labor) * 2;
       return acc + liveRetail;
     }, 0);
-  }, [inventory, prices]);
+  }, [inventory, prices, calculateFullBreakdown]);
 
   const exportToCSV = () => {
     const headers = ["Item Name", "Live Retail", "Live Wholesale", "Saved Retail", "Saved Wholesale", "Notes", "Date Created", "Strategy", "Metals"];
@@ -324,10 +333,10 @@ useEffect(() => {
 
         {/* MARKET TICKER */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {Object.entries(prices).filter(([name]) => ['gold', 'silver', 'platinum', 'palladium'].includes(name)).map(([name, p]) => (
+          {['gold', 'silver', 'platinum', 'palladium'].map((name) => (
             <div key={name} className="bg-white p-4 rounded-xl border-l-4 border-[#A5BEAC] shadow-sm text-center lg:text-left">
               <p className="text-[10px] font-black uppercase text-stone-400">{name}</p>
-              <p className="text-xl font-bold">{p !== null ? `$${Number(p).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "--.--"}</p>
+              <p className="text-xl font-bold">{prices[name] > 0 ? `$${prices[name].toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "--.--"}</p>
             </div>
           ))}
         </div>
@@ -394,7 +403,7 @@ useEffect(() => {
                         <input 
                           type="number" 
                           step="0.1"
-                          className="w-12 bg-white border-2 border-[#A5BEAC] rounded-xl text-xs font-black py-1.5 text-center outline-none" 
+                          className="w-12 bg-white border-2 border-[#A5BEAC] rounded-xl text-xs font-black py-1.5 text-center outline-none text-slate-900" 
                           value={retailMultA} 
                           onChange={(e) => setRetailMultA(Number(e.target.value))} 
                           onClick={(e) => e.stopPropagation()} 
@@ -424,7 +433,7 @@ useEffect(() => {
                         <input 
                           type="number" 
                           step="0.1"
-                          className="w-12 bg-white border-2 border-[#A5BEAC] rounded-xl text-xs font-black py-1.5 text-center outline-none" 
+                          className="w-12 bg-white border-2 border-[#A5BEAC] rounded-xl text-xs font-black py-1.5 text-center outline-none text-slate-900" 
                           value={markupB} 
                           onChange={(e) => setMarkupB(Number(e.target.value))} 
                           onClick={(e) => e.stopPropagation()} 
@@ -575,7 +584,7 @@ useEffect(() => {
           <div className="bg-white p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC]">
             <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">2. PRICE STRATEGY DETAIL</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
-              {/* STRATEGY A - RESTORED EQUATIONS + IN-BOX GUIDE */}
+              {/* STRATEGY A */}
               <div className="p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all flex flex-col justify-between">
                 <div>
                   <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6">STRATEGY A (STANDARD MULTIPLIER)</h3>
@@ -599,7 +608,7 @@ useEffect(() => {
                 </div>
               </div>
 
-              {/* STRATEGY B - RESTORED EQUATIONS + IN-BOX GUIDE */}
+              {/* STRATEGY B */}
               <div className="p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all flex flex-col justify-between">
                 <div>
                   <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6">STRATEGY B (MATERIALS MARKUP)</h3>
