@@ -113,13 +113,13 @@ export default function Home() {
             setPricesLoaded(true);
           }
         }
-      } catch (e) { 
-        console.error("Price fetch failed", e); 
+      } catch (e) {
+        console.error("Price fetch failed", e);
       }
       fetchInventory();
     }
     initSession();
-    
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
       if (session) fetchInventory();
@@ -202,7 +202,7 @@ export default function Home() {
       const liveWholesale = item.strategy === 'A' ? current.wholesaleA + labor : current.wholesaleB;
       const liveRetail = item.strategy === 'A' ? (current.totalMaterials + labor) * (item.multiplier || 3) : ((current.totalMaterials * (item.markup_b || 1.8)) + labor) * 2;
       const metalsStr = item.metals.map((m: any) => `${m.weight}${m.unit} ${m.type}`).join('; ');
-      return [`"${item.name}"`, liveRetail.toFixed(2), liveWholesale.toFixed(2), Number(item.retail).toFixed(2), Number(item.wholesale).toFixed(2), `"${item.notes?.replace(/"/g, '""') || ''}"`, new Date(item.created_at).toLocaleDateString(), item.strategy, `"${metalsStr}"` ];
+      return [`"${item.name}"`, liveRetail.toFixed(2), liveWholesale.toFixed(2), Number(item.retail).toFixed(2), Number(item.wholesale).toFixed(2), `"${item.notes?.replace(/"/g, '""') || ''}"`, new Date(item.created_at).toLocaleDateString(), item.strategy, `"${metalsStr}"`];
     });
     const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
     const encodedUri = encodeURI(csvContent);
@@ -240,7 +240,7 @@ export default function Home() {
       if (labor > 0) breakdownLines.push(`Labor Cost: $${Number(labor).toFixed(2)}`);
 
       doc.setFontSize(8); doc.setTextColor(80, 80, 80); doc.setFont("helvetica", "bold"); doc.text("BREAKDOWN:", 140, currentY + 12);
-      doc.setFont("helvetica", "normal"); 
+      doc.setFont("helvetica", "normal");
       breakdownLines.forEach((line: string, i: number) => doc.text(line, 140, currentY + 17 + (i * 4)));
 
       if (item.notes) {
@@ -273,9 +273,9 @@ export default function Home() {
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Manual Price Edit</h3>
             <div className="space-y-4">
               <div><label className="text-[10px] font-black uppercase text-stone-400 mb-1 block">New Retail Price ($)</label>
-              <input type="number" className="w-full p-4 bg-stone-50 border rounded-2xl outline-none focus:border-[#A5BEAC] font-bold" value={manualRetail} onChange={(e) => setManualRetail(e.target.value)} /></div>
+                <input type="number" className="w-full p-4 bg-stone-50 border rounded-2xl outline-none focus:border-[#A5BEAC] font-bold" value={manualRetail} onChange={(e) => setManualRetail(e.target.value)} /></div>
               <div><label className="text-[10px] font-black uppercase text-stone-400 mb-1 block">New Wholesale Cost ($)</label>
-              <input type="number" className="w-full p-4 bg-stone-50 border rounded-2xl outline-none focus:border-[#A5BEAC] font-bold" value={manualWholesale} onChange={(e) => setManualWholesale(e.target.value)} /></div>
+                <input type="number" className="w-full p-4 bg-stone-50 border rounded-2xl outline-none focus:border-[#A5BEAC] font-bold" value={manualWholesale} onChange={(e) => setManualWholesale(e.target.value)} /></div>
             </div>
             <div className="flex gap-3">
               <button onClick={() => setEditingItem(null)} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
@@ -305,7 +305,6 @@ export default function Home() {
               <div className={`w-2 h-2 rounded-full ${user ? 'bg-[#A5BEAC] animate-pulse' : 'bg-stone-300'}`}></div>
             </div>
             <div className="relative flex gap-2 w-full justify-center md:justify-end">
-                <button onClick={() => window.open(SHOPIFY_PRO_URL, '_blank')} className="text-[10px] font-black uppercase bg-[#A5BEAC] text-white px-6 py-3 rounded-xl shadow-sm hover:scale-105 transition">Upgrade</button>
               {(!user || user.is_anonymous) ? (
                 <button onClick={() => setShowAuth(!showAuth)} className="text-[10px] font-black uppercase bg-slate-900 text-white px-8 py-3 rounded-xl hover:bg-[#A5BEAC] transition shadow-sm">Login / Sign Up</button>
               ) : (
@@ -380,8 +379,8 @@ export default function Home() {
                 </div>
                 <div className="grid grid-cols-1 gap-4 mb-6 w-full">
                   {/* STRATEGY A */}
-                  <button 
-                    onClick={() => setStrategy('A')} 
+                  <button
+                    onClick={() => setStrategy('A')}
                     className={`group flex flex-col sm:flex-row sm:items-center sm:justify-between p-5 rounded-[2rem] border-2 transition-all ${strategy === 'A' ? 'border-[#A5BEAC] bg-stone-50 shadow-md' : 'border-stone-100 bg-white hover:border-stone-200'}`}
                   >
                     <div className="text-left mb-4 sm:mb-0">
@@ -400,21 +399,21 @@ export default function Home() {
                       </div>
                       <div className="flex items-center gap-2 mt-1">
                         <span className="text-[10px] font-black text-[#a8a29e] uppercase italic whitespace-nowrap">Retail: W ×</span>
-                        <input 
-                          type="number" 
+                        <input
+                          type="number"
                           step="0.1"
-                          className="w-12 bg-white border-2 border-[#A5BEAC] rounded-xl text-xs font-black py-1.5 text-center outline-none text-slate-900" 
-                          value={retailMultA} 
-                          onChange={(e) => setRetailMultA(Number(e.target.value))} 
-                          onClick={(e) => e.stopPropagation()} 
+                          className="w-12 bg-white border-2 border-[#A5BEAC] rounded-xl text-xs font-black py-1.5 text-center outline-none text-slate-900"
+                          value={retailMultA}
+                          onChange={(e) => setRetailMultA(Number(e.target.value))}
+                          onClick={(e) => e.stopPropagation()}
                         />
                       </div>
                     </div>
                   </button>
 
                   {/* STRATEGY B */}
-                  <button 
-                    onClick={() => setStrategy('B')} 
+                  <button
+                    onClick={() => setStrategy('B')}
                     className={`group relative flex flex-col sm:flex-row sm:items-center sm:justify-between p-5 rounded-[2rem] border-2 transition-all ${strategy === 'B' ? 'border-[#A5BEAC] bg-stone-50 shadow-md' : 'border-stone-100 bg-white hover:border-stone-200'}`}
                   >
                     <div className="text-left mb-4 sm:mb-0">
@@ -430,13 +429,13 @@ export default function Home() {
                     <div className="flex flex-col items-start sm:items-end">
                       <div className="flex items-center gap-1 text-[#a8a29e] italic font-black text-[10px] uppercase whitespace-nowrap">
                         <span>Wholesale: (M ×</span>
-                        <input 
-                          type="number" 
+                        <input
+                          type="number"
                           step="0.1"
-                          className="w-12 bg-white border-2 border-[#A5BEAC] rounded-xl text-xs font-black py-1.5 text-center outline-none text-slate-900" 
-                          value={markupB} 
-                          onChange={(e) => setMarkupB(Number(e.target.value))} 
-                          onClick={(e) => e.stopPropagation()} 
+                          className="w-12 bg-white border-2 border-[#A5BEAC] rounded-xl text-xs font-black py-1.5 text-center outline-none text-slate-900"
+                          value={markupB}
+                          onChange={(e) => setMarkupB(Number(e.target.value))}
+                          onClick={(e) => e.stopPropagation()}
                         />
                         <span>) + L</span>
                       </div>
@@ -451,102 +450,102 @@ export default function Home() {
           </div>
 
           <div className="lg:col-span-7 space-y-4">
-             <div className="bg-white p-6 rounded-[2rem] border-2 shadow-sm border-[#A5BEAC] space-y-4">
-               <div className="flex justify-between items-center text-left">
-                  <div><h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Vault Inventory</h2><p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">{inventory.length} Records Stored</p></div>
-                  <div className="text-right"><p className="text-[9px] font-black text-[#2d4a22] uppercase italic">Total Vault Value</p><p className="text-2xl font-black text-slate-900">${pricesLoaded ? totalVaultValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : "--.--"}</p></div>
-               </div>
-               <div className="flex flex-col sm:flex-row gap-4">
-                 <div className="relative flex-1"><span className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-300 text-xs">🔍</span><input type="text" placeholder="Search items..." className="w-full pl-10 pr-4 py-3 bg-stone-50 border rounded-xl text-xs font-bold outline-none focus:border-[#A5BEAC] transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
-                 <div className="relative">
-                    <button onClick={() => setShowExportMenu(!showExportMenu)} className="w-full sm:w-auto px-6 py-3 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2">Export {showExportMenu ? '▲' : '▼'}</button>
-                    {showExportMenu && (<div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[50] overflow-hidden animate-in fade-in"><button onClick={exportDetailedPDF} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b transition-colors">Export PDF Report</button><button onClick={exportToCSV} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 transition-colors">Export CSV Spreadsheet</button></div>)}
-                 </div>
-               </div>
+            <div className="bg-white p-6 rounded-[2rem] border-2 shadow-sm border-[#A5BEAC] space-y-4">
+              <div className="flex justify-between items-center text-left">
+                <div><h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Vault Inventory</h2><p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">{inventory.length} Records Stored</p></div>
+                <div className="text-right"><p className="text-[9px] font-black text-[#2d4a22] uppercase italic">Total Vault Value</p><p className="text-2xl font-black text-slate-900">${pricesLoaded ? totalVaultValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "--.--"}</p></div>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="relative flex-1"><span className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-300 text-xs">🔍</span><input type="text" placeholder="Search items..." className="w-full pl-10 pr-4 py-3 bg-stone-50 border rounded-xl text-xs font-bold outline-none focus:border-[#A5BEAC] transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
+                <div className="relative">
+                  <button onClick={() => setShowExportMenu(!showExportMenu)} className="w-full sm:w-auto px-6 py-3 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2">Export {showExportMenu ? '▲' : '▼'}</button>
+                  {showExportMenu && (<div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[50] overflow-hidden animate-in fade-in"><button onClick={exportDetailedPDF} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b transition-colors">Export PDF Report</button><button onClick={exportToCSV} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 transition-colors">Export CSV Spreadsheet</button></div>)}
+                </div>
+              </div>
             </div>
 
             <div className="space-y-4 overflow-y-auto max-h-[850px] pr-2 custom-scrollbar">
               {loading ? <div className="p-20 text-center text-stone-400 font-bold uppercase text-xs tracking-widest animate-pulse">Opening Vault...</div> :
-                  filteredInventory.map(item => {
-                    const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
-                    const labor = item.labor_at_making || 0;
-                    const liveWholesale = item.strategy === 'A' ? current.wholesaleA + labor : current.wholesaleB;
-                    const liveRetail = item.strategy === 'A' ? (current.totalMaterials + labor) * (item.multiplier || 3) : ((current.totalMaterials * (item.markup_b || 1.8)) + labor) * 2;
-                    const priceDiff = liveRetail - item.retail;
-                    const isUp = priceDiff >= 0;
+                filteredInventory.map(item => {
+                  const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
+                  const labor = item.labor_at_making || 0;
+                  const liveWholesale = item.strategy === 'A' ? current.wholesaleA + labor : current.wholesaleB;
+                  const liveRetail = item.strategy === 'A' ? (current.totalMaterials + labor) * (item.multiplier || 3) : ((current.totalMaterials * (item.markup_b || 1.8)) + labor) * 2;
+                  const priceDiff = liveRetail - item.retail;
+                  const isUp = priceDiff >= 0;
 
-                    return (
-                      <div key={item.id} className="bg-white rounded-[2rem] border border-stone-100 shadow-sm overflow-hidden transition-all hover:shadow-md">
-                        <div className="p-5 md:p-6 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 text-left">
-                          <div className="flex-1 w-full">
-                            <div className="flex items-start gap-2 mb-1">
-                                <p className="text-xl font-black text-slate-800 break-words leading-tight uppercase flex-1">{item.name}</p>
-                                <span className={`text-[8px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${isUp ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
-                                    {isUp ? '▲' : '▼'} ${Math.abs(priceDiff).toFixed(2)}
-                                </span>
-                            </div>
-                            <p className="text-[10px] text-stone-400 font-bold uppercase tracking-widest mb-3">{new Date(item.created_at).toLocaleDateString()} | Strategy: {item.strategy}</p>
-                            <button onClick={() => deleteInventoryItem(item.id, item.name)} className="text-[10px] font-black text-red-300 uppercase hover:text-red-600 transition-colors bg-stone-50 px-3 py-1.5 rounded-lg">[ Remove Piece ]</button>
+                  return (
+                    <div key={item.id} className="bg-white rounded-[2rem] border border-stone-100 shadow-sm overflow-hidden transition-all hover:shadow-md">
+                      <div className="p-5 md:p-6 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 text-left">
+                        <div className="flex-1 w-full">
+                          <div className="flex items-start gap-2 mb-1">
+                            <p className="text-xl font-black text-slate-800 break-words leading-tight uppercase flex-1">{item.name}</p>
+                            <span className={`text-[8px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${isUp ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                              {isUp ? '▲' : '▼'} ${Math.abs(priceDiff).toFixed(2)}
+                            </span>
                           </div>
-                          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 sm:gap-10 xl:gap-12 shrink-0 w-full xl:w-auto text-left sm:text-right">
-                                <div className="flex gap-6 sm:border-r border-stone-100 sm:pr-8 w-full sm:w-auto">
-                                    <div className="flex-1 sm:flex-none">
-                                      <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest mb-1">Saved Wholesale</p>
-                                      <p className="text-sm font-bold text-stone-500">${Number(item.wholesale).toFixed(2)}</p>
-                                    </div>
-                                    <div className="flex-1 sm:flex-none">
-                                      <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest mb-1">Saved Retail</p>
-                                      <p className="text-sm font-bold text-stone-500">${Number(item.retail).toFixed(2)}</p>
-                                    </div>
-                                </div>
-                                <div className="flex gap-6 items-center w-full sm:w-auto">
-                                    <div className="flex-1 sm:flex-none">
-                                      <p className="text-[8px] font-black text-slate-900 uppercase tracking-widest mb-1">Live Wholesale</p>
-                                      <p className={`text-lg font-black transition-all ${pricesLoaded ? 'text-slate-900' : 'text-stone-200'}`}>{pricesLoaded ? `$${liveWholesale.toFixed(2)}` : "--.--"}</p>
-                                    </div>
-                                    <div className="flex-1 sm:flex-none">
-                                      <p className="text-[8px] font-black text-slate-900 uppercase tracking-widest mb-1 italic">Live Retail</p>
-                                      <p className={`text-3xl font-black text-slate-900 leading-none transition-all duration-300 ${pricesLoaded ? 'text-slate-900' : 'text-stone-200'}`}>{pricesLoaded ? `$${liveRetail.toFixed(2)}` : "--.--"}</p>
-                                    </div>
-                                </div>
+                          <p className="text-[10px] text-stone-400 font-bold uppercase tracking-widest mb-3">{new Date(item.created_at).toLocaleDateString()} | Strategy: {item.strategy}</p>
+                          <button onClick={() => deleteInventoryItem(item.id, item.name)} className="text-[10px] font-black text-red-300 uppercase hover:text-red-600 transition-colors bg-stone-50 px-3 py-1.5 rounded-lg">[ Remove Piece ]</button>
+                        </div>
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 sm:gap-10 xl:gap-12 shrink-0 w-full xl:w-auto text-left sm:text-right">
+                          <div className="flex gap-6 sm:border-r border-stone-100 sm:pr-8 w-full sm:w-auto">
+                            <div className="flex-1 sm:flex-none">
+                              <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest mb-1">Saved Wholesale</p>
+                              <p className="text-sm font-bold text-stone-500">${Number(item.wholesale).toFixed(2)}</p>
+                            </div>
+                            <div className="flex-1 sm:flex-none">
+                              <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest mb-1">Saved Retail</p>
+                              <p className="text-sm font-bold text-stone-500">${Number(item.retail).toFixed(2)}</p>
+                            </div>
+                          </div>
+                          <div className="flex gap-6 items-center w-full sm:w-auto">
+                            <div className="flex-1 sm:flex-none">
+                              <p className="text-[8px] font-black text-slate-900 uppercase tracking-widest mb-1">Live Wholesale</p>
+                              <p className={`text-lg font-black transition-all ${pricesLoaded ? 'text-slate-900' : 'text-stone-200'}`}>{pricesLoaded ? `$${liveWholesale.toFixed(2)}` : "--.--"}</p>
+                            </div>
+                            <div className="flex-1 sm:flex-none">
+                              <p className="text-[8px] font-black text-slate-900 uppercase tracking-widest mb-1 italic">Live Retail</p>
+                              <p className={`text-3xl font-black text-slate-900 leading-none transition-all duration-300 ${pricesLoaded ? 'text-slate-900' : 'text-stone-200'}`}>{pricesLoaded ? `$${liveRetail.toFixed(2)}` : "--.--"}</p>
+                            </div>
                           </div>
                         </div>
-                        <details className="group border-t border-stone-50">
-                            <summary className="list-none cursor-pointer py-3 text-center text-[8px] font-black uppercase tracking-[0.2em] text-stone-300 hover:text-[#A5BEAC] transition-colors">Breakdown & Snapshot</summary>
-                            <div className="p-5 md:p-6 bg-stone-50/50 space-y-6">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
-                                    <div className="space-y-3">
-                                        <h4 className="text-[10px] font-black uppercase text-stone-400">Breakdown</h4>
-                                        {item.metals?.map((m: any, idx: number) => (<div key={idx} className="flex justify-between text-[10px] font-bold border-b border-stone-100 pb-1.5 uppercase"><span>{m.weight}{m.unit} {m.type}</span><span className="text-stone-400">{m.isManual ? 'Manual' : 'Spot'}</span></div>))}
-                                        {item.other_costs_at_making > 0 && (<div className="flex justify-between text-[10px] font-bold border-b border-stone-100 pb-1.5 uppercase"><span>Stones/Other</span><span>${Number(item.other_costs_at_making).toFixed(2)}</span></div>)}
-                                    </div>
-                                    <div className="space-y-5">
-                                        <div className="grid grid-cols-2 gap-3 text-center">
-                                            <div className="bg-white p-3.5 rounded-xl border border-stone-100 shadow-sm"><p className="text-[8px] font-black text-stone-400 uppercase mb-1">Materials Cost (Orig)</p><p className="text-xs font-black text-slate-700">${(Number(item.materials_at_making || 0) + Number(item.other_costs_at_making || 0)).toFixed(2)}</p></div>
-                                            <div className="bg-white p-3.5 rounded-xl border border-stone-100 shadow-sm"><p className="text-[8px] font-black text-stone-400 uppercase mb-1">Labor Cost</p><p className="text-xs font-black text-slate-700">${Number(labor).toFixed(2)}</p></div>
-                                        </div>
-                                        <div className="relative">
-                                          <button onClick={() => setOpenEditId(openEditId === item.id ? null : item.id)} className="w-full py-3 bg-[#A5BEAC] text-white rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-slate-900 transition-all shadow-sm">
-                                            Edit Prices {openEditId === item.id ? '▲' : '▼'}
-                                          </button>
-                                          {openEditId === item.id && (
-                                            <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-[#A5BEAC] rounded-xl shadow-xl z-20 overflow-hidden animate-in fade-in slide-in-from-top-1">
-                                              <button onClick={() => syncToMarket(item)} className="w-full py-4 px-4 text-left text-[9px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b transition-colors">Sync to Market</button>
-                                              <button onClick={() => { setEditingItem(item); setManualRetail(item.retail.toFixed(2)); setManualWholesale(item.wholesale.toFixed(2)); }} className="w-full py-4 px-4 text-left text-[9px] font-black uppercase text-slate-700 hover:bg-stone-50 transition-colors">Manual Edit</button>
-                                            </div>
-                                          )}
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="bg-white p-4 rounded-2xl border border-stone-200 text-left">
-                                  <h4 className="text-[9px] font-black uppercase text-stone-400 mb-2">Vault Notes</h4>
-                                  <textarea className="w-full p-3 bg-stone-50 border border-stone-100 rounded-xl text-xs italic text-slate-600 resize-none h-24 outline-none focus:border-[#A5BEAC] transition-all" placeholder="Click to add notes..." defaultValue={item.notes || ''} onBlur={(e) => saveNote(item.id, (e.target as HTMLTextAreaElement).value)} />
-                                </div>
-                            </div>
-                        </details>
                       </div>
-                    );
-                  })}
+                      <details className="group border-t border-stone-50">
+                        <summary className="list-none cursor-pointer py-3 text-center text-[8px] font-black uppercase tracking-[0.2em] text-stone-300 hover:text-[#A5BEAC] transition-colors">Breakdown & Snapshot</summary>
+                        <div className="p-5 md:p-6 bg-stone-50/50 space-y-6">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
+                            <div className="space-y-3">
+                              <h4 className="text-[10px] font-black uppercase text-stone-400">Breakdown</h4>
+                              {item.metals?.map((m: any, idx: number) => (<div key={idx} className="flex justify-between text-[10px] font-bold border-b border-stone-100 pb-1.5 uppercase"><span>{m.weight}{m.unit} {m.type}</span><span className="text-stone-400">{m.isManual ? 'Manual' : 'Spot'}</span></div>))}
+                              {item.other_costs_at_making > 0 && (<div className="flex justify-between text-[10px] font-bold border-b border-stone-100 pb-1.5 uppercase"><span>Stones/Other</span><span>${Number(item.other_costs_at_making).toFixed(2)}</span></div>)}
+                            </div>
+                            <div className="space-y-5">
+                              <div className="grid grid-cols-2 gap-3 text-center">
+                                <div className="bg-white p-3.5 rounded-xl border border-stone-100 shadow-sm"><p className="text-[8px] font-black text-stone-400 uppercase mb-1">Materials Cost (Orig)</p><p className="text-xs font-black text-slate-700">${(Number(item.materials_at_making || 0) + Number(item.other_costs_at_making || 0)).toFixed(2)}</p></div>
+                                <div className="bg-white p-3.5 rounded-xl border border-stone-100 shadow-sm"><p className="text-[8px] font-black text-stone-400 uppercase mb-1">Labor Cost</p><p className="text-xs font-black text-slate-700">${Number(labor).toFixed(2)}</p></div>
+                              </div>
+                              <div className="relative">
+                                <button onClick={() => setOpenEditId(openEditId === item.id ? null : item.id)} className="w-full py-3 bg-[#A5BEAC] text-white rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-slate-900 transition-all shadow-sm">
+                                  Edit Prices {openEditId === item.id ? '▲' : '▼'}
+                                </button>
+                                {openEditId === item.id && (
+                                  <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-[#A5BEAC] rounded-xl shadow-xl z-20 overflow-hidden animate-in fade-in slide-in-from-top-1">
+                                    <button onClick={() => syncToMarket(item)} className="w-full py-4 px-4 text-left text-[9px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b transition-colors">Sync to Market</button>
+                                    <button onClick={() => { setEditingItem(item); setManualRetail(item.retail.toFixed(2)); setManualWholesale(item.wholesale.toFixed(2)); }} className="w-full py-4 px-4 text-left text-[9px] font-black uppercase text-slate-700 hover:bg-stone-50 transition-colors">Manual Edit</button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="bg-white p-4 rounded-2xl border border-stone-200 text-left">
+                            <h4 className="text-[9px] font-black uppercase text-stone-400 mb-2">Vault Notes</h4>
+                            <textarea className="w-full p-3 bg-stone-50 border border-stone-100 rounded-xl text-xs italic text-slate-600 resize-none h-24 outline-none focus:border-[#A5BEAC] transition-all" placeholder="Click to add notes..." defaultValue={item.notes || ''} onBlur={(e) => saveNote(item.id, (e.target as HTMLTextAreaElement).value)} />
+                          </div>
+                        </div>
+                      </details>
+                    </div>
+                  );
+                })}
             </div>
           </div>
         </div>
