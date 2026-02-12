@@ -25,7 +25,7 @@ export default function InstallPrompt() {
         Install The Vault
       </p>
       <p className="text-[11px] text-stone-500 mt-2 leading-relaxed">
-        For the best experience, tap the <span className="inline-block bg-white p-1 rounded border border-stone-200"><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg></span> icon and select <br />
+        For the best experience on iPhone, tap the <span className="inline-block bg-white p-1 rounded border border-stone-200"><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg></span> icon and select <br />
         <span className="font-black text-slate-900 italic">"Add to Home Screen"</span>
       </p>
     </div>
