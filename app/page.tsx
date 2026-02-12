@@ -49,6 +49,40 @@ export default function Home() {
 
   const SHOPIFY_PRO_URL = "https://bearsilverandstone.com/products/the-vault-pro";
 
+  // Reusable price fetcher
+  const fetchPrices = useCallback(async (force = false) => {
+    try {
+      const cachedData = sessionStorage.getItem('vault_prices');
+      const cacheTimestamp = sessionStorage.getItem('vault_prices_time');
+      const now = Date.now();
+      const oneMinute = 60 * 1000;
+
+      if (!force && cachedData && cacheTimestamp && (now - Number(cacheTimestamp) < oneMinute)) {
+        setPrices(JSON.parse(cachedData));
+        setPricesLoaded(true);
+        return;
+      }
+
+      const res = await fetch(`/api/gold-price?cb=${now}`);
+      const priceData = await res.json();
+      if (priceData.gold || priceData.silver) {
+        const freshPrices = {
+          gold: priceData.gold || 0,
+          silver: priceData.silver || 0,
+          platinum: priceData.platinum || 0,
+          palladium: priceData.palladium || 0,
+          updated_at: priceData.updated_at
+        };
+        setPrices(freshPrices);
+        sessionStorage.setItem('vault_prices', JSON.stringify(freshPrices));
+        sessionStorage.setItem('vault_prices_time', now.toString());
+        setPricesLoaded(true);
+      }
+    } catch (e) {
+      console.error("Price fetch failed", e);
+    }
+  }, []);
+
   // Fix 2: Wrap math in useCallback so it updates when prices state changes
   const calculateFullBreakdown = useCallback((metals: any[], h: any, r: any, o: any, customMult?: number, customMarkup?: number) => {
     let rawMaterialCost = 0;
@@ -88,45 +122,31 @@ export default function Home() {
         setUser(session.user);
       }
 
-      try {
-        const cachedData = sessionStorage.getItem('vault_prices');
-        const cacheTimestamp = sessionStorage.getItem('vault_prices_time');
-        const now = Date.now();
-        const oneMinute = 60 * 1000;
-
-        if (cachedData && cacheTimestamp && (now - Number(cacheTimestamp) < oneMinute)) {
-          setPrices(JSON.parse(cachedData));
-          setPricesLoaded(true);
-        } else {
-          const res = await fetch('/api/gold-price');
-          const priceData = await res.json();
-          if (priceData.gold || priceData.silver) {
-            const freshPrices = {
-              gold: priceData.gold || 0,
-              silver: priceData.silver || 0,
-              platinum: priceData.platinum || 0,
-              palladium: priceData.palladium || 0,
-              updated_at: priceData.updated_at
-            };
-            setPrices(freshPrices);
-            sessionStorage.setItem('vault_prices', JSON.stringify(freshPrices));
-            sessionStorage.setItem('vault_prices_time', now.toString());
-            setPricesLoaded(true);
-          }
-        }
-      } catch (e) {
-        console.error("Price fetch failed", e);
-      }
+      await fetchPrices();
       fetchInventory();
     }
     initSession();
+
+    const handleWakeUp = () => {
+      if (document.visibilityState === 'visible') {
+        fetchPrices(true);
+      }
+    };
+
+    window.addEventListener('visibilitychange', handleWakeUp);
+    window.addEventListener('focus', handleWakeUp);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
       if (session) fetchInventory();
     });
-    return () => subscription.unsubscribe();
-  }, []);
+
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener('visibilitychange', handleWakeUp);
+      window.removeEventListener('focus', handleWakeUp);
+    };
+  }, [fetchPrices]);
 
   async function fetchInventory() {
     const { data: { session } } = await supabase.auth.getSession();
@@ -318,7 +338,7 @@ export default function Home() {
                   <button onClick={loginWithGoogle} className="w-full flex items-center justify-center gap-3 bg-white border-2 border-stone-100 py-3 rounded-xl hover:bg-stone-50 transition mb-4 shadow-sm"><img src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png" className="w-4 h-4" alt="G" /><span className="text-[10px] font-black uppercase text-slate-700">Continue with Google</span></button>
                   <div className="flex border-b border-stone-100 mb-4">
                     <button onClick={() => setIsSignUp(false)} className={`flex-1 py-2 text-[10px] font-black uppercase ${!isSignUp ? 'text-[#A5BEAC] border-b-2 border-[#A5BEAC]' : 'text-stone-300'}`}>Login</button>
-                    <button onClick={() => setIsSignUp(true)} className={`flex-1 py-2 text-[10px] font-black uppercase ${isSignUp ? 'text-[#A5BEAC] border-b-2 border-[#A5BEAC]' : 'text-stone-300'}`}>Sign Up</button>
+                    <button onClick={setIsSignUp(true)} className={`flex-1 py-2 text-[10px] font-black uppercase ${isSignUp ? 'text-[#A5BEAC] border-b-2 border-[#A5BEAC]' : 'text-stone-300'}`}>Sign Up</button>
                   </div>
                   <form onSubmit={handleAuth} className="space-y-3">
                     <input type="email" placeholder="Email" className="w-full p-3 border rounded-xl text-sm outline-none focus:border-[#A5BEAC] transition" value={email} onChange={e => setEmail(e.target.value)} required />
@@ -452,7 +472,7 @@ export default function Home() {
 
           {/* THE VAULT CONTAINER - REFINED WITH GREEN OUTLINE */}
           <div className="lg:col-span-7 bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm overflow-hidden flex flex-col h-fit">
-            
+
             {/* INVENTORY HEADER (Search & Export) */}
             <div className="p-6 border-b border-stone-100 bg-white space-y-4">
               <div className="flex justify-between items-center text-left">
@@ -465,16 +485,16 @@ export default function Home() {
                   <p className="text-2xl font-black text-slate-900">${pricesLoaded ? totalVaultValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "--.--"}</p>
                 </div>
               </div>
-              
+
               <div className="flex flex-col sm:flex-row gap-4">
                 <div className="relative flex-1">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-300 text-xs">🔍</span>
-                  <input 
-                    type="text" 
-                    placeholder="Search items..." 
-                    className="w-full pl-10 pr-4 py-3 bg-stone-50 border rounded-xl text-xs font-bold outline-none focus:border-[#A5BEAC] transition-all" 
-                    value={searchTerm} 
-                    onChange={(e) => setSearchTerm(e.target.value)} 
+                  <input
+                    type="text"
+                    placeholder="Search items..."
+                    className="w-full pl-10 pr-4 py-3 bg-stone-50 border rounded-xl text-xs font-bold outline-none focus:border-[#A5BEAC] transition-all"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
                 <div className="relative">
@@ -489,7 +509,7 @@ export default function Home() {
               </div>
             </div>
 
-            {/* SCROLLABLE CARDS AREA - ENCLOSED WITH MOBILE OPTIMIZATION */}
+            {/* SCROLLABLE CARDS AREA */}
             <div className="p-4 md:p-6 space-y-4 overflow-y-auto max-h-[850px] custom-scrollbar overscroll-behavior-contain touch-pan-y bg-stone-50/20">
               {loading ? (
                 <div className="p-20 text-center text-stone-400 font-bold uppercase text-xs tracking-widest animate-pulse">Opening Vault...</div>
@@ -502,55 +522,104 @@ export default function Home() {
                   const priceDiff = liveRetail - item.retail;
                   const isUp = priceDiff >= 0;
 
+                  // Helper for clean, 2-decimal currency with commas
+                  const formatCurrency = (num: number) => {
+                    return num.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2
+                    });
+                  };
+
                   return (
                     <div key={item.id} className="bg-white rounded-[2rem] border border-stone-100 shadow-sm overflow-hidden transition-all hover:shadow-md">
-                      <div className="p-5 md:p-6 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 text-left">
-                        <div className="flex-1 w-full text-left">
-                          <div className="flex items-start gap-2 mb-1">
-                            <p className="text-xl font-black text-slate-800 break-words leading-tight uppercase flex-1">{item.name}</p>
-                            <span className={`text-[8px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${isUp ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
-                              {isUp ? '▲' : '▼'} ${Math.abs(priceDiff).toFixed(2)}
-                            </span>
+                      <div className="p-5 md:p-6 flex flex-col gap-5">
+
+                        {/* 1. TOP SECTION: Name and Status */}
+                        <div className="flex justify-between items-start gap-4 text-left">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-lg font-black text-slate-900 leading-tight uppercase tracking-tight truncate">
+                              {item.name}
+                            </h3>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-md border ${isUp ? 'bg-green-50 text-green-700 border-green-100' : 'bg-red-50 text-red-700 border-red-100'}`}>
+                                {isUp ? '▲' : '▼'} ${formatCurrency(Math.abs(priceDiff))}
+                              </span>
+                              <p className="text-[9px] text-stone-400 font-bold uppercase tracking-widest text-left">
+                                {new Date(item.created_at).toLocaleDateString()}
+                              </p>
+                            </div>
                           </div>
-                          <p className="text-[10px] text-stone-400 font-bold uppercase tracking-widest mb-3">{new Date(item.created_at).toLocaleDateString()} | Strategy: {item.strategy}</p>
-                          <button onClick={() => deleteInventoryItem(item.id, item.name)} className="text-[10px] font-black text-red-300 uppercase hover:text-red-600 transition-colors bg-stone-50 px-3 py-1.5 rounded-lg">[ Remove Piece ]</button>
+                          <button
+                            onClick={() => deleteInventoryItem(item.id, item.name)}
+                            className="text-[9px] font-black text-stone-300 uppercase hover:text-red-500 transition-colors shrink-0"
+                          >
+                            [ Remove ]
+                          </button>
                         </div>
-                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 sm:gap-10 xl:gap-12 shrink-0 w-full xl:w-auto text-left sm:text-right">
-                          <div className="flex gap-6 sm:border-r border-stone-100 sm:pr-8 w-full sm:w-auto">
-                            <div className="flex-1 sm:flex-none">
-                              <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest mb-1">Saved Wholesale</p>
-                              <p className="text-sm font-bold text-stone-500">${Number(item.wholesale).toFixed(2)}</p>
-                            </div>
-                            <div className="flex-1 sm:flex-none">
-                              <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest mb-1">Saved Retail</p>
-                              <p className="text-sm font-bold text-stone-500">${Number(item.retail).toFixed(2)}</p>
-                            </div>
+
+                        {/* 2. DATA GRID: Strict layout for total consistency */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 border border-stone-100 rounded-2xl overflow-hidden">
+
+                          {/* Saved Wholesale */}
+                          <div className="p-3 border-b sm:border-b-0 border-r border-stone-100 bg-stone-50/30 text-left">
+                            <p className="text-[7px] font-black text-stone-400 uppercase tracking-widest mb-1">Saved Wholesale</p>
+                            <p className="text-xs font-bold text-stone-500 whitespace-nowrap">${formatCurrency(Number(item.wholesale))}</p>
                           </div>
-                          <div className="flex gap-6 items-center w-full sm:w-auto">
-                            <div className="flex-1 sm:flex-none">
-                              <p className="text-[8px] font-black text-slate-900 uppercase tracking-widest mb-1">Live Wholesale</p>
-                              <p className={`text-lg font-black transition-all ${pricesLoaded ? 'text-slate-900' : 'text-stone-200'}`}>{pricesLoaded ? `$${liveWholesale.toFixed(2)}` : "--.--"}</p>
-                            </div>
-                            <div className="flex-1 sm:flex-none">
-                              <p className="text-[8px] font-black text-slate-900 uppercase tracking-widest mb-1 italic">Live Retail</p>
-                              <p className={`text-3xl font-black text-slate-900 leading-none transition-all duration-300 ${pricesLoaded ? 'text-slate-900' : 'text-stone-200'}`}>{pricesLoaded ? `$${liveRetail.toFixed(2)}` : "--.--"}</p>
-                            </div>
+
+                          {/* Saved Retail */}
+                          <div className="p-3 border-b sm:border-b-0 sm:border-r border-stone-100 bg-stone-50/30 text-left">
+                            <p className="text-[7px] font-black text-stone-400 uppercase tracking-widest mb-1">Saved Retail</p>
+                            <p className="text-xs font-bold text-stone-500 whitespace-nowrap">${formatCurrency(Number(item.retail))}</p>
+                          </div>
+
+                          {/* Live Wholesale */}
+                          <div className="p-3 border-r border-stone-100 bg-white text-left">
+                            <p className="text-[7px] font-black text-slate-900 uppercase tracking-widest mb-1">Live Wholesale</p>
+                            <p className="text-sm font-black text-slate-900 whitespace-nowrap">
+                              ${pricesLoaded ? formatCurrency(liveWholesale) : "--.--"}
+                            </p>
+                          </div>
+
+                          {/* Live Retail */}
+                          <div className="p-3 bg-white text-left">
+                            <p className="text-[7px] font-black text-[#A5BEAC] uppercase tracking-widest mb-1">Live Retail</p>
+                            <p className="text-base sm:text-lg font-black text-slate-900 leading-none whitespace-nowrap">
+                              ${pricesLoaded ? formatCurrency(liveRetail) : "--.--"}
+                            </p>
                           </div>
                         </div>
                       </div>
-                      <details className="group border-t border-stone-50">
-                        <summary className="list-none cursor-pointer py-3 text-center text-[8px] font-black uppercase tracking-[0.2em] text-stone-300 hover:text-[#A5BEAC] transition-colors">Breakdown & Snapshot</summary>
+
+                      {/* 3. DETAILS TOGGLE - DROPDOWNS RESTORED */}
+                      <details className="group border-t border-stone-50 text-left">
+                        <summary className="list-none cursor-pointer py-2 text-center text-[8px] font-black uppercase tracking-[0.3em] text-stone-300 hover:text-[#A5BEAC] transition-colors">View Breakdown & Edit Card</summary>
                         <div className="p-5 md:p-6 bg-stone-50/50 space-y-6">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
                             <div className="space-y-3">
                               <h4 className="text-[10px] font-black uppercase text-stone-400">Breakdown</h4>
-                              {item.metals?.map((m: any, idx: number) => (<div key={idx} className="flex justify-between text-[10px] font-bold border-b border-stone-100 pb-1.5 uppercase"><span>{m.weight}{m.unit} {m.type}</span><span className="text-stone-400">{m.isManual ? 'Manual' : 'Spot'}</span></div>))}
-                              {item.other_costs_at_making > 0 && (<div className="flex justify-between text-[10px] font-bold border-b border-stone-100 pb-1.5 uppercase"><span>Stones/Other</span><span>${Number(item.other_costs_at_making).toFixed(2)}</span></div>)}
+                              {item.metals?.map((m: any, idx: number) => (
+                                <div key={idx} className="flex justify-between text-[10px] font-bold border-b border-stone-100 pb-1.5 uppercase">
+                                  <span>{m.weight}{m.unit} {m.type}</span>
+                                  <span className="text-stone-400">{m.isManual ? 'Manual' : 'Spot'}</span>
+                                </div>
+                              ))}
+                              {item.other_costs_at_making > 0 && (
+                                <div className="flex justify-between text-[10px] font-bold border-b border-stone-100 pb-1.5 uppercase">
+                                  <span>Stones/Other</span>
+                                  <span>${Number(item.other_costs_at_making).toFixed(2)}</span>
+                                </div>
+                              )}
                             </div>
                             <div className="space-y-5">
                               <div className="grid grid-cols-2 gap-3 text-center">
-                                <div className="bg-white p-3.5 rounded-xl border border-stone-100 shadow-sm"><p className="text-[8px] font-black text-stone-400 uppercase mb-1">Materials Cost (Orig)</p><p className="text-xs font-black text-slate-700">${(Number(item.materials_at_making || 0) + Number(item.other_costs_at_making || 0)).toFixed(2)}</p></div>
-                                <div className="bg-white p-3.5 rounded-xl border border-stone-100 shadow-sm"><p className="text-[8px] font-black text-stone-400 uppercase mb-1">Labor Cost</p><p className="text-xs font-black text-slate-700">${Number(labor).toFixed(2)}</p></div>
+                                <div className="bg-white p-3.5 rounded-xl border border-stone-100 shadow-sm">
+                                  <p className="text-[8px] font-black text-stone-400 uppercase mb-1">Materials Cost (Orig)</p>
+                                  <p className="text-xs font-black text-slate-700">${(Number(item.materials_at_making || 0) + Number(item.other_costs_at_making || 0)).toFixed(2)}</p>
+                                </div>
+                                <div className="bg-white p-3.5 rounded-xl border border-stone-100 shadow-sm">
+                                  <p className="text-[8px] font-black text-stone-400 uppercase mb-1">Labor Cost</p>
+                                  <p className="text-xs font-black text-slate-700">${Number(labor).toFixed(2)}</p>
+                                </div>
                               </div>
                               <div className="relative">
                                 <button onClick={() => setOpenEditId(openEditId === item.id ? null : item.id)} className="w-full py-3 bg-[#A5BEAC] text-white rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-slate-900 transition-all shadow-sm">
@@ -573,6 +642,7 @@ export default function Home() {
                       </details>
                     </div>
                   );
+
                 })
               )}
             </div>
