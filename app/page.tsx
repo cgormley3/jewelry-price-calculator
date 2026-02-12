@@ -465,7 +465,8 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="space-y-4 overflow-y-auto max-h-[850px] pr-2 custom-scrollbar">
+            {/* FIXED SCROLL AREA */}
+            <div className="space-y-4 overflow-y-auto max-h-[850px] pr-2 custom-scrollbar overscroll-behavior-contain touch-pan-y">
               {loading ? <div className="p-20 text-center text-stone-400 font-bold uppercase text-xs tracking-widest animate-pulse">Opening Vault...</div> :
                 filteredInventory.map(item => {
                   const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
@@ -560,7 +561,6 @@ export default function Home() {
                 <div className="bg-stone-50 p-6 md:p-8 rounded-[2rem] border border-stone-100 text-left">
                   <h3 className="text-xs font-black text-[#A5BEAC] uppercase tracking-widest mb-6">THE LOGIC</h3>
                   <div className="font-mono text-sm bg-white p-6 rounded-2xl border border-stone-100 text-center shadow-sm">
-                    {/* Removed min-w-fit and whitespace-nowrap to allow natural wrapping */}
                     <p className="text-slate-900 font-bold break-words">Cost = (Spot ÷ 31.1035) × Grams × Purity</p>
                   </div>
                 </div>
@@ -585,7 +585,6 @@ export default function Home() {
           <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC]">
             <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">2. PRICE STRATEGY DETAIL</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
-              {/* STRATEGY A */}
               <div className="p-6 md:p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all flex flex-col justify-between">
                 <div>
                   <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6">STRATEGY A (STANDARD MULTIPLIER)</h3>
@@ -609,7 +608,6 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* STRATEGY B */}
               <div className="p-6 md:p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all flex flex-col justify-between">
                 <div>
                   <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6">STRATEGY B (MATERIALS MARKUP)</h3>
@@ -635,7 +633,6 @@ export default function Home() {
             </div>
           </div>
 
-
           <div className="flex flex-col items-center justify-center gap-2 py-8 border-t border-stone-200 mt-10">
             <a href="https://bearsilverandstone.com" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400">Powered by</span>
@@ -656,6 +653,8 @@ export default function Home() {
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #A5BEAC; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #A5BEAC; }
+        /* Enable momentum scrolling on iOS */
+        .custom-scrollbar { -webkit-overflow-scrolling: touch; }
       `}</style>
     </div>
   );
