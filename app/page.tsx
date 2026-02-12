@@ -593,8 +593,8 @@ useEffect(() => {
                   </div>
                 </div>
                 <div className="pt-4 border-t border-stone-200/60">
-                  <p className="text-[10px] text-[#A5BEAC] leading-relaxed italic uppercase font-bold tracking-tight">
-                    * The standard retail model. Best for production pieces where a 3x markup covers overhead, marketing, and business growth.
+                  <p className="text-[11px] text-[#a8a29e] leading-relaxed italic uppercase font-bold tracking-tight">
+                    * The standard retail model. Best for production pieces where a 2-3x markup covers overhead, marketing, and business growth.
                   </p>
                 </div>
               </div>
@@ -617,8 +617,8 @@ useEffect(() => {
                   </div>
                 </div>
                 <div className="pt-4 border-t border-stone-200/60">
-                  <p className="text-[10px] text-[#A5BEAC] leading-relaxed italic uppercase font-bold tracking-tight">
-                    * The custom model. Best for high-material-cost work where you markup the metals first to protect against market volatility.
+                  <p className="text-[11px] text-[#a8a29e] leading-relaxed italic uppercase font-bold tracking-tight">
+                    * The custom model. Best for high-material-cost work where you markup the metals first by 1.5-1.8X to protect against market volatility.
                   </p>
                 </div>
               </div>
