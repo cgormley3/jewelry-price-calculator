@@ -338,7 +338,7 @@ export default function Home() {
                   <button onClick={loginWithGoogle} className="w-full flex items-center justify-center gap-3 bg-white border-2 border-stone-100 py-3 rounded-xl hover:bg-stone-50 transition mb-4 shadow-sm"><img src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png" className="w-4 h-4" alt="G" /><span className="text-[10px] font-black uppercase text-slate-700">Continue with Google</span></button>
                   <div className="flex border-b border-stone-100 mb-4">
                     <button onClick={() => setIsSignUp(false)} className={`flex-1 py-2 text-[10px] font-black uppercase ${!isSignUp ? 'text-[#A5BEAC] border-b-2 border-[#A5BEAC]' : 'text-stone-300'}`}>Login</button>
-                    <button onClick={setIsSignUp(true)} className={`flex-1 py-2 text-[10px] font-black uppercase ${isSignUp ? 'text-[#A5BEAC] border-b-2 border-[#A5BEAC]' : 'text-stone-300'}`}>Sign Up</button>
+                    <button onClick={() => setIsSignUp(true)} className={`flex-1 py-2 text-[10px] font-black uppercase ${isSignUp ? 'text-[#A5BEAC] border-b-2 border-[#A5BEAC]' : 'text-stone-300'}`}>Sign Up</button>
                   </div>
                   <form onSubmit={handleAuth} className="space-y-3">
                     <input type="email" placeholder="Email" className="w-full p-3 border rounded-xl text-sm outline-none focus:border-[#A5BEAC] transition" value={email} onChange={e => setEmail(e.target.value)} required />
@@ -582,7 +582,7 @@ export default function Home() {
 
                           {/* Live Retail */}
                           <div className="p-3 bg-white text-left">
-                            <p className="text-[7px] font-black text-[#A5BEAC] uppercase tracking-widest mb-1">Live Retail</p>
+                            <p className="text-[7px] font-black text-[#A5BEAC] uppercase tracking-widest italic mb-1">Live Retail</p>
                             <p className="text-base sm:text-lg font-black text-slate-900 leading-none whitespace-nowrap">
                               ${pricesLoaded ? formatCurrency(liveRetail) : "--.--"}
                             </p>
