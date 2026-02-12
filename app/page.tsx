@@ -550,88 +550,90 @@ export default function Home() {
           </div>
         </div>
 
-        {/* BOTTOM SECTIONS */}
-        <div className="grid grid-cols-1 gap-8 pt-10">
-          <div className="bg-white p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC]">
-            <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">1. MATERIAL CALCULATION DETAIL</h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 text-left">
-              <div className="space-y-6">
-                <div className="bg-stone-50 p-8 rounded-[2rem] border border-stone-100 text-left overflow-x-auto">
-                  <h3 className="text-xs font-black text-[#A5BEAC] uppercase tracking-widest mb-6">THE LOGIC</h3>
-                  <div className="font-mono text-sm bg-white p-6 rounded-2xl border border-stone-100 text-center shadow-sm min-w-fit">
-                    <p className="text-slate-900 font-bold whitespace-nowrap">Cost = (Spot ÷ 31.1035) × Grams × Purity</p>
-                  </div>
-                </div>
-                <p className="text-xs text-stone-500 leading-relaxed italic px-2">Spot prices are quoted per Troy Ounce. We divide by 31.1035 to get the price per gram, then multiply by the specific metal purity.</p>
-              </div>
-              <div className="bg-stone-50 p-8 rounded-[2rem] border border-stone-100 text-left">
-                <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6">PURITY CONSTANTS:</h3>
-                <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-[10px] font-bold text-stone-400 uppercase tracking-tighter">
-                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>24K Gold</span><span>99.9%</span></div>
-                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>22K Gold</span><span>91.6%</span></div>
-                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>18K Gold</span><span>75.0%</span></div>
-                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>14K Gold</span><span>58.3%</span></div>
-                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>10K Gold</span><span>41.7%</span></div>
-                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>Sterling Silver</span><span>92.5%</span></div>
-                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>Plat 950</span><span>95.0%</span></div>
-                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>Palladium</span><span>95.0%</span></div>
-                </div>
-              </div>
+{/* BOTTOM SECTIONS */}
+<div className="grid grid-cols-1 gap-8 pt-10">
+  <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC]">
+    <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">1. MATERIAL CALCULATION DETAIL</h2>
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 text-left">
+      <div className="space-y-6">
+        <div className="bg-stone-50 p-6 md:p-8 rounded-[2rem] border border-stone-100 text-left">
+          <h3 className="text-xs font-black text-[#A5BEAC] uppercase tracking-widest mb-6">THE LOGIC</h3>
+          <div className="font-mono text-sm bg-white p-6 rounded-2xl border border-stone-100 text-center shadow-sm">
+            {/* Removed min-w-fit and whitespace-nowrap to allow natural wrapping */}
+            <p className="text-slate-900 font-bold break-words">Cost = (Spot ÷ 31.1035) × Grams × Purity</p>
+          </div>
+        </div>
+        <p className="text-xs text-stone-500 leading-relaxed italic px-2">Spot prices are quoted per Troy Ounce. We divide by 31.1035 to get the price per gram, then multiply by the specific metal purity.</p>
+      </div>
+      <div className="bg-stone-50 p-6 md:p-8 rounded-[2rem] border border-stone-100 text-left">
+        <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6">PURITY CONSTANTS:</h3>
+        <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-[10px] font-bold text-stone-400 uppercase tracking-tighter">
+          <div className="flex justify-between border-b border-stone-200 pb-1"><span>24K Gold</span><span>99.9%</span></div>
+          <div className="flex justify-between border-b border-stone-200 pb-1"><span>22K Gold</span><span>91.6%</span></div>
+          <div className="flex justify-between border-b border-stone-200 pb-1"><span>18K Gold</span><span>75.0%</span></div>
+          <div className="flex justify-between border-b border-stone-200 pb-1"><span>14K Gold</span><span>58.3%</span></div>
+          <div className="flex justify-between border-b border-stone-200 pb-1"><span>10K Gold</span><span>41.7%</span></div>
+          <div className="flex justify-between border-b border-stone-200 pb-1"><span>Sterling Silver</span><span>92.5%</span></div>
+          <div className="flex justify-between border-b border-stone-200 pb-1"><span>Plat 950</span><span>95.0%</span></div>
+          <div className="flex justify-between border-b border-stone-200 pb-1"><span>Palladium</span><span>95.0%</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC]">
+    <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">2. PRICE STRATEGY DETAIL</h2>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
+      {/* STRATEGY A */}
+      <div className="p-6 md:p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all flex flex-col justify-between">
+        <div>
+          <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6">STRATEGY A (STANDARD MULTIPLIER)</h3>
+          <div className="space-y-4 mb-8">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-white border border-stone-200 flex items-center justify-center font-black text-xs shrink-0">W</div>
+              <span className="text-xs font-bold text-stone-400">=</span>
+              <span className="text-xs font-bold text-slate-900 break-words">Materials (M) + Labor (L)</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-black text-xs shrink-0">R</div>
+              <span className="text-xs font-bold text-stone-400">=</span>
+              <span className="text-xs font-bold text-slate-900 break-words">Wholesale (W) × {retailMultA}</span>
             </div>
           </div>
+        </div>
+        <div className="pt-4 border-t border-stone-200/60">
+          <p className="text-[11px] text-[#a8a29e] leading-relaxed italic uppercase font-bold tracking-tight">
+            * The standard retail model. Best for production pieces where a 2-3x markup covers overhead, marketing, and business growth.
+          </p>
+        </div>
+      </div>
 
-          <div className="bg-white p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC]">
-            <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">2. PRICE STRATEGY DETAIL</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
-              {/* STRATEGY A */}
-              <div className="p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all flex flex-col justify-between">
-                <div>
-                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6">STRATEGY A (STANDARD MULTIPLIER)</h3>
-                  <div className="space-y-4 mb-8 overflow-x-auto min-w-fit">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-white border border-stone-200 flex items-center justify-center font-black text-xs shrink-0">W</div>
-                      <span className="text-xs font-bold text-stone-400">=</span>
-                      <span className="text-xs font-bold text-slate-900 whitespace-nowrap">Materials (M) + Labor (L)</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-black text-xs shrink-0">R</div>
-                      <span className="text-xs font-bold text-stone-400">=</span>
-                      <span className="text-xs font-bold text-slate-900 whitespace-nowrap">Wholesale (W) × {retailMultA}</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="pt-4 border-t border-stone-200/60">
-                  <p className="text-[11px] text-[#a8a29e] leading-relaxed italic uppercase font-bold tracking-tight">
-                    * The standard retail model. Best for production pieces where a 2-3x markup covers overhead, marketing, and business growth.
-                  </p>
-                </div>
-              </div>
-
-              {/* STRATEGY B */}
-              <div className="p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all flex flex-col justify-between">
-                <div>
-                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6">STRATEGY B (MATERIALS MARKUP)</h3>
-                  <div className="space-y-4 mb-8 overflow-x-auto min-w-fit">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-white border border-stone-200 flex items-center justify-center font-black text-xs shrink-0">W</div>
-                      <span className="text-xs font-bold text-stone-400">=</span>
-                      <span className="text-xs font-bold text-slate-900 whitespace-nowrap">(Materials × {markupB}) + Labor</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-black text-xs shrink-0">R</div>
-                      <span className="text-xs font-bold text-stone-400">=</span>
-                      <span className="text-xs font-bold text-slate-900 whitespace-nowrap">Wholesale (W) × 2</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="pt-4 border-t border-stone-200/60">
-                  <p className="text-[11px] text-[#a8a29e] leading-relaxed italic uppercase font-bold tracking-tight">
-                    * The custom model. Best for high-material-cost work where you markup the metals first by 1.5-1.8X to protect against market volatility.
-                  </p>
-                </div>
-              </div>
+      {/* STRATEGY B */}
+      <div className="p-6 md:p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all flex flex-col justify-between">
+        <div>
+          <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6">STRATEGY B (MATERIALS MARKUP)</h3>
+          <div className="space-y-4 mb-8">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-white border border-stone-200 flex items-center justify-center font-black text-xs shrink-0">W</div>
+              <span className="text-xs font-bold text-stone-400">=</span>
+              <span className="text-xs font-bold text-slate-900 break-words">(Materials × {markupB}) + Labor</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-black text-xs shrink-0">R</div>
+              <span className="text-xs font-bold text-stone-400">=</span>
+              <span className="text-xs font-bold text-slate-900 break-words">Wholesale (W) × 2</span>
             </div>
           </div>
+        </div>
+        <div className="pt-4 border-t border-stone-200/60">
+          <p className="text-[11px] text-[#a8a29e] leading-relaxed italic uppercase font-bold tracking-tight">
+            * The custom model. Best for high-material-cost work where you markup the metals first by 1.5-1.8X to protect against market volatility.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
 
           <div className="flex flex-col items-center justify-center gap-2 py-8 border-t border-stone-200 mt-10">
             <a href="https://bearsilverandstone.com" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
