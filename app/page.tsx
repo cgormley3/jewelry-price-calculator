@@ -450,24 +450,50 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="lg:col-span-7 space-y-4">
-            <div className="bg-white p-6 rounded-[2rem] border-2 shadow-sm border-[#A5BEAC] space-y-4">
+          {/* THE VAULT CONTAINER - REFINED WITH GREEN OUTLINE */}
+          <div className="lg:col-span-7 bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm overflow-hidden flex flex-col h-fit">
+            
+            {/* INVENTORY HEADER (Search & Export) */}
+            <div className="p-6 border-b border-stone-100 bg-white space-y-4">
               <div className="flex justify-between items-center text-left">
-                <div><h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Vault Inventory</h2><p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">{inventory.length} Records Stored</p></div>
-                <div className="text-right"><p className="text-[9px] font-black text-stone-400 uppercase italic">Total Vault Value</p><p className="text-2xl font-black text-slate-900">${pricesLoaded ? totalVaultValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "--.--"}</p></div>
+                <div>
+                  <h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Vault Inventory</h2>
+                  <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">{inventory.length} Records Stored</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[9px] font-black text-stone-400 uppercase italic">Total Vault Value</p>
+                  <p className="text-2xl font-black text-slate-900">${pricesLoaded ? totalVaultValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "--.--"}</p>
+                </div>
               </div>
+              
               <div className="flex flex-col sm:flex-row gap-4">
-                <div className="relative flex-1"><span className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-300 text-xs">🔍</span><input type="text" placeholder="Search items..." className="w-full pl-10 pr-4 py-3 bg-stone-50 border rounded-xl text-xs font-bold outline-none focus:border-[#A5BEAC] transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
+                <div className="relative flex-1">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-300 text-xs">🔍</span>
+                  <input 
+                    type="text" 
+                    placeholder="Search items..." 
+                    className="w-full pl-10 pr-4 py-3 bg-stone-50 border rounded-xl text-xs font-bold outline-none focus:border-[#A5BEAC] transition-all" 
+                    value={searchTerm} 
+                    onChange={(e) => setSearchTerm(e.target.value)} 
+                  />
+                </div>
                 <div className="relative">
                   <button onClick={() => setShowExportMenu(!showExportMenu)} className="w-full sm:w-auto px-6 py-3 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2">Export {showExportMenu ? '▲' : '▼'}</button>
-                  {showExportMenu && (<div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[50] overflow-hidden animate-in fade-in"><button onClick={exportDetailedPDF} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b transition-colors">Export PDF Report</button><button onClick={exportToCSV} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 transition-colors">Export CSV Spreadsheet</button></div>)}
+                  {showExportMenu && (
+                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[50] overflow-hidden animate-in fade-in">
+                      <button onClick={exportDetailedPDF} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b transition-colors">Export PDF Report</button>
+                      <button onClick={exportToCSV} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 transition-colors">Export CSV Spreadsheet</button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* FIXED SCROLL AREA */}
-            <div className="space-y-4 overflow-y-auto max-h-[850px] pr-2 custom-scrollbar overscroll-behavior-contain touch-pan-y">
-              {loading ? <div className="p-20 text-center text-stone-400 font-bold uppercase text-xs tracking-widest animate-pulse">Opening Vault...</div> :
+            {/* SCROLLABLE CARDS AREA - ENCLOSED WITH MOBILE OPTIMIZATION */}
+            <div className="p-4 md:p-6 space-y-4 overflow-y-auto max-h-[850px] custom-scrollbar overscroll-behavior-contain touch-pan-y bg-stone-50/20">
+              {loading ? (
+                <div className="p-20 text-center text-stone-400 font-bold uppercase text-xs tracking-widest animate-pulse">Opening Vault...</div>
+              ) : (
                 filteredInventory.map(item => {
                   const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
                   const labor = item.labor_at_making || 0;
@@ -479,7 +505,7 @@ export default function Home() {
                   return (
                     <div key={item.id} className="bg-white rounded-[2rem] border border-stone-100 shadow-sm overflow-hidden transition-all hover:shadow-md">
                       <div className="p-5 md:p-6 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 text-left">
-                        <div className="flex-1 w-full">
+                        <div className="flex-1 w-full text-left">
                           <div className="flex items-start gap-2 mb-1">
                             <p className="text-xl font-black text-slate-800 break-words leading-tight uppercase flex-1">{item.name}</p>
                             <span className={`text-[8px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${isUp ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
@@ -547,7 +573,8 @@ export default function Home() {
                       </details>
                     </div>
                   );
-                })}
+                })
+              )}
             </div>
           </div>
         </div>
@@ -585,6 +612,7 @@ export default function Home() {
           <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC]">
             <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">2. PRICE STRATEGY DETAIL</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
+              {/* STRATEGY A */}
               <div className="p-6 md:p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all flex flex-col justify-between">
                 <div>
                   <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6">STRATEGY A (STANDARD MULTIPLIER)</h3>
@@ -608,6 +636,7 @@ export default function Home() {
                 </div>
               </div>
 
+              {/* STRATEGY B */}
               <div className="p-6 md:p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all flex flex-col justify-between">
                 <div>
                   <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6">STRATEGY B (MATERIALS MARKUP)</h3>
