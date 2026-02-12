@@ -4,6 +4,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { supabase } from '../lib/supabase';
 import { Turnstile } from '@marsidev/react-turnstile';
+import InstallPrompt from './InstallPrompt';
 
 const UNIT_TO_GRAMS: { [key: string]: number } = {
   "Grams": 1,
@@ -453,7 +454,7 @@ export default function Home() {
             <div className="bg-white p-6 rounded-[2rem] border-2 shadow-sm border-[#A5BEAC] space-y-4">
               <div className="flex justify-between items-center text-left">
                 <div><h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Vault Inventory</h2><p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">{inventory.length} Records Stored</p></div>
-                <div className="text-right"><p className="text-[9px] font-black text-[#2d4a22] uppercase italic">Total Vault Value</p><p className="text-2xl font-black text-slate-900">${pricesLoaded ? totalVaultValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "--.--"}</p></div>
+                <div className="text-right"><p className="text-[9px] font-black text-stone-400 uppercase italic">Total Vault Value</p><p className="text-2xl font-black text-slate-900">${pricesLoaded ? totalVaultValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "--.--"}</p></div>
               </div>
               <div className="flex flex-col sm:flex-row gap-4">
                 <div className="relative flex-1"><span className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-300 text-xs">🔍</span><input type="text" placeholder="Search items..." className="w-full pl-10 pr-4 py-3 bg-stone-50 border rounded-xl text-xs font-bold outline-none focus:border-[#A5BEAC] transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
@@ -633,7 +634,7 @@ export default function Home() {
               </div>
             </div>
           </div>
-
+          <InstallPrompt />
 
           <div className="flex flex-col items-center justify-center gap-2 py-8 border-t border-stone-200 mt-10">
             <a href="https://bearsilverandstone.com" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
@@ -647,6 +648,7 @@ export default function Home() {
               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900">Bear Silver and Stone</span>
             </a>
           </div>
+
         </div>
       </div>
       <style jsx global>{`
