@@ -281,6 +281,15 @@ export default function Home() {
     if (result.error) alert(result.error.message); else { setShowAuth(false); fetchInventory(); }
   };
 
+  const handleResetPassword = async () => {
+    if (!email) return alert("Please enter your email address first.");
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    if (error) alert(error.message);
+    else alert("Password reset link sent! Check your inbox.");
+  };
+
   const loginWithGoogle = async () => {
     const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
     if (error) alert(error.message);
@@ -344,6 +353,9 @@ export default function Home() {
                     <input type="email" placeholder="Email" className="w-full p-3 border rounded-xl text-sm outline-none focus:border-[#A5BEAC] transition" value={email} onChange={e => setEmail(e.target.value)} required />
                     <input type="password" placeholder="Password" className="w-full p-3 border rounded-xl text-sm outline-none focus:border-[#A5BEAC] transition" value={password} onChange={e => setPassword(e.target.value)} required />
                     <button type="submit" className="w-full bg-[#A5BEAC] text-white py-3 rounded-xl font-black text-xs uppercase hover:bg-slate-900 transition shadow-md">{isSignUp ? 'Create Vault Account' : 'Open The Vault'}</button>
+                    {!isSignUp && (
+                      <button type="button" onClick={handleResetPassword} className="w-full text-center text-[9px] font-black uppercase text-stone-400 hover:text-[#A5BEAC] transition mt-2 tracking-widest">Forgot Password?</button>
+                    )}
                   </form>
                 </div>
               )}
