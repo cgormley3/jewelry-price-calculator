@@ -19,6 +19,8 @@ export default function Home() {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [openEditId, setOpenEditId] = useState<string | null>(null);
 
+  const [hasFetched, setHasFetched] = useState(false);
+  
   const [editingItem, setEditingItem] = useState<any>(null);
   const [manualRetail, setManualRetail] = useState('');
   const [manualWholesale, setManualWholesale] = useState('');
@@ -46,9 +48,8 @@ export default function Home() {
   const [markupB, setMarkupB] = useState(1.8);
 
   const SHOPIFY_PRO_URL = "https://bearsilverandstone.com/products/the-vault-pro";
-  const isPro = user?.user_metadata?.is_pro || false;
 
-  useEffect(() => {
+useEffect(() => {
     async function initSession() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
@@ -57,17 +58,38 @@ export default function Home() {
       } else {
         setUser(session.user);
       }
+
+      // --- SMART PRICE LOCK (5 MINUTE TTL) ---
       try {
-        const res = await fetch('/api/gold-price');
-        const priceData = await res.json();
-        if (priceData.gold) {
-          setPrices(priceData);
-          setTimeout(() => setPricesLoaded(true), 800);
+        const cachedData = sessionStorage.getItem('vault_prices');
+        const cacheTimestamp = sessionStorage.getItem('vault_prices_time');
+        const now = Date.now();
+        const fiveMinutes = 5 * 60 * 1000;
+
+        if (cachedData && cacheTimestamp && (now - Number(cacheTimestamp) < fiveMinutes)) {
+          // Use stable cached price if it's less than 5 mins old
+          setPrices(JSON.parse(cachedData));
+          setPricesLoaded(true);
+        } else {
+          // Cache is expired or missing - pull fresh 83.33 data
+          const res = await fetch('/api/gold-price');
+          const priceData = await res.json();
+          if (priceData.gold) {
+            setPrices(priceData);
+            sessionStorage.setItem('vault_prices', JSON.stringify(priceData));
+            sessionStorage.setItem('vault_prices_time', now.toString());
+            setTimeout(() => setPricesLoaded(true), 800);
+          }
         }
-      } catch (e) { console.error("Price fetch failed", e); }
+      } catch (e) { 
+        console.error("Price fetch failed", e); 
+      }
+      // ---------------------------------------
+
       fetchInventory();
     }
     initSession();
+    
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
       if (session) fetchInventory();
@@ -139,7 +161,6 @@ export default function Home() {
   };
 
   const addToInventory = async () => {
-    if (!isPro && inventory.length >= 5) return alert("Vault Limit Reached (5 items). Upgrade for unlimited space.");
     if (!token || !itemName || metalList.length === 0 || !user) return alert("Missing verification");
     const a = calculateFullBreakdown(metalList, hours, rate, otherCosts);
     const newItem = {
@@ -264,7 +285,6 @@ export default function Home() {
             <div className="flex flex-col items-center leading-none">
               <div className="flex items-center justify-center gap-2 mb-2">
                 <h1 className="text-3xl font-black uppercase italic tracking-[0.1em] text-slate-900 leading-none">THE VAULT</h1>
-                {isPro && <span className="bg-[#A5BEAC] text-white text-[8px] font-black px-2 py-0.5 rounded-full">PRO</span>}
               </div>
               <a href="https://bearsilverandstone.com" target="_blank" rel="noopener noreferrer" className="text-[9px] font-black uppercase tracking-[0.15em] text-stone-400 hover:text-[#A5BEAC] transition-colors">BY BEAR SILVER AND STONE</a>
             </div>
@@ -276,9 +296,7 @@ export default function Home() {
               <div className={`w-2 h-2 rounded-full ${user ? 'bg-[#A5BEAC] animate-pulse' : 'bg-stone-300'}`}></div>
             </div>
             <div className="relative flex gap-2 w-full justify-center md:justify-end">
-              {!isPro && user && !user.is_anonymous && (
                 <button onClick={() => window.open(SHOPIFY_PRO_URL, '_blank')} className="text-[10px] font-black uppercase bg-[#A5BEAC] text-white px-6 py-3 rounded-xl shadow-sm hover:scale-105 transition">Upgrade</button>
-              )}
               {(!user || user.is_anonymous) ? (
                 <button onClick={() => setShowAuth(!showAuth)} className="text-[10px] font-black uppercase bg-slate-900 text-white px-8 py-3 rounded-xl hover:bg-[#A5BEAC] transition shadow-sm">Login / Sign Up</button>
               ) : (
@@ -375,9 +393,9 @@ export default function Home() {
                         <span className="text-[10px] font-black text-[#A5BEAC] uppercase italic whitespace-nowrap">Retail: W ×</span>
                         <input 
                           type="number" 
-                          className="w-12 bg-white border-2 border-[#A5BEAC] text-[#A5BEAC] rounded-xl text-xs font-black py-1.5 text-center outline-none" 
-                          value={retailMultA} 
                           step="0.1"
+                          className="w-12 bg-white border-2 border-[#A5BEAC] rounded-xl text-xs font-black py-1.5 text-center outline-none" 
+                          value={retailMultA} 
                           onChange={(e) => setRetailMultA(Number(e.target.value))} 
                           onClick={(e) => e.stopPropagation()} 
                         />
@@ -405,8 +423,8 @@ export default function Home() {
                         <span>Wholesale: (M ×</span>
                         <input 
                           type="number" 
-                          className="w-12 bg-white border-2 border-[#A5BEAC] rounded-xl text-xs font-black py-1.5 text-center outline-none" 
                           step="0.1"
+                          className="w-12 bg-white border-2 border-[#A5BEAC] rounded-xl text-xs font-black py-1.5 text-center outline-none" 
                           value={markupB} 
                           onChange={(e) => setMarkupB(Number(e.target.value))} 
                           onClick={(e) => e.stopPropagation()} 
@@ -576,7 +594,7 @@ export default function Home() {
                 </div>
                 <div className="pt-4 border-t border-stone-200/60">
                   <p className="text-[10px] text-[#A5BEAC] leading-relaxed italic uppercase font-bold tracking-tight">
-                    * The standard retail model. Best for production pieces where a 2-3x markup covers overhead, marketing, and business growth.
+                    * The standard retail model. Best for production pieces where a 3x markup covers overhead, marketing, and business growth.
                   </p>
                 </div>
               </div>
@@ -600,7 +618,7 @@ export default function Home() {
                 </div>
                 <div className="pt-4 border-t border-stone-200/60">
                   <p className="text-[10px] text-[#A5BEAC] leading-relaxed italic uppercase font-bold tracking-tight">
-                    * The custom model. Best for high-material-cost work where you markup the metals first by 1.5-1.8x to protect against market volatility.
+                    * The custom model. Best for high-material-cost work where you markup the metals first to protect against market volatility.
                   </p>
                 </div>
               </div>
