@@ -634,7 +634,7 @@ export default function Home() {
               </div>
             </div>
           </div>
-          <InstallPrompt />
+
 
           <div className="flex flex-col items-center justify-center gap-2 py-8 border-t border-stone-200 mt-10">
             <a href="https://bearsilverandstone.com" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
@@ -647,8 +647,8 @@ export default function Home() {
               />
               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900">Bear Silver and Stone</span>
             </a>
+            <InstallPrompt />
           </div>
-
         </div>
       </div>
       <style jsx global>{`
