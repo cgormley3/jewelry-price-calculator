@@ -24,6 +24,11 @@ export default function Home() {
   const [manualRetail, setManualRetail] = useState('');
   const [manualWholesale, setManualWholesale] = useState('');
 
+  // States for renaming items
+  const [editingNameId, setEditingNameId] = useState<string | null>(null);
+  const [newNameValue, setNewNameValue] = useState('');
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+
   const [metalList, setMetalList] = useState<{ type: string, weight: number, unit: string, isManual?: boolean, manualPrice?: number }[]>([]);
   const [tempMetal, setTempMetal] = useState('Sterling Silver');
   const [tempWeight, setTempWeight] = useState(0);
@@ -50,8 +55,14 @@ export default function Home() {
   const [newPassword, setNewPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [activeTab, setActiveTab] = useState<'calculator' | 'vault' | 'logic'>('calculator');
+  
+  const [notification, setNotification] = useState<{ 
+    title: string; 
+    message: string; 
+    type?: 'success' | 'error' | 'info' | 'confirm'; 
+    onConfirm?: () => void 
+  } | null>(null);
 
-  // Helper to determine if Turnstile is required
   const isGuest = !user || user.is_anonymous;
 
   const SHOPIFY_PRO_URL = "https://bearsilverandstone.com/products/the-vault-pro";
@@ -172,9 +183,30 @@ export default function Home() {
   };
 
   const deleteInventoryItem = async (id: string, name: string) => {
-    if (window.confirm(`Are you sure you want to permanently delete "${name}"?`)) {
-      const { error } = await supabase.from('inventory').delete().eq('id', id);
-      if (!error) setInventory(inventory.filter(item => item.id !== id));
+    setNotification({
+      title: "Confirm Deletion",
+      message: `Are you sure you want to permanently remove "${name}" from your Vault?`,
+      type: 'confirm',
+      onConfirm: async () => {
+        const { error } = await supabase.from('inventory').delete().eq('id', id);
+        if (!error) {
+          setInventory(inventory.filter(item => item.id !== id));
+          setNotification({ title: "Deleted", message: `"${name}" has been removed.`, type: 'success' });
+        } else {
+          setNotification({ title: "Error", message: "Could not delete item.", type: 'error' });
+        }
+      }
+    });
+  };
+
+  const renameItem = async (id: string) => {
+    if (!newNameValue.trim()) return setEditingNameId(null);
+    const { error } = await supabase.from('inventory').update({ name: newNameValue }).eq('id', id);
+    if (!error) {
+      setInventory(inventory.map(item => item.id === id ? { ...item, name: newNameValue } : item));
+      setEditingNameId(null);
+    } else {
+      setNotification({ title: "Error", message: "Could not rename item.", type: 'error' });
     }
   };
 
@@ -184,25 +216,46 @@ export default function Home() {
   };
 
   const syncToMarket = async (item: any) => {
-    if (!window.confirm(`Sync "${item.name}" to current market prices?`)) return;
-    const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
-    const labor = item.labor_at_making || 0;
-    const liveWholesale = item.strategy === 'A' ? current.wholesaleA + labor : current.wholesaleB;
-    const liveRetail = item.strategy === 'A' ? (current.totalMaterials + labor) * (item.multiplier || 3) : ((current.totalMaterials * (item.markup_b || 1.8)) + labor) * 2;
-    const { error } = await supabase.from('inventory').update({ wholesale: liveWholesale, retail: liveRetail }).eq('id', item.id);
-    if (!error) { fetchInventory(); setOpenEditId(null); }
+    setNotification({
+        title: "Sync Prices",
+        message: `Update "${item.name}" to reflect current market spot prices?`,
+        type: 'confirm',
+        onConfirm: async () => {
+            const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
+            const labor = item.labor_at_making || 0;
+            const liveWholesale = item.strategy === 'A' ? current.wholesaleA + labor : current.wholesaleB;
+            const liveRetail = item.strategy === 'A' ? (current.totalMaterials + labor) * (item.multiplier || 3) : ((current.totalMaterials * (item.markup_b || 1.8)) + labor) * 2;
+            const { error } = await supabase.from('inventory').update({ wholesale: liveWholesale, retail: liveRetail }).eq('id', item.id);
+            if (!error) { 
+              fetchInventory(); 
+              setOpenMenuId(null);
+              setNotification({ title: "Vault Updated", message: `"${item.name}" has been synced to live market prices.`, type: 'success' });
+            }
+        }
+    });
   };
 
   const handleManualPriceSave = async () => {
     if (!editingItem) return;
     const { error } = await supabase.from('inventory').update({ wholesale: Number(manualWholesale), retail: Number(manualRetail) }).eq('id', editingItem.id);
-    if (!error) { fetchInventory(); setEditingItem(null); setOpenEditId(null); }
+    if (!error) { 
+        fetchInventory(); 
+        setEditingItem(null); 
+        setOpenEditId(null);
+        setNotification({ title: "Vault Secured", message: "Manual price updates saved successfully.", type: 'success' });
+    }
   };
 
   const addToInventory = async () => {
-    if (isGuest && !token) return alert("Please complete verification");
-    if (!itemName) return alert("Please provide a name for this item.");
-    if (metalList.length === 0 || !user) return alert("Missing required fields");
+    if (isGuest && !token) {
+        setNotification({ title: "Verification Required", message: "Please complete the human verification to save items as a guest.", type: 'info' });
+        return;
+    }
+    if (!itemName) {
+        setNotification({ title: "Name Required", message: "Please provide a name for this piece to save it to your Vault.", type: 'info' });
+        return;
+    }
+    if (metalList.length === 0 || !user) return;
 
     const a = calculateFullBreakdown(metalList, hours, rate, otherCosts);
     const newItem = {
@@ -211,7 +264,16 @@ export default function Home() {
       strategy: strategy, multiplier: retailMultA, markup_b: markupB, user_id: user.id, notes: ''
     };
     const { data, error } = await supabase.from('inventory').insert([newItem]).select();
-    if (!error && data) { setInventory([data[0], ...inventory]); setItemName(''); setMetalList([]); setHours(''); setRate(''); setOtherCosts(''); setToken(null); }
+    if (!error && data) { 
+        setInventory([data[0], ...inventory]); 
+        setItemName(''); 
+        setMetalList([]); 
+        setHours(''); 
+        setRate(''); 
+        setOtherCosts(''); 
+        setToken(null);
+        setNotification({ title: "Item Saved", message: `"${newItem.name}" is now stored in your Vault.`, type: 'success' });
+    }
   };
 
   const filteredInventory = useMemo(() => {
@@ -289,29 +351,53 @@ export default function Home() {
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    let result = isSignUp ? await supabase.auth.signUp({ email, password, options: { data: { is_converted_from_anonymous: true } } }) : await supabase.auth.signInWithPassword({ email, password });
-    if (result.error) alert(result.error.message); else { setShowAuth(false); setShowPassword(false); fetchInventory(); }
+    let result = isSignUp 
+      ? await supabase.auth.signUp({ email, password, options: { data: { is_converted_from_anonymous: true } } }) 
+      : await supabase.auth.signInWithPassword({ email, password });
+      
+    if (result.error) {
+        setNotification({ title: "Vault Access Error", message: result.error.message, type: 'error' });
+    } else {
+      if (isSignUp) {
+        setShowAuth(false);
+        setNotification({ title: "Check Your Inbox", message: "We've sent a verification link to your email. Please confirm your account to get access to your Vault.", type: 'success' });
+      } else {
+        setShowAuth(false);
+        setShowPassword(false);
+        fetchInventory();
+      }
+    }
   };
 
   const handleResetPassword = async () => {
-    if (!email) return alert("Please enter your email address first.");
+    if (!email) {
+        setNotification({ title: "Email Required", message: "Please enter your email address first so we know where to send the recovery link.", type: 'info' });
+        return;
+    }
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: 'https://vault.bearsilverandstone.com',
     });
-    if (error) alert(error.message);
-    else alert("Password reset link sent! Check your inbox.");
+    if (error) {
+        setNotification({ title: "Recovery Error", message: error.message, type: 'error' });
+    } else {
+        setNotification({ title: "Link Sent", message: "Password reset link sent! Check your inbox to get back into The Vault.", type: 'success' });
+    }
   };
 
   const handleUpdatePassword = async () => {
-    if (newPassword.length < 6) return alert("Password must be at least 6 characters.");
+    if (newPassword.length < 6) {
+        setNotification({ title: "Security Alert", message: "Password must be at least 6 characters for Vault security.", type: 'error' });
+        return;
+    }
     const { error } = await supabase.auth.updateUser({ password: newPassword });
-    if (error) alert(error.message);
-    else {
-      alert("Your password was updated successfully. Vault Access Restored!");
+    if (error) {
+        setNotification({ title: "Security Error", message: error.message, type: 'error' });
+    } else {
       setShowResetModal(false);
       setShowPassword(false);
       setNewPassword('');
       window.location.hash = "";
+      setNotification({ title: "Access Restored", message: "Your master password has been updated successfully. Vault Access Restored!", type: 'success' });
     }
   };
 
@@ -320,7 +406,7 @@ export default function Home() {
       provider: 'google',
       options: { redirectTo: 'https://vault.bearsilverandstone.com' }
     });
-    if (error) alert(error.message);
+    if (error) setNotification({ title: "Google Access Error", message: error.message, type: 'error' });
   };
 
   return (
@@ -372,6 +458,42 @@ export default function Home() {
             >
               Update Vault Access
             </button>
+          </div>
+        </div>
+      )}
+
+      {notification && (
+        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[400] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] border-2 border-[#A5BEAC] p-10 space-y-6 shadow-2xl animate-in zoom-in-95 text-center">
+            <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-2 ${
+                notification.type === 'error' ? 'bg-red-50 text-red-500' : 
+                notification.type === 'info' ? 'bg-blue-50 text-blue-500' : 
+                notification.type === 'confirm' ? 'bg-amber-50 text-amber-500' :
+                'bg-[#A5BEAC]/10 text-[#A5BEAC]'
+            }`}>
+              <span className="text-2xl">
+                {notification.type === 'error' ? '⚠️' : notification.type === 'info' ? 'ℹ️' : notification.type === 'confirm' ? '❓' : '✨'}
+              </span>
+            </div>
+            <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900 leading-tight">{notification.title}</h3>
+            <p className="text-xs font-bold text-stone-500 uppercase tracking-wide leading-relaxed">
+              {notification.message}
+            </p>
+            <div className="flex gap-3">
+              {notification.type === 'confirm' ? (
+                <>
+                  <button onClick={() => setNotification(null)} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
+                  <button onClick={() => { notification.onConfirm?.(); setNotification(null); }} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition shadow-lg">Confirm</button>
+                </>
+              ) : (
+                <button
+                  onClick={() => setNotification(null)}
+                  className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-[#A5BEAC] transition-all shadow-lg"
+                >
+                  Understood
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -441,7 +563,7 @@ export default function Home() {
         </div>
 
         {/* MARKET TICKER */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 px-2 mb-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 px-2 mb-2 md:mb-6">
           {['gold', 'silver', 'platinum', 'palladium'].map((name) => (
             <div key={name} className="bg-white p-4 rounded-xl border-l-4 border-[#A5BEAC] shadow-sm text-center lg:text-left">
               <p className="text-[10px] font-black uppercase text-stone-400">{name}</p>
@@ -521,14 +643,8 @@ export default function Home() {
                     className={`group flex flex-col sm:flex-row sm:items-center sm:justify-between p-5 rounded-[2rem] border-2 transition-all ${strategy === 'A' ? 'border-[#A5BEAC] bg-stone-50 shadow-md' : 'border-stone-100 bg-white hover:border-stone-200'}`}
                   >
                     <div className="text-left mb-4 sm:mb-0">
-                      <div className="mb-1">
-                        <p className="text-[8px] font-black text-stone-400 uppercase tracking-widest">Wholesale A</p>
-                        <p className="text-lg font-bold text-[slate-500]">${calculateFullBreakdown(metalList, hours, rate, otherCosts).wholesaleA.toFixed(2)}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter mb-1">Retail A</p>
-                        <p className="text-3xl font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts).retailA.toFixed(2)}</p>
-                      </div>
+                      <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter mb-1">Retail A</p>
+                      <p className="text-3xl font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts).retailA.toFixed(2)}</p>
                     </div>
                     <div className="flex flex-col items-start sm:items-end">
                       <div className="flex items-center gap-1 text-[#a8a29e] italic font-black text-[10px] uppercase whitespace-nowrap">
@@ -553,14 +669,8 @@ export default function Home() {
                     className={`group relative flex flex-col sm:flex-row sm:items-center sm:justify-between p-5 rounded-[2rem] border-2 transition-all ${strategy === 'B' ? 'border-[#A5BEAC] bg-stone-50 shadow-md' : 'border-stone-100 bg-white hover:border-stone-200'}`}
                   >
                     <div className="text-left mb-4 sm:mb-0">
-                      <div className="mb-1">
-                        <p className="text-[8px] font-black text-stone-400 uppercase tracking-widest">Wholesale B</p>
-                        <p className="text-lg font-bold text-[#8a8480]]">${calculateFullBreakdown(metalList, hours, rate, otherCosts).wholesaleB.toFixed(2)}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter mb-1">Retail B</p>
-                        <p className="text-3xl font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts).retailB.toFixed(2)}</p>
-                      </div>
+                      <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter mb-1">Retail B</p>
+                      <p className="text-3xl font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts).retailB.toFixed(2)}</p>
                     </div>
                     <div className="flex flex-col items-start sm:items-end">
                       <div className="flex items-center gap-1 text-[#a8a29e] italic font-black text-[10px] uppercase whitespace-nowrap">
@@ -626,8 +736,8 @@ export default function Home() {
                   <button onClick={() => setShowExportMenu(!showExportMenu)} className="w-full sm:w-auto px-6 py-3 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2">Export {showExportMenu ? '▲' : '▼'}</button>
                   {showExportMenu && (
                     <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[50] overflow-hidden animate-in fade-in">
-                      <button onClick={exportDetailedPDF} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b transition-colors">Export PDF Report</button>
-                      <button onClick={exportToCSV} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 transition-colors">Export CSV Spreadsheet</button>
+                      <button onClick={() => { exportDetailedPDF(); setShowExportMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b transition-colors">Export PDF Report</button>
+                      <button onClick={() => { exportToCSV(); setShowExportMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 transition-colors">Export CSV Spreadsheet</button>
                     </div>
                   )}
                 </div>
@@ -656,29 +766,98 @@ export default function Home() {
                   return (
                     <div key={item.id} className="bg-white rounded-[2rem] border border-stone-100 shadow-sm overflow-hidden transition-all hover:shadow-md">
                       <div className="p-5 md:p-6 flex flex-col gap-5">
-                        <div className="flex justify-between items-start gap-4 text-left">
-                          <div className="flex-1 min-w-0">
-                            <h3 className="text-lg font-black text-slate-900 leading-tight uppercase tracking-tight truncate">
-                              {item.name}
-                            </h3>
-                            <div className="flex items-center gap-2 mt-1">
-                              <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-md border ${isUp ? 'bg-green-50 text-green-700 border-green-100' : 'bg-red-50 text-red-700 border-red-100'}`}>
-                                {isUp ? '▲' : '▼'} ${formatCurrency(Math.abs(priceDiff))}
-                              </span>
-                              <p className="text-[9px] text-stone-400 font-bold uppercase tracking-widest text-left">
-                                {new Date(item.created_at).toLocaleDateString()}
-                              </p>
+                        <div className="flex flex-col gap-1">
+                          {/* HEADER WRAPPER - FLEX NOWRAP KEEPS ARROW ON THE RIGHT */}
+                          <div className="flex items-start flex-nowrap justify-between gap-3 relative">
+                            <div className="flex-1 min-w-0">
+                                {editingNameId === item.id ? (
+                                <div className="w-full animate-in fade-in slide-in-from-left-1 flex items-center gap-2">
+                                    <input 
+                                    type="text" 
+                                    className="flex-1 bg-stone-50 border-2 border-[#A5BEAC] rounded-xl px-4 py-2 text-sm font-black uppercase outline-none shadow-inner"
+                                    value={newNameValue}
+                                    autoFocus
+                                    onChange={(e) => setNewNameValue(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if(e.key === 'Enter') renameItem(item.id);
+                                        if(e.key === 'Escape') setEditingNameId(null);
+                                    }}
+                                    />
+                                    <button onClick={() => renameItem(item.id)} className="w-10 h-10 flex items-center justify-center bg-[#A5BEAC] text-white rounded-xl font-black text-lg shadow-sm hover:bg-slate-900 transition-colors shrink-0">✓</button>
+                                </div>
+                                ) : (
+                                <div className="flex items-start flex-nowrap gap-2 w-full">
+                                    {/* Name Column - Allowed to Wrap */}
+                                    <h3 className="text-lg font-black text-slate-900 leading-tight uppercase tracking-tight break-words flex-1">
+                                        {item.name}
+                                    </h3>
+                                    {/* Menu Trigger Column - Locked in Place */}
+                                    <div className="relative shrink-0 pt-0.5">
+                                        <button 
+                                            onClick={() => setOpenMenuId(openMenuId === item.id ? null : item.id)}
+                                            className="w-8 h-8 flex items-center justify-center rounded-full bg-stone-50 text-[#A5BEAC] border border-stone-100 hover:bg-stone-100 transition-all shadow-sm"
+                                        >
+                                            <span className="text-[10px] transform transition-transform duration-200" style={{ transform: openMenuId === item.id ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
+                                        </button>
+                                        
+                                        {openMenuId === item.id && (
+                                            <div className="absolute top-full left-auto right-0 mt-2 w-48 bg-white border border-[#A5BEAC] rounded-2xl shadow-xl z-[150] overflow-hidden animate-in fade-in slide-in-from-top-1">
+                                            <button 
+                                                onClick={() => {
+                                                setEditingNameId(item.id);
+                                                setNewNameValue(item.name);
+                                                setOpenMenuId(null);
+                                                }}
+                                                className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b transition-colors flex items-center gap-2"
+                                            >
+                                                <span>✎</span> Edit Name
+                                            </button>
+                                            <button 
+                                                onClick={() => syncToMarket(item)}
+                                                className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b transition-colors flex items-center gap-2"
+                                            >
+                                                <span>🔄</span> Sync to Market
+                                            </button>
+                                            <button 
+                                                onClick={() => {
+                                                setEditingItem(item);
+                                                setManualRetail(item.retail.toFixed(2));
+                                                setManualWholesale(item.wholesale.toFixed(2));
+                                                setOpenMenuId(null);
+                                                }}
+                                                className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b transition-colors flex items-center gap-2"
+                                            >
+                                                <span>⚙️</span> Manual Price Edit
+                                            </button>
+                                            <button 
+                                                onClick={() => {
+                                                deleteInventoryItem(item.id, item.name);
+                                                setOpenMenuId(null);
+                                                }}
+                                                className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-red-500 hover:bg-red-50 transition-colors flex items-center gap-2"
+                                            >
+                                                <span>🗑️</span> Remove from Vault
+                                            </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                                )}
+                                
+                                {/* Info Line (Price Diff & Date) */}
+                                <div className="flex items-center gap-2 mt-2">
+                                    <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-md border ${isUp ? 'bg-green-50 text-green-700 border-green-100' : 'bg-red-50 text-red-700 border-red-100'}`}>
+                                        {isUp ? '▲' : '▼'} ${formatCurrency(Math.abs(priceDiff))}
+                                    </span>
+                                    <p className="text-[9px] text-stone-400 font-bold uppercase tracking-widest text-left">
+                                        {new Date(item.created_at).toLocaleDateString()}
+                                    </p>
+                                </div>
                             </div>
                           </div>
-                          <button
-                            onClick={() => deleteInventoryItem(item.id, item.name)}
-                            className="text-[9px] font-black text-stone-300 uppercase hover:text-red-500 transition-colors shrink-0"
-                          >
-                            [ Remove ]
-                          </button>
                         </div>
 
-                        <div className="grid grid-cols-2 sm:grid-cols-4 border border-stone-100 rounded-2xl overflow-hidden">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 border border-stone-100 rounded-2xl overflow-hidden mt-1 relative z-0">
                           <div className="p-3 border-b sm:border-b-0 border-r border-stone-100 bg-stone-50/30 text-left">
                             <p className="text-[7px] font-black text-stone-400 uppercase tracking-widest mb-1">Saved Wholesale</p>
                             <p className="text-xs font-bold text-stone-500 whitespace-nowrap">${formatCurrency(Number(item.wholesale))}</p>
@@ -703,7 +882,7 @@ export default function Home() {
                       </div>
 
                       <details className="group border-t border-stone-50 text-left">
-                        <summary className="list-none cursor-pointer py-2 text-center text-[8px] font-black uppercase tracking-[0.3em] text-stone-300 hover:text-[#A5BEAC] transition-colors">View Breakdown & Edit Card</summary>
+                        <summary className="list-none cursor-pointer py-2 text-center text-[8px] font-black uppercase tracking-[0.3em] text-stone-300 hover:text-[#A5BEAC] transition-colors">View Breakdown & Notes</summary>
                         <div className="p-5 md:p-6 bg-stone-50/50 space-y-6">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
                             <div className="space-y-3">
@@ -729,19 +908,8 @@ export default function Home() {
                                 </div>
                                 <div className="bg-white p-3.5 rounded-xl border border-stone-100 shadow-sm">
                                   <p className="text-[8px] font-black text-stone-400 uppercase mb-1">Labor Cost</p>
-                                  <p className="text-xs font-black text-slate-700">${Number(labor).toFixed(2)}</p>
+                                  <p className="text-xs font-black text-slate-700">${Number(item.labor_at_making || 0).toFixed(2)}</p>
                                 </div>
-                              </div>
-                              <div className="relative">
-                                <button onClick={() => setOpenEditId(openEditId === item.id ? null : item.id)} className="w-full py-3 bg-[#A5BEAC] text-white rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-slate-900 transition-all shadow-sm">
-                                  Edit Prices {openEditId === item.id ? '▲' : '▼'}
-                                </button>
-                                {openEditId === item.id && (
-                                  <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-[#A5BEAC] rounded-xl shadow-xl z-20 overflow-hidden animate-in fade-in slide-in-from-top-1">
-                                    <button onClick={() => syncToMarket(item)} className="w-full py-4 px-4 text-left text-[9px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b transition-colors">Sync to Market</button>
-                                    <button onClick={() => { setEditingItem(item); setManualRetail(item.retail.toFixed(2)); setManualWholesale(item.wholesale.toFixed(2)); }} className="w-full py-4 px-4 text-left text-[9px] font-black uppercase text-slate-700 hover:bg-stone-50 transition-colors">Manual Edit</button>
-                                  </div>
-                                )}
                               </div>
                             </div>
                           </div>
