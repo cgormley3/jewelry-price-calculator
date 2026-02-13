@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { supabase } from '../lib/supabase';
@@ -19,7 +19,7 @@ export default function Home() {
   const [itemName, setItemName] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   
-  // NEW: Combined Menu State (Replaces showExportMenu and showBatchMenu)
+  // Menus
   const [showVaultMenu, setShowVaultMenu] = useState(false);
   
   // Modals
@@ -29,6 +29,10 @@ export default function Home() {
   const [recalcItem, setRecalcItem] = useState<any>(null);
   const [showResetModal, setShowResetModal] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
+  
+  // PDF Export Options Modal
+  const [showPDFOptions, setShowPDFOptions] = useState(false);
+  const [includeLiveInPDF, setIncludeLiveInPDF] = useState(true);
 
   // Form States
   const [manualRetail, setManualRetail] = useState('');
@@ -65,8 +69,18 @@ export default function Home() {
   const [showPassword, setShowPassword] = useState(false);
   const [activeTab, setActiveTab] = useState<'calculator' | 'vault' | 'logic'>('calculator');
    
-  // NEW: Image Upload State
+  // Image Upload & Crop State
   const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [cropImage, setCropImage] = useState<string | null>(null);
+  const [cropItemId, setCropItemId] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [minZoom, setMinZoom] = useState(0.1); // NEW: Dynamic minimum zoom
+  const [rotation, setRotation] = useState(0); // NEW: Rotation state
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
 
   const [notification, setNotification] = useState<{ 
     title: string; 
@@ -187,6 +201,102 @@ export default function Home() {
     setLoading(false);
   }
 
+  // --- Image Crop Handlers ---
+  const onFileSelect = (event: any, itemId: string) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+       setNotification({ title: "File Too Large", message: "Please select an image under 5MB.", type: 'error' });
+       return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+        setCropImage(reader.result as string);
+        setCropItemId(itemId);
+        // Reset defaults
+        setZoom(1); 
+        setRotation(0);
+        setOffset({ x: 0, y: 0 });
+        setOpenMenuId(null);
+    };
+    reader.readAsDataURL(file);
+    event.target.value = '';
+  };
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+      setIsDragging(true);
+      setDragStart({ x: e.clientX - offset.x, y: e.clientY - offset.y });
+  };
+  
+  const handlePointerMove = (e: React.PointerEvent) => {
+      if (!isDragging) return;
+      setOffset({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
+  };
+  
+  const handlePointerUp = () => setIsDragging(false);
+
+  const performCropAndUpload = async () => {
+      if (!canvasRef.current || !imageRef.current || !cropItemId) return;
+      
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const size = 256;
+      canvas.width = size;
+      canvas.height = size;
+      
+      const img = imageRef.current;
+      
+      ctx.clearRect(0,0,size,size);
+      ctx.save();
+      
+      // 1. Center of canvas
+      ctx.translate(size / 2, size / 2);
+      
+      // 2. Circular Clipping
+      ctx.beginPath();
+      ctx.arc(0, 0, size / 2, 0, Math.PI * 2);
+      ctx.clip();
+      
+      // 3. User Interaction Transforms
+      // Apply offset (pan)
+      ctx.translate(offset.x, offset.y);
+      // Apply rotation (user choice)
+      ctx.rotate((rotation * Math.PI) / 180);
+      // Apply Zoom
+      ctx.scale(zoom, zoom);
+      
+      // 4. Draw image centered on its own origin
+      ctx.translate(-img.naturalWidth / 2, -img.naturalHeight / 2);
+      ctx.drawImage(img, 0, 0);
+      
+      ctx.restore();
+
+      canvas.toBlob(async (blob) => {
+          if (!blob) return;
+          setUploadingId(cropItemId);
+          setCropImage(null); 
+          
+          const fileName = `${user.id}/${cropItemId}-${Date.now()}.png`;
+          const { error: uploadError } = await supabase.storage.from('product-images').upload(fileName, blob);
+          
+          if (uploadError) {
+             setNotification({ title: "Upload Failed", message: "Could not upload cropped image.", type: 'error' });
+          } else {
+             const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(fileName);
+             const { error: dbError } = await supabase.from('inventory').update({ image_url: publicUrl }).eq('id', cropItemId);
+             
+             if (!dbError) {
+                 setInventory(inventory.map(item => item.id === cropItemId ? { ...item, image_url: publicUrl } : item));
+                 setNotification({ title: "Image Updated", message: "New photo saved successfully.", type: 'success' });
+             }
+          }
+          setUploadingId(null);
+          setCropItemId(null);
+      }, 'image/png');
+  };
+
   const addMetalToPiece = () => {
     if (tempWeight <= 0) return;
     let currentSpot = 0;
@@ -233,43 +343,6 @@ export default function Home() {
     } else {
       setNotification({ title: "Error", message: "Could not rename item.", type: 'error' });
     }
-  };
-
-  // NEW: Image Upload Logic
-  const handleImageUpload = async (event: any, itemId: string) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    // Optional: Add size check (e.g., 5MB limit)
-    if (file.size > 5 * 1024 * 1024) {
-       setNotification({ title: "File Too Large", message: "Please select an image under 5MB.", type: 'error' });
-       return;
-    }
-
-    setUploadingId(itemId);
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${user.id}/${itemId}-${Date.now()}.${fileExt}`;
-
-    // Upload to Supabase Storage (Bucket: 'product-images')
-    const { error: uploadError } = await supabase.storage.from('product-images').upload(fileName, file);
-
-    if (uploadError) {
-        setNotification({ title: "Upload Failed", message: "Could not upload image.", type: 'error' });
-    } else {
-        // Get Public URL
-        const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(fileName);
-        
-        // Save URL to Inventory Table
-        const { error: dbError } = await supabase.from('inventory').update({ image_url: publicUrl }).eq('id', itemId);
-        
-        if (!dbError) {
-             // Update local state without fetching all
-             setInventory(inventory.map(item => item.id === itemId ? { ...item, image_url: publicUrl } : item));
-             setNotification({ title: "Image Added", message: "Product card updated successfully.", type: 'success' });
-             setOpenMenuId(null); // Close menu
-        }
-    }
-    setUploadingId(null);
   };
 
   const saveNote = async (id: string, newNote: string) => {
@@ -519,26 +592,15 @@ export default function Home() {
     }
   };
 
-  // MODIFIED: Search logic now includes Notes, Strategy, and Date
   const filteredInventory = useMemo(() => {
     const lowerTerm = searchTerm.toLowerCase();
     return inventory.filter(item => {
-        // 1. Name Check
         if (item.name.toLowerCase().includes(lowerTerm)) return true;
-        
-        // 2. Metals Check
         if (item.metals.some((m: any) => m.type.toLowerCase().includes(lowerTerm))) return true;
-        
-        // 3. Notes Check (safe navigation)
         if (item.notes && item.notes.toLowerCase().includes(lowerTerm)) return true;
-        
-        // 4. Strategy Check (safe navigation)
         if (item.strategy && item.strategy.toLowerCase().includes(lowerTerm)) return true;
-
-        // 5. Date Created Check
         const dateStr = new Date(item.created_at).toLocaleDateString();
         if (dateStr.includes(searchTerm)) return true;
-
         return false;
     });
   }, [inventory, searchTerm]);
@@ -553,7 +615,7 @@ export default function Home() {
   }, [inventory, prices, calculateFullBreakdown]);
 
   const exportToCSV = () => {
-    const headers = ["Item Name", "Live Retail", "Live Wholesale", "Saved Retail", "Saved Wholesale", "Labor Hours", "Labor Cost", "Materials Cost", "Other Costs", "Notes", "Date Created", "Strategy", "Metals"];
+    const headers = ["Item Name", "Live Retail", "Live Wholesale", "Saved Retail", "Saved Wholesale", "Labor Hours", "Labor Cost", "Materials Cost", "Other Costs", "Notes", "Date Created", "Strategy", "Metals", "Image URL"];
     const rows = filteredInventory.map(item => {
       const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
       const labor = item.labor_at_making || 0;
@@ -573,7 +635,8 @@ export default function Home() {
           `"${item.notes?.replace(/"/g, '""') || ''}"`, 
           new Date(item.created_at).toLocaleDateString(), 
           item.strategy, 
-          `"${metalsStr}"`
+          `"${metalsStr}"`,
+          `"${item.image_url || ''}"`
       ];
     });
     const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
@@ -583,49 +646,109 @@ export default function Home() {
     document.body.appendChild(link); link.click(); setShowVaultMenu(false);
   };
 
-  const exportDetailedPDF = () => {
+  const getImageData = async (url: string): Promise<string | null> => {
+      try {
+          const res = await fetch(url);
+          const blob = await res.blob();
+          return new Promise((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.readAsDataURL(blob);
+          });
+      } catch (e) { return null; }
+  };
+
+  const exportDetailedPDF = async () => {
+    setLoading(true);
+    setShowPDFOptions(false); 
+
     const doc = new jsPDF();
     doc.setFontSize(22); doc.setTextColor(45, 74, 34); doc.text('THE VAULT INVENTORY REPORT', 14, 20);
     doc.setFontSize(9); doc.setTextColor(100, 100, 100); doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 26);
-    doc.text(`Total Vault live Market Value: $${totalVaultValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, 14, 31);
+    
+    if (includeLiveInPDF) {
+        doc.text(`Total Vault live Market Value: $${totalVaultValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, 14, 31);
+    }
+
     let currentY = 40;
-    filteredInventory.forEach((item, index) => {
+
+    for (const item of filteredInventory) {
       if (currentY > 230) { doc.addPage(); currentY = 20; }
       const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
       const labor = item.labor_at_making || 0;
       const liveWholesale = item.strategy === 'A' ? current.wholesaleA + labor : current.wholesaleB;
       const liveRetail = item.strategy === 'A' ? (current.totalMaterials + labor) * (item.multiplier || 3) : ((current.totalMaterials * (item.markup_b || 1.8)) + labor) * 2;
 
-      doc.setFont("helvetica", "bold"); doc.setFontSize(14); doc.setTextColor(0, 0, 0); doc.text(`${item.name.toUpperCase()}`, 14, currentY);
+      let titleX = 14;
+      if (item.image_url) {
+          const imgData = await getImageData(item.image_url);
+          if (imgData) {
+              // NEW: PDF Circular Clip
+              doc.saveGraphicsState();
+              doc.setDrawColor(255, 255, 255);
+              // Draw image
+              doc.addImage(imgData, 'PNG', 14, currentY, 20, 20);
+              
+              // Draw a thick white circle border to visually "clip" any edges if square
+              // Note: True clipping is complex in basic jsPDF, masking with a white border is the stable cross-client hack
+              doc.setLineWidth(1);
+              doc.circle(24, currentY + 10, 10, 'S'); 
+              doc.restoreGraphicsState();
+              
+              titleX = 40; 
+          }
+      }
+
+      doc.setFont("helvetica", "bold"); doc.setFontSize(14); doc.setTextColor(0, 0, 0); doc.text(`${item.name.toUpperCase()}`, titleX, currentY + 6);
       doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(150, 150, 150);
-      doc.text(`Strategy: ${item.strategy} | Saved: ${new Date(item.created_at).toLocaleDateString()}`, 14, currentY + 5);
+      doc.text(`Strategy: ${item.strategy} | Saved: ${new Date(item.created_at).toLocaleDateString()}`, titleX, currentY + 11);
+
+      const tableHead = includeLiveInPDF 
+          ? [['Financial Metric', 'Saved (Original)', 'Live (Current Market)']]
+          : [['Financial Metric', 'Saved (Original)']];
+      
+      const tableBody = [];
+      const retailRow: any[] = ['Retail Price', `$${Number(item.retail).toFixed(2)}`];
+      if (includeLiveInPDF) retailRow.push({ content: `$${liveRetail.toFixed(2)}`, styles: { fontStyle: 'bold', textColor: [0, 0, 0] } });
+      tableBody.push(retailRow);
+
+      const wholesaleRow: any[] = ['Wholesale Cost', `$${Number(item.wholesale).toFixed(2)}`];
+      if (includeLiveInPDF) wholesaleRow.push({ content: `$${liveWholesale.toFixed(2)}`, styles: { textColor: [0, 0, 0] } });
+      tableBody.push(wholesaleRow);
 
       autoTable(doc, {
-        startY: currentY + 8, head: [['Financial Metric', 'Saved (Original)', 'Live (Current Market)']],
-        body: [['Retail Price', `$${Number(item.retail).toFixed(2)}`, { content: `$${liveRetail.toFixed(2)}`, styles: { fontStyle: 'bold', textColor: [0, 0, 0] } }], ['Wholesale Cost', `$${Number(item.wholesale).toFixed(2)}`, { content: `$${liveWholesale.toFixed(2)}`, styles: { textColor: [0, 0, 0] } }]],
+        startY: currentY + 14, 
+        head: tableHead,
+        body: tableBody,
         theme: 'grid', headStyles: { fillColor: [165, 190, 172], textColor: 255, fontSize: 8 },
-        styles: { fontSize: 8, cellPadding: 2 }, margin: { left: 14 }, tableWidth: 120
+        styles: { fontSize: 8, cellPadding: 2 }, margin: { left: 14 }, tableWidth: includeLiveInPDF ? 120 : 80
       });
 
       const breakdownLines = item.metals.map((m: any) => `${m.weight}${m.unit} ${m.type}`);
       if (item.other_costs_at_making > 0) breakdownLines.push(`Stones/Other: $${Number(item.other_costs_at_making).toFixed(2)}`);
-      
       if (labor > 0) breakdownLines.push(`Labor Cost (${item.hours || 0}h): $${Number(labor).toFixed(2)}`);
       breakdownLines.push(`Materials Total: $${(Number(item.materials_at_making) + Number(item.other_costs_at_making)).toFixed(2)}`);
 
-      doc.setFontSize(8); doc.setTextColor(80, 80, 80); doc.setFont("helvetica", "bold"); doc.text("BREAKDOWN:", 140, currentY + 12);
+      doc.setFontSize(8); doc.setTextColor(80, 80, 80); doc.setFont("helvetica", "bold"); doc.text("BREAKDOWN:", 140, currentY + 18);
       doc.setFont("helvetica", "normal");
-      breakdownLines.forEach((line: string, i: number) => doc.text(line, 140, currentY + 17 + (i * 4)));
+      breakdownLines.forEach((line: string, i: number) => doc.text(line, 140, currentY + 23 + (i * 4)));
+
+      let nextY = (doc as any).lastAutoTable.finalY + 6;
 
       if (item.notes) {
-        doc.setFont("helvetica", "bold"); doc.text("NOTES:", 14, (doc as any).lastAutoTable.finalY + 6);
+        doc.setFont("helvetica", "bold"); doc.text("NOTES:", 14, nextY);
         doc.setFont("helvetica", "italic"); doc.setTextColor(100, 100, 100);
-        doc.text(item.notes, 14, (doc as any).lastAutoTable.finalY + 10, { maxWidth: 120 });
-        currentY = Math.max((doc as any).lastAutoTable.finalY + 20, currentY + 25 + (breakdownLines.length * 4));
-      } else { currentY = Math.max((doc as any).lastAutoTable.finalY + 12, currentY + 25 + (breakdownLines.length * 4)); }
-      doc.setDrawColor(220); doc.line(14, currentY - 4, 196, currentY - 4);
-    });
-    doc.save(`Vault_Report.pdf`); setShowVaultMenu(false);
+        doc.text(item.notes, 14, nextY + 4, { maxWidth: 120 });
+        nextY += 14; 
+      }
+
+      currentY = Math.max(nextY + 10, currentY + 30 + (breakdownLines.length * 4));
+      doc.setDrawColor(220); doc.line(14, currentY - 5, 196, currentY - 5);
+    }
+
+    doc.save(`Vault_Report.pdf`); 
+    setLoading(false);
+    setShowVaultMenu(false);
   };
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -704,6 +827,102 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-stone-50 p-4 md:p-10 text-slate-900 font-sans text-left relative">
+      
+      {/* NEW: Image Adjuster Modal */}
+      {cropImage && (
+          <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[500] flex items-center justify-center p-4 animate-in fade-in">
+              <div className="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl space-y-4">
+                  <h3 className="text-lg font-black uppercase text-center text-slate-900">Adjust Photo</h3>
+                  
+                  {/* Cropper Container */}
+                  <div 
+                    className="relative w-64 h-64 mx-auto rounded-full overflow-hidden border-4 border-[#A5BEAC] shadow-inner bg-stone-100 touch-none"
+                    onPointerDown={handlePointerDown}
+                    onPointerMove={handlePointerMove}
+                    onPointerUp={handlePointerUp}
+                    onPointerLeave={handlePointerUp}
+                  >
+                      <img 
+                        ref={imageRef}
+                        src={cropImage} 
+                        alt="Crop"
+                        className="absolute max-w-none"
+                        style={{ 
+                            transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom}) rotate(${rotation}deg)`,
+                            left: '50%', 
+                            top: '50%',
+                            marginLeft: imageRef.current ? -imageRef.current.naturalWidth/2 : 0,
+                            marginTop: imageRef.current ? -imageRef.current.naturalHeight/2 : 0,
+                            opacity: imageRef.current ? 1 : 0
+                        }}
+                        onLoad={(e) => {
+                           const img = e.target as HTMLImageElement;
+                           img.style.marginLeft = `-${img.naturalWidth / 2}px`;
+                           img.style.marginTop = `-${img.naturalHeight / 2}px`;
+                           img.style.opacity = '1';
+                           
+                           // NEW: Calculate perfect fit scale
+                           const fitScale = Math.max(256 / img.naturalWidth, 256 / img.naturalHeight);
+                           setMinZoom(fitScale * 0.8); // Allow slightly smaller to see edges
+                           setZoom(fitScale); 
+                        }}
+                        draggable={false}
+                      />
+                  </div>
+                  
+                  {/* Controls */}
+                  <div className="space-y-4">
+                      <div className="flex justify-between items-center text-xs font-bold text-stone-400 uppercase">
+                          <span>Zoom</span>
+                          <button onClick={() => setRotation(r => (r + 90) % 360)} className="text-[#A5BEAC] hover:text-slate-900 transition-colors">⟳ Rotate</button>
+                      </div>
+                      <input 
+                        type="range" 
+                        min={minZoom}
+                        max={minZoom * 4} 
+                        step="0.01" 
+                        value={zoom} 
+                        onChange={(e) => setZoom(parseFloat(e.target.value))}
+                        className="w-full h-2 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-[#A5BEAC]"
+                      />
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                      <button onClick={() => setCropImage(null)} className="flex-1 py-3 bg-stone-100 rounded-xl font-bold text-xs uppercase hover:bg-stone-200 transition">Cancel</button>
+                      <button onClick={performCropAndUpload} className="flex-1 py-3 bg-slate-900 text-white rounded-xl font-bold text-xs uppercase hover:bg-[#A5BEAC] transition shadow-md">
+                          {uploadingId ? 'Saving...' : 'Save Photo'}
+                      </button>
+                  </div>
+                  
+                  <canvas ref={canvasRef} className="hidden" />
+              </div>
+          </div>
+      )}
+
+      {/* NEW: PDF Options Modal */}
+      {showPDFOptions && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
+              <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-6">
+                  <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">PDF Options</h3>
+                  
+                  <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setIncludeLiveInPDF(!includeLiveInPDF)}>
+                      <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${includeLiveInPDF ? 'bg-[#A5BEAC] border-[#A5BEAC] text-white' : 'bg-white border-stone-300'}`}>
+                          {includeLiveInPDF && '✓'}
+                      </div>
+                      <div>
+                          <p className="text-xs font-black uppercase text-slate-900">Include Live Prices</p>
+                          <p className="text-[10px] text-stone-400 font-bold">Show current market value calculations</p>
+                      </div>
+                  </div>
+
+                  <div className="flex gap-3">
+                      <button onClick={() => setShowPDFOptions(false)} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
+                      <button onClick={exportDetailedPDF} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition shadow-lg">Download PDF</button>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {editingItem && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-6">
@@ -1205,7 +1424,7 @@ export default function Home() {
                             {/* Export Options */}
                             {filteredInventory.length > 0 ? (
                                 <>
-                                    <button onClick={() => { exportDetailedPDF(); setShowVaultMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
+                                    <button onClick={() => { setShowPDFOptions(true); setShowVaultMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
                                         Export PDF Report
                                     </button>
                                     <button onClick={() => { exportToCSV(); setShowVaultMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 transition-colors">
@@ -1315,7 +1534,7 @@ export default function Home() {
                                                         accept="image/*" 
                                                         className="hidden" 
                                                         disabled={uploadingId === item.id}
-                                                        onChange={(e) => handleImageUpload(e, item.id)}
+                                                        onChange={(e) => onFileSelect(e, item.id)}
                                                     />
                                                 </label>
 
