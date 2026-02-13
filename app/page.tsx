@@ -14,7 +14,6 @@ const UNIT_TO_GRAMS: { [key: string]: number } = {
 };
 
 export default function Home() {
-  // Fix 1: Initialize with 0 so math doesn't break
   const [prices, setPrices] = useState<any>({ gold: 0, silver: 0, platinum: 0, palladium: 0, updated_at: null });
   const [itemName, setItemName] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -47,13 +46,12 @@ export default function Home() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [markupB, setMarkupB] = useState(1.8);
 
-  // New states for Password Reset
+  // New States for Password Reset Modal
   const [showResetModal, setShowResetModal] = useState(false);
   const [newPassword, setNewPassword] = useState('');
 
   const SHOPIFY_PRO_URL = "https://bearsilverandstone.com/products/the-vault-pro";
 
-  // Reusable price fetcher
   const fetchPrices = useCallback(async (force = false) => {
     try {
       const cachedData = sessionStorage.getItem('vault_prices');
@@ -87,7 +85,6 @@ export default function Home() {
     }
   }, []);
 
-  // Fix 2: Wrap math in useCallback so it updates when prices state changes
   const calculateFullBreakdown = useCallback((metals: any[], h: any, r: any, o: any, customMult?: number, customMarkup?: number) => {
     let rawMaterialCost = 0;
     metals.forEach(m => {
@@ -143,8 +140,8 @@ export default function Home() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setUser(session?.user ?? null);
       if (session) fetchInventory();
-      
-      // Listen for the special recovery event from the email link
+
+      // TRIGGER RESET MODAL
       if (event === "PASSWORD_RECOVERY") {
         setShowResetModal(true);
       }
@@ -293,7 +290,7 @@ export default function Home() {
   const handleResetPassword = async () => {
     if (!email) return alert("Please enter your email address first.");
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: 'https://vault.bearsilverandstone.com',
     });
     if (error) alert(error.message);
     else alert("Password reset link sent! Check your inbox.");
@@ -304,15 +301,18 @@ export default function Home() {
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     if (error) alert(error.message);
     else {
-      alert("Vault Access Restored! You can now log in with your new password.");
+      alert("Your password was updated successfully. Vault Access Restored!");
       setShowResetModal(false);
       setNewPassword('');
-      window.location.hash = ""; // Clean up the URL
+      window.location.hash = "";
     }
   };
 
   const loginWithGoogle = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: 'https://vault.bearsilverandstone.com' }
+    });
     if (error) alert(error.message);
   };
 
@@ -336,6 +336,7 @@ export default function Home() {
         </div>
       )}
 
+      {/* RECOVERY MODAL */}
       {showResetModal && (
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[300] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] border-2 border-[#A5BEAC] p-8 space-y-6 shadow-2xl animate-in zoom-in-95">
@@ -343,14 +344,14 @@ export default function Home() {
               <h3 className="text-xl font-black uppercase italic tracking-tighter">Secure the Vault</h3>
               <p className="text-[10px] text-stone-400 font-bold uppercase mt-2">Enter your new master password</p>
             </div>
-            <input 
-              type="password" 
-              placeholder="New Password" 
+            <input
+              type="password"
+              placeholder="New Password"
               className="w-full p-4 bg-stone-50 border rounded-2xl outline-none focus:border-[#A5BEAC] font-bold"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
             />
-            <button 
+            <button
               onClick={handleUpdatePassword}
               className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-[#A5BEAC] transition-all shadow-lg"
             >
@@ -361,7 +362,6 @@ export default function Home() {
       )}
 
       <div className="max-w-7xl mx-auto space-y-6">
-        {/* HEADER */}
         <div className="flex flex-col md:flex-row justify-between items-center bg-white px-6 py-8 rounded-[2rem] border-2 shadow-sm gap-8 mb-6 relative border-[#A5BEAC]">
           <div className="hidden md:block md:w-1/4"></div>
           <div className="flex flex-col items-center justify-center text-center w-full md:w-2/4">
@@ -456,7 +456,6 @@ export default function Home() {
                   <div className="flex justify-between items-center py-2"><span className="text-stone-500 font-bold uppercase text-[10px]">Labor Total ({hours || 0}h)</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts).labor.toFixed(2)}</span></div>
                 </div>
                 <div className="grid grid-cols-1 gap-4 mb-6 w-full">
-                  {/* STRATEGY A */}
                   <button
                     onClick={() => setStrategy('A')}
                     className={`group flex flex-col sm:flex-row sm:items-center sm:justify-between p-5 rounded-[2rem] border-2 transition-all ${strategy === 'A' ? 'border-[#A5BEAC] bg-stone-50 shadow-md' : 'border-stone-100 bg-white hover:border-stone-200'}`}
@@ -489,7 +488,6 @@ export default function Home() {
                     </div>
                   </button>
 
-                  {/* STRATEGY B */}
                   <button
                     onClick={() => setStrategy('B')}
                     className={`group relative flex flex-col sm:flex-row sm:items-center sm:justify-between p-5 rounded-[2rem] border-2 transition-all ${strategy === 'B' ? 'border-[#A5BEAC] bg-stone-50 shadow-md' : 'border-stone-100 bg-white hover:border-stone-200'}`}
@@ -527,10 +525,7 @@ export default function Home() {
             </div>
           </div>
 
-          {/* THE VAULT CONTAINER - REFINED WITH GREEN OUTLINE */}
           <div className="lg:col-span-7 bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm overflow-hidden flex flex-col h-fit">
-
-            {/* INVENTORY HEADER (Search & Export) */}
             <div className="p-6 border-b border-stone-100 bg-white space-y-4">
               <div className="flex justify-between items-center text-left">
                 <div>
@@ -566,7 +561,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* SCROLLABLE CARDS AREA */}
             <div className="p-4 md:p-6 space-y-4 overflow-y-auto max-h-[850px] custom-scrollbar overscroll-behavior-contain touch-pan-y bg-stone-50/20">
               {loading ? (
                 <div className="p-20 text-center text-stone-400 font-bold uppercase text-xs tracking-widest animate-pulse">Opening Vault...</div>
@@ -579,7 +573,6 @@ export default function Home() {
                   const priceDiff = liveRetail - item.retail;
                   const isUp = priceDiff >= 0;
 
-                  // Helper for clean, 2-decimal currency with commas
                   const formatCurrency = (num: number) => {
                     return num.toLocaleString(undefined, {
                       minimumFractionDigits: 2,
@@ -590,8 +583,6 @@ export default function Home() {
                   return (
                     <div key={item.id} className="bg-white rounded-[2rem] border border-stone-100 shadow-sm overflow-hidden transition-all hover:shadow-md">
                       <div className="p-5 md:p-6 flex flex-col gap-5">
-
-                        {/* 1. TOP SECTION: Name and Status */}
                         <div className="flex justify-between items-start gap-4 text-left">
                           <div className="flex-1 min-w-0">
                             <h3 className="text-lg font-black text-slate-900 leading-tight uppercase tracking-tight truncate">
@@ -614,30 +605,21 @@ export default function Home() {
                           </button>
                         </div>
 
-                        {/* 2. DATA GRID: Strict layout for total consistency */}
                         <div className="grid grid-cols-2 sm:grid-cols-4 border border-stone-100 rounded-2xl overflow-hidden">
-
-                          {/* Saved Wholesale */}
                           <div className="p-3 border-b sm:border-b-0 border-r border-stone-100 bg-stone-50/30 text-left">
                             <p className="text-[7px] font-black text-stone-400 uppercase tracking-widest mb-1">Saved Wholesale</p>
                             <p className="text-xs font-bold text-stone-500 whitespace-nowrap">${formatCurrency(Number(item.wholesale))}</p>
                           </div>
-
-                          {/* Saved Retail */}
                           <div className="p-3 border-b sm:border-b-0 sm:border-r border-stone-100 bg-stone-50/30 text-left">
                             <p className="text-[7px] font-black text-stone-400 uppercase tracking-widest mb-1">Saved Retail</p>
                             <p className="text-xs font-bold text-stone-500 whitespace-nowrap">${formatCurrency(Number(item.retail))}</p>
                           </div>
-
-                          {/* Live Wholesale */}
                           <div className="p-3 border-r border-stone-100 bg-white text-left">
                             <p className="text-[7px] font-black text-slate-900 uppercase tracking-widest mb-1">Live Wholesale</p>
                             <p className="text-sm font-black text-slate-900 whitespace-nowrap">
                               ${pricesLoaded ? formatCurrency(liveWholesale) : "--.--"}
                             </p>
                           </div>
-
-                          {/* Live Retail */}
                           <div className="p-3 bg-white text-left">
                             <p className="text-[7px] font-black text-[#A5BEAC] uppercase tracking-widest italic mb-1">Live Retail</p>
                             <p className="text-base sm:text-lg font-black text-slate-900 leading-none whitespace-nowrap">
@@ -647,7 +629,6 @@ export default function Home() {
                         </div>
                       </div>
 
-                      {/* 3. DETAILS TOGGLE - DROPDOWNS RESTORED */}
                       <details className="group border-t border-stone-50 text-left">
                         <summary className="list-none cursor-pointer py-2 text-center text-[8px] font-black uppercase tracking-[0.3em] text-stone-300 hover:text-[#A5BEAC] transition-colors">View Breakdown & Edit Card</summary>
                         <div className="p-5 md:p-6 bg-stone-50/50 space-y-6">
@@ -699,14 +680,12 @@ export default function Home() {
                       </details>
                     </div>
                   );
-
                 })
               )}
             </div>
           </div>
         </div>
 
-        {/* BOTTOM SECTIONS */}
         <div className="grid grid-cols-1 gap-8 pt-10">
           <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC]">
             <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">1. MATERIAL CALCULATION DETAIL</h2>
@@ -739,7 +718,6 @@ export default function Home() {
           <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC]">
             <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">2. PRICE STRATEGY DETAIL</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
-              {/* STRATEGY A */}
               <div className="p-6 md:p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all flex flex-col justify-between">
                 <div>
                   <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6">STRATEGY A (STANDARD MULTIPLIER)</h3>
@@ -763,7 +741,6 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* STRATEGY B */}
               <div className="p-6 md:p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all flex flex-col justify-between">
                 <div>
                   <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6">STRATEGY B (MATERIALS MARKUP)</h3>
@@ -809,7 +786,6 @@ export default function Home() {
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #A5BEAC; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #A5BEAC; }
-        /* Enable momentum scrolling on iOS */
         .custom-scrollbar { -webkit-overflow-scrolling: touch; }
       `}</style>
     </div>
