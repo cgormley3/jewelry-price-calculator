@@ -46,9 +46,10 @@ export default function Home() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [markupB, setMarkupB] = useState(1.8);
 
-  // New States for Password Reset Modal
+  // Password Visibility and Reset States
   const [showResetModal, setShowResetModal] = useState(false);
   const [newPassword, setNewPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const SHOPIFY_PRO_URL = "https://bearsilverandstone.com/products/the-vault-pro";
 
@@ -141,7 +142,6 @@ export default function Home() {
       setUser(session?.user ?? null);
       if (session) fetchInventory();
 
-      // TRIGGER RESET MODAL
       if (event === "PASSWORD_RECOVERY") {
         setShowResetModal(true);
       }
@@ -284,7 +284,7 @@ export default function Home() {
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     let result = isSignUp ? await supabase.auth.signUp({ email, password, options: { data: { is_converted_from_anonymous: true } } }) : await supabase.auth.signInWithPassword({ email, password });
-    if (result.error) alert(result.error.message); else { setShowAuth(false); fetchInventory(); }
+    if (result.error) alert(result.error.message); else { setShowAuth(false); setShowPassword(false); fetchInventory(); }
   };
 
   const handleResetPassword = async () => {
@@ -303,6 +303,7 @@ export default function Home() {
     else {
       alert("Your password was updated successfully. Vault Access Restored!");
       setShowResetModal(false);
+      setShowPassword(false);
       setNewPassword('');
       window.location.hash = "";
     }
@@ -344,13 +345,22 @@ export default function Home() {
               <h3 className="text-xl font-black uppercase italic tracking-tighter">Secure the Vault</h3>
               <p className="text-[10px] text-stone-400 font-bold uppercase mt-2">Enter your new master password</p>
             </div>
-            <input
-              type="password"
-              placeholder="New Password"
-              className="w-full p-4 bg-stone-50 border rounded-2xl outline-none focus:border-[#A5BEAC] font-bold"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder="New Password"
+                className="w-full p-4 bg-stone-50 border rounded-2xl outline-none focus:border-[#A5BEAC] font-bold"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black uppercase text-stone-300 hover:text-[#A5BEAC]"
+              >
+                {showPassword ? "Hide" : "Show"}
+              </button>
+            </div>
             <button
               onClick={handleUpdatePassword}
               className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-[#A5BEAC] transition-all shadow-lg"
@@ -381,22 +391,38 @@ export default function Home() {
             </div>
             <div className="relative flex gap-2 w-full justify-center md:justify-end">
               {(!user || user.is_anonymous) ? (
-                <button onClick={() => setShowAuth(!showAuth)} className="text-[10px] font-black uppercase bg-slate-900 text-white px-8 py-3 rounded-xl hover:bg-[#A5BEAC] transition shadow-sm">Login / Sign Up</button>
+                <button onClick={() => { setShowAuth(!showAuth); setShowPassword(false); }} className="text-[10px] font-black uppercase bg-slate-900 text-white px-8 py-3 rounded-xl hover:bg-[#A5BEAC] transition shadow-sm">Login / Sign Up</button>
               ) : (
                 <button onClick={async () => { await supabase.auth.signOut(); window.location.reload(); }} className="text-[10px] font-black uppercase bg-stone-100 text-slate-900 px-8 py-3 rounded-xl hover:bg-stone-200 transition">Logout</button>
               )}
               {showAuth && (
                 <div className="absolute right-0 mt-12 w-full md:w-80 bg-white p-6 rounded-3xl border-2 border-[#A5BEAC] shadow-2xl z-[100] animate-in fade-in slide-in-from-top-2 mx-auto">
-                  <button onClick={() => setShowAuth(false)} className="absolute top-4 right-4 text-stone-300 hover:text-[#A5BEAC] font-black text-sm">✕</button>
+                  <button onClick={() => { setShowAuth(false); setShowPassword(false); }} className="absolute top-4 right-4 text-stone-300 hover:text-[#A5BEAC] font-black text-sm">✕</button>
                   <h3 className="text-sm font-black uppercase mb-4 text-center text-slate-900">Vault Access</h3>
                   <button onClick={loginWithGoogle} className="w-full flex items-center justify-center gap-3 bg-white border-2 border-stone-100 py-3 rounded-xl hover:bg-stone-50 transition mb-4 shadow-sm"><img src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png" className="w-4 h-4" alt="G" /><span className="text-[10px] font-black uppercase text-slate-700">Continue with Google</span></button>
                   <div className="flex border-b border-stone-100 mb-4">
-                    <button onClick={() => setIsSignUp(false)} className={`flex-1 py-2 text-[10px] font-black uppercase ${!isSignUp ? 'text-[#A5BEAC] border-b-2 border-[#A5BEAC]' : 'text-stone-300'}`}>Login</button>
-                    <button onClick={() => setIsSignUp(true)} className={`flex-1 py-2 text-[10px] font-black uppercase ${isSignUp ? 'text-[#A5BEAC] border-b-2 border-[#A5BEAC]' : 'text-stone-300'}`}>Sign Up</button>
+                    <button onClick={() => { setIsSignUp(false); setShowPassword(false); }} className={`flex-1 py-2 text-[10px] font-black uppercase ${!isSignUp ? 'text-[#A5BEAC] border-b-2 border-[#A5BEAC]' : 'text-stone-300'}`}>Login</button>
+                    <button onClick={() => { setIsSignUp(true); setShowPassword(false); }} className={`flex-1 py-2 text-[10px] font-black uppercase ${isSignUp ? 'text-[#A5BEAC] border-b-2 border-[#A5BEAC]' : 'text-stone-300'}`}>Sign Up</button>
                   </div>
                   <form onSubmit={handleAuth} className="space-y-3">
                     <input type="email" placeholder="Email" className="w-full p-3 border rounded-xl text-sm outline-none focus:border-[#A5BEAC] transition" value={email} onChange={e => setEmail(e.target.value)} required />
-                    <input type="password" placeholder="Password" className="w-full p-3 border rounded-xl text-sm outline-none focus:border-[#A5BEAC] transition" value={password} onChange={e => setPassword(e.target.value)} required />
+                    <div className="relative">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Password"
+                        className="w-full p-3 border rounded-xl text-sm outline-none focus:border-[#A5BEAC] transition"
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black uppercase text-stone-300 hover:text-[#A5BEAC]"
+                      >
+                        {showPassword ? "Hide" : "Show"}
+                      </button>
+                    </div>
                     <button type="submit" className="w-full bg-[#A5BEAC] text-white py-3 rounded-xl font-black text-xs uppercase hover:bg-slate-900 transition shadow-md">{isSignUp ? 'Create Vault Account' : 'Open The Vault'}</button>
                     {!isSignUp && (
                       <button type="button" onClick={handleResetPassword} className="w-full text-center text-[9px] font-black uppercase text-stone-400 hover:text-[#A5BEAC] transition mt-2 tracking-widest">Forgot Password?</button>
