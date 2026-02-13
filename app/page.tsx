@@ -24,12 +24,16 @@ export default function Home() {
   const [manualRetail, setManualRetail] = useState('');
   const [manualWholesale, setManualWholesale] = useState('');
 
+  // Recalculate Feature State
+  const [recalcItem, setRecalcItem] = useState<any>(null);
+  const [recalcParams, setRecalcParams] = useState({ gold: '', silver: '', platinum: '', palladium: '', laborRate: '' });
+
   // States for renaming items
   const [editingNameId, setEditingNameId] = useState<string | null>(null);
   const [newNameValue, setNewNameValue] = useState('');
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
-  const [metalList, setMetalList] = useState<{ type: string, weight: number, unit: string, isManual?: boolean, manualPrice?: number }[]>([]);
+  const [metalList, setMetalList] = useState<{ type: string, weight: number, unit: string, isManual?: boolean, manualPrice?: number, spotSaved?: number }[]>([]);
   const [tempMetal, setTempMetal] = useState('Sterling Silver');
   const [tempWeight, setTempWeight] = useState(0);
   const [tempUnit, setTempUnit] = useState('Ounces (std)');
@@ -100,7 +104,7 @@ export default function Home() {
     }
   }, []);
 
-  const calculateFullBreakdown = useCallback((metals: any[], h: any, r: any, o: any, customMult?: number, customMarkup?: number) => {
+  const calculateFullBreakdown = useCallback((metals: any[], h: any, r: any, o: any, customMult?: number, customMarkup?: number, priceOverride?: any) => {
     let rawMaterialCost = 0;
     metals.forEach(m => {
       let pricePerGram = 0;
@@ -109,10 +113,11 @@ export default function Home() {
       } else {
         let spot = 0;
         const type = m.type.toLowerCase();
-        if (type.includes('gold')) spot = prices.gold;
-        else if (type.includes('silver')) spot = prices.silver;
-        else if (type.includes('platinum')) spot = prices.platinum;
-        else if (type.includes('palladium')) spot = prices.palladium;
+        
+        if (type.includes('gold')) spot = (priceOverride && priceOverride.gold) ? Number(priceOverride.gold) : prices.gold;
+        else if (type.includes('silver')) spot = (priceOverride && priceOverride.silver) ? Number(priceOverride.silver) : prices.silver;
+        else if (type.includes('platinum')) spot = (priceOverride && priceOverride.platinum) ? Number(priceOverride.platinum) : prices.platinum;
+        else if (type.includes('palladium')) spot = (priceOverride && priceOverride.palladium) ? Number(priceOverride.palladium) : prices.palladium;
 
         const purities: any = { '10K Gold': 0.417, '14K Gold': 0.583, '18K Gold': 0.75, '22K Gold': 0.916, '24K Gold': 0.999, 'Sterling Silver': 0.925, 'Platinum 950': 0.95, 'Palladium': 0.95 };
         pricePerGram = (spot / 31.1035) * (purities[m.type] || 1.0);
@@ -178,7 +183,21 @@ export default function Home() {
 
   const addMetalToPiece = () => {
     if (tempWeight <= 0) return;
-    setMetalList([...metalList, { type: tempMetal, weight: tempWeight, unit: tempUnit, isManual: useManualPrice, manualPrice: useManualPrice ? Number(manualPriceInput) : undefined }]);
+    let currentSpot = 0;
+    const type = tempMetal.toLowerCase();
+    if (type.includes('gold')) currentSpot = prices.gold;
+    else if (type.includes('silver')) currentSpot = prices.silver;
+    else if (type.includes('platinum')) currentSpot = prices.platinum;
+    else if (type.includes('palladium')) currentSpot = prices.palladium;
+
+    setMetalList([...metalList, { 
+      type: tempMetal, 
+      weight: tempWeight, 
+      unit: tempUnit, 
+      isManual: useManualPrice, 
+      manualPrice: useManualPrice ? Number(manualPriceInput) : undefined,
+      spotSaved: useManualPrice ? undefined : currentSpot 
+    }]);
     setTempWeight(0); setManualPriceInput(''); setUseManualPrice(false);
   };
 
@@ -225,7 +244,24 @@ export default function Home() {
             const labor = item.labor_at_making || 0;
             const liveWholesale = item.strategy === 'A' ? current.wholesaleA + labor : current.wholesaleB;
             const liveRetail = item.strategy === 'A' ? (current.totalMaterials + labor) * (item.multiplier || 3) : ((current.totalMaterials * (item.markup_b || 1.8)) + labor) * 2;
-            const { error } = await supabase.from('inventory').update({ wholesale: liveWholesale, retail: liveRetail }).eq('id', item.id);
+            
+            const updatedMetals = item.metals.map((m: any) => {
+                let currentSpot = 0;
+                const type = m.type.toLowerCase();
+                if (type.includes('gold')) currentSpot = prices.gold;
+                else if (type.includes('silver')) currentSpot = prices.silver;
+                else if (type.includes('platinum')) currentSpot = prices.platinum;
+                else if (type.includes('palladium')) currentSpot = prices.palladium;
+                
+                return { ...m, spotSaved: m.isManual ? undefined : currentSpot };
+            });
+
+            const { error } = await supabase.from('inventory').update({ 
+                wholesale: liveWholesale, 
+                retail: liveRetail,
+                metals: updatedMetals
+            }).eq('id', item.id);
+
             if (!error) { 
               fetchInventory(); 
               setOpenMenuId(null);
@@ -246,6 +282,63 @@ export default function Home() {
     }
   };
 
+  const handleRecalcSync = () => {
+    if (!recalcItem) return;
+
+    setNotification({
+      title: "Confirm Update",
+      message: `Overwrite "${recalcItem.name}" with these new prices and costs? This cannot be undone.`,
+      type: 'confirm',
+      onConfirm: async () => {
+        const laborHours = recalcItem.hours || 1;
+        const newLaborCost = recalcParams.laborRate 
+           ? Number(recalcParams.laborRate) * laborHours
+           : Number(recalcItem.labor_at_making || 0);
+
+        const calc = calculateFullBreakdown(
+           recalcItem.metals, 
+           1, 
+           newLaborCost, 
+           recalcItem.other_costs_at_making, 
+           recalcItem.multiplier, 
+           recalcItem.markup_b,
+           recalcParams 
+        );
+
+        const newWholesale = recalcItem.strategy === 'A' ? calc.wholesaleA + newLaborCost : calc.wholesaleB;
+        const newRetail = recalcItem.strategy === 'A' ? calc.retailA : calc.retailB;
+
+        const updatedMetals = recalcItem.metals.map((m: any) => {
+            const type = m.type.toLowerCase();
+            let newSpot = m.spotSaved; 
+
+            if (type.includes('gold') && recalcParams.gold) newSpot = Number(recalcParams.gold);
+            if (type.includes('silver') && recalcParams.silver) newSpot = Number(recalcParams.silver);
+            if (type.includes('platinum') && recalcParams.platinum) newSpot = Number(recalcParams.platinum);
+            if (type.includes('palladium') && recalcParams.palladium) newSpot = Number(recalcParams.palladium);
+
+            return { ...m, spotSaved: m.isManual ? undefined : newSpot };
+        });
+
+        const { error } = await supabase.from('inventory').update({
+            wholesale: newWholesale,
+            retail: newRetail,
+            labor_at_making: newLaborCost,
+            metals: updatedMetals
+        }).eq('id', recalcItem.id);
+
+        if (!error) {
+            fetchInventory();
+            setRecalcItem(null);
+            setRecalcParams({ gold: '', silver: '', platinum: '', palladium: '', laborRate: '' });
+            setNotification({ title: "Vault Updated", message: "Item prices and costs have been updated successfully.", type: 'success' });
+        } else {
+            setNotification({ title: "Update Failed", message: "Could not sync new prices to Vault.", type: 'error' });
+        }
+      }
+    });
+  };
+
   const addToInventory = async () => {
     if (isGuest && !token) {
         setNotification({ title: "Verification Required", message: "Please complete the human verification to save items as a guest.", type: 'info' });
@@ -259,9 +352,19 @@ export default function Home() {
 
     const a = calculateFullBreakdown(metalList, hours, rate, otherCosts);
     const newItem = {
-      name: itemName, metals: metalList, wholesale: strategy === 'A' ? a.wholesaleA : a.wholesaleB, retail: strategy === 'A' ? a.retailA : a.retailB,
-      materials_at_making: a.totalMaterials - (Number(otherCosts) || 0), labor_at_making: a.labor, other_costs_at_making: Number(otherCosts) || 0,
-      strategy: strategy, multiplier: retailMultA, markup_b: markupB, user_id: user.id, notes: ''
+      name: itemName, 
+      metals: metalList, 
+      wholesale: strategy === 'A' ? a.wholesaleA : a.wholesaleB, 
+      retail: strategy === 'A' ? a.retailA : a.retailB,
+      materials_at_making: a.totalMaterials - (Number(otherCosts) || 0), 
+      labor_at_making: a.labor, 
+      other_costs_at_making: Number(otherCosts) || 0,
+      strategy: strategy, 
+      multiplier: retailMultA, 
+      markup_b: markupB, 
+      user_id: user.id, 
+      notes: '',
+      hours: Number(hours) || 0 
     };
     const { data, error } = await supabase.from('inventory').insert([newItem]).select();
     if (!error && data) { 
@@ -413,7 +516,7 @@ export default function Home() {
     <div className="min-h-screen bg-stone-50 p-4 md:p-10 text-slate-900 font-sans text-left relative">
       {editingItem && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white w-full max-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-6">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-6">
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Manual Price Edit</h3>
             <div className="space-y-4">
               <div><label className="text-[10px] font-black uppercase text-stone-400 mb-1 block">New Retail Price ($)</label>
@@ -424,6 +527,115 @@ export default function Home() {
             <div className="flex gap-3">
               <button onClick={() => setEditingItem(null)} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
               <button onClick={handleManualPriceSave} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition shadow-lg">Save Vault</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RECALCULATE MODAL */}
+      {recalcItem && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-5 max-h-[90vh] overflow-y-auto custom-scrollbar">
+            <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Scenario Calculator</h3>
+            <p className="text-[10px] text-stone-400 font-bold uppercase">Temporarily recalculate logic with custom inputs</p>
+            
+            <div className="space-y-4 bg-stone-50 p-4 rounded-2xl border border-stone-100">
+               {recalcItem.metals.some((m: any) => m.type.toLowerCase().includes('gold')) && (
+                 <div><label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Gold Spot Price ($/oz)</label>
+                 <input type="number" placeholder={`${prices.gold}`} className="w-full p-3 bg-white border rounded-xl outline-none focus:border-[#A5BEAC] font-bold text-sm" value={recalcParams.gold} onChange={(e) => setRecalcParams({...recalcParams, gold: e.target.value})} /></div>
+               )}
+               {recalcItem.metals.some((m: any) => m.type.toLowerCase().includes('silver')) && (
+                 <div><label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Silver Spot Price ($/oz)</label>
+                 <input type="number" placeholder={`${prices.silver}`} className="w-full p-3 bg-white border rounded-xl outline-none focus:border-[#A5BEAC] font-bold text-sm" value={recalcParams.silver} onChange={(e) => setRecalcParams({...recalcParams, silver: e.target.value})} /></div>
+               )}
+               {recalcItem.metals.some((m: any) => m.type.toLowerCase().includes('platinum')) && (
+                 <div><label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Platinum Spot Price ($/oz)</label>
+                 <input type="number" placeholder={`${prices.platinum}`} className="w-full p-3 bg-white border rounded-xl outline-none focus:border-[#A5BEAC] font-bold text-sm" value={recalcParams.platinum} onChange={(e) => setRecalcParams({...recalcParams, platinum: e.target.value})} /></div>
+               )}
+               {recalcItem.metals.some((m: any) => m.type.toLowerCase().includes('palladium')) && (
+                 <div><label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Palladium Spot Price ($/oz)</label>
+                 <input type="number" placeholder={`${prices.palladium}`} className="w-full p-3 bg-white border rounded-xl outline-none focus:border-[#A5BEAC] font-bold text-sm" value={recalcParams.palladium} onChange={(e) => setRecalcParams({...recalcParams, palladium: e.target.value})} /></div>
+               )}
+               
+               <hr className="border-stone-200" />
+               
+               <div>
+                   <label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">New Labor Rate ($/hr)</label>
+                   <input type="number" placeholder="Enter rate to recalculate..." className="w-full p-3 bg-white border rounded-xl outline-none focus:border-[#A5BEAC] font-bold text-sm" value={recalcParams.laborRate} onChange={(e) => setRecalcParams({...recalcParams, laborRate: e.target.value})} />
+               </div>
+            </div>
+
+            {/* LIVE CALCULATION DISPLAY */}
+            <div className="p-4 bg-slate-900 rounded-2xl text-white space-y-2">
+               {(() => {
+                 const laborHours = recalcItem.hours || 1;
+                 const newLaborCost = recalcParams.laborRate 
+                    ? Number(recalcParams.laborRate) * laborHours
+                    : Number(recalcItem.labor_at_making || 0);
+                 
+                 const calc = calculateFullBreakdown(
+                   recalcItem.metals, 
+                   1, 
+                   newLaborCost, 
+                   recalcItem.other_costs_at_making, 
+                   recalcItem.multiplier, 
+                   recalcItem.markup_b,
+                   recalcParams 
+                 );
+                 
+                 const liveRetail = recalcItem.strategy === 'A' ? (calc.totalMaterials + newLaborCost) * (recalcItem.multiplier || 3) : ((calc.totalMaterials * (recalcItem.markup_b || 1.8)) + newLaborCost) * 2;
+                 
+                 return (
+                   <>
+                     <div className="flex justify-between items-center"><span className="text-[10px] font-bold text-stone-400 uppercase">Recalculated Retail</span><span className="text-xl font-black">${liveRetail.toFixed(2)}</span></div>
+                     <div className="flex justify-between items-center"><span className="text-[10px] font-bold text-stone-400 uppercase">Material Cost</span><span className="text-sm font-bold text-stone-300">${calc.totalMaterials.toFixed(2)}</span></div>
+                     
+                     {/* ADDED: Individual Metal Price Changes */}
+                     <div className="pl-2 space-y-1 my-1 border-l-2 border-stone-600">
+                        {recalcItem.metals.map((m: any, idx: number) => {
+                            const type = m.type.toLowerCase();
+                            // Logic to determine if user has overridden this metal
+                            let hasOverride = false;
+                            let newSpotVal = 0;
+                            if (type.includes('gold') && recalcParams.gold) { hasOverride = true; newSpotVal = Number(recalcParams.gold); }
+                            if (type.includes('silver') && recalcParams.silver) { hasOverride = true; newSpotVal = Number(recalcParams.silver); }
+                            if (type.includes('platinum') && recalcParams.platinum) { hasOverride = true; newSpotVal = Number(recalcParams.platinum); }
+                            if (type.includes('palladium') && recalcParams.palladium) { hasOverride = true; newSpotVal = Number(recalcParams.palladium); }
+
+                            if (!hasOverride) return null; // Only show if overridden
+
+                            // Calculate Old Value (based on Saved Spot)
+                            const purities: any = { '10K Gold': 0.417, '14K Gold': 0.583, '18K Gold': 0.75, '22K Gold': 0.916, '24K Gold': 0.999, 'Sterling Silver': 0.925, 'Platinum 950': 0.95, 'Palladium': 0.95 };
+                            const purity = purities[m.type] || 1;
+                            const gramWeight = m.weight * UNIT_TO_GRAMS[m.unit];
+                            const oldSpot = m.spotSaved || 0;
+                            
+                            const oldVal = (oldSpot / 31.1035) * purity * gramWeight;
+                            const newVal = (newSpotVal / 31.1035) * purity * gramWeight;
+
+                            return (
+                                <div key={idx} className="flex justify-between text-[9px] text-stone-400">
+                                    <span>{m.type}</span>
+                                    <span>${oldVal.toFixed(2)} → ${newVal.toFixed(2)}</span>
+                                </div>
+                            );
+                        })}
+                     </div>
+
+                     <div className="flex justify-between items-center">
+                       <span className="text-[10px] font-bold text-stone-400 uppercase">Labor Cost (at {laborHours}h)</span>
+                       <span className="text-sm font-bold text-stone-300">
+                         ${Number(recalcItem.labor_at_making || 0).toFixed(2)} {recalcParams.laborRate && `→ $${newLaborCost.toFixed(2)}`}
+                       </span>
+                     </div>
+                   </>
+                 );
+               })()}
+            </div>
+
+            <div className="flex gap-3">
+                <button onClick={() => { setRecalcItem(null); setRecalcParams({ gold: '', silver: '', platinum: '', palladium: '', laborRate: '' }); }} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Close Calculator</button>
+                <button onClick={handleRecalcSync} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition shadow-lg">Sync to Vault</button>
             </div>
           </div>
         </div>
@@ -764,7 +976,8 @@ export default function Home() {
                   };
 
                   return (
-                    <div key={item.id} className="bg-white rounded-[2rem] border border-stone-100 shadow-sm overflow-hidden transition-all hover:shadow-md">
+                    // overflow-visible allows the dropdown to spill out of the card
+                    <div key={item.id} className="bg-white rounded-[2rem] border border-stone-100 shadow-sm overflow-visible relative transition-all hover:shadow-md">
                       <div className="p-5 md:p-6 flex flex-col gap-5">
                         <div className="flex flex-col gap-1">
                           {/* HEADER WRAPPER - FLEX NOWRAP KEEPS ARROW ON THE RIGHT */}
@@ -802,42 +1015,52 @@ export default function Home() {
                                         
                                         {openMenuId === item.id && (
                                             <div className="absolute top-full left-auto right-0 mt-2 w-48 bg-white border border-[#A5BEAC] rounded-2xl shadow-xl z-[150] overflow-hidden animate-in fade-in slide-in-from-top-1">
-                                            <button 
-                                                onClick={() => {
-                                                setEditingNameId(item.id);
-                                                setNewNameValue(item.name);
-                                                setOpenMenuId(null);
-                                                }}
-                                                className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b transition-colors flex items-center gap-2"
-                                            >
-                                                <span>✎</span> Edit Name
-                                            </button>
-                                            <button 
-                                                onClick={() => syncToMarket(item)}
-                                                className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b transition-colors flex items-center gap-2"
-                                            >
-                                                <span>🔄</span> Sync to Market
-                                            </button>
-                                            <button 
-                                                onClick={() => {
-                                                setEditingItem(item);
-                                                setManualRetail(item.retail.toFixed(2));
-                                                setManualWholesale(item.wholesale.toFixed(2));
-                                                setOpenMenuId(null);
-                                                }}
-                                                className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b transition-colors flex items-center gap-2"
-                                            >
-                                                <span>⚙️</span> Manual Price Edit
-                                            </button>
-                                            <button 
-                                                onClick={() => {
-                                                deleteInventoryItem(item.id, item.name);
-                                                setOpenMenuId(null);
-                                                }}
-                                                className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-red-500 hover:bg-red-50 transition-colors flex items-center gap-2"
-                                            >
-                                                <span>🗑️</span> Remove from Vault
-                                            </button>
+                                                <button 
+                                                    onClick={() => {
+                                                    setEditingNameId(item.id);
+                                                    setNewNameValue(item.name);
+                                                    setOpenMenuId(null);
+                                                    }}
+                                                    className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b transition-colors flex items-center gap-2"
+                                                >
+                                                    <span>✎</span> Edit Name
+                                                </button>
+                                                <button 
+                                                    onClick={() => syncToMarket(item)}
+                                                    className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b transition-colors flex items-center gap-2"
+                                                >
+                                                    <span>🔄</span> Sync to Market
+                                                </button>
+                                                <button 
+                                                    onClick={() => {
+                                                    setRecalcItem(item);
+                                                    setRecalcParams({ gold: '', silver: '', platinum: '', palladium: '', laborRate: '' });
+                                                    setOpenMenuId(null);
+                                                    }}
+                                                    className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b transition-colors flex items-center gap-2"
+                                                >
+                                                    <span>🧮</span> Recalculate
+                                                </button>
+                                                <button 
+                                                    onClick={() => {
+                                                    setEditingItem(item);
+                                                    setManualRetail(item.retail.toFixed(2));
+                                                    setManualWholesale(item.wholesale.toFixed(2));
+                                                    setOpenMenuId(null);
+                                                    }}
+                                                    className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b transition-colors flex items-center gap-2"
+                                                >
+                                                    <span>⚙️</span> Manual Price Edit
+                                                </button>
+                                                <button 
+                                                    onClick={() => {
+                                                    deleteInventoryItem(item.id, item.name);
+                                                    setOpenMenuId(null);
+                                                    }}
+                                                    className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-red-500 hover:bg-red-50 transition-colors flex items-center gap-2"
+                                                >
+                                                    <span>🗑️</span> Remove from Vault
+                                                </button>
                                             </div>
                                         )}
                                     </div>
@@ -886,13 +1109,28 @@ export default function Home() {
                         <div className="p-5 md:p-6 bg-stone-50/50 space-y-6">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
                             <div className="space-y-3">
-                              <h4 className="text-[10px] font-black uppercase text-stone-400">Breakdown</h4>
-                              {item.metals?.map((m: any, idx: number) => (
-                                <div key={idx} className="flex justify-between text-[10px] font-bold border-b border-stone-100 pb-1.5 uppercase">
-                                  <span>{m.weight}{m.unit} {m.type}</span>
-                                  <span className="text-stone-400">{m.isManual ? 'Manual' : 'Spot'}</span>
+                              <h4 className="text-[10px] font-black uppercase text-stone-400">Saved Breakdown</h4>
+                              {item.metals?.map((m: any, idx: number) => {
+                                // Calculate original value if spotSaved exists
+                                const purities: any = { '10K Gold': 0.417, '14K Gold': 0.583, '18K Gold': 0.75, '22K Gold': 0.916, '24K Gold': 0.999, 'Sterling Silver': 0.925, 'Platinum 950': 0.95, 'Palladium': 0.95 };
+                                const purity = purities[m.type] || 1;
+                                const gramWeight = m.weight * UNIT_TO_GRAMS[m.unit];
+                                const spot = m.isManual ? 0 : (m.spotSaved || 0); 
+                                const val = m.isManual ? m.manualPrice : (spot / 31.1035) * purity * gramWeight;
+
+                                return (
+                                <div key={idx} className="flex justify-between items-center text-[10px] font-bold border-b border-stone-100 pb-1.5 uppercase">
+                                  <div>
+                                    <span>{m.weight}{m.unit} {m.type}</span>
+                                    {/* Display saved spot if available */}
+                                    {spot > 0 && <span className="block text-[8px] text-stone-400 font-medium normal-case tracking-wide">Spot: ${spot.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>}
+                                  </div>
+                                  <div className="text-right">
+                                     <span className="text-stone-400">{m.isManual ? 'Manual' : (val > 0 ? `$${val.toFixed(2)}` : 'Spot')}</span>
+                                  </div>
                                 </div>
-                              ))}
+                                );
+                              })}
                               {item.other_costs_at_making > 0 && (
                                 <div className="flex justify-between text-[10px] font-bold border-b border-stone-100 pb-1.5 uppercase">
                                   <span>Stones/Other</span>
@@ -903,11 +1141,12 @@ export default function Home() {
                             <div className="space-y-5">
                               <div className="grid grid-cols-2 gap-3 text-center">
                                 <div className="bg-white p-3.5 rounded-xl border border-stone-100 shadow-sm">
-                                  <p className="text-[8px] font-black text-stone-400 uppercase mb-1">Materials Cost (Orig)</p>
+                                  <p className="text-[8px] font-black text-stone-400 uppercase mb-1">Materials</p>
                                   <p className="text-xs font-black text-slate-700">${(Number(item.materials_at_making || 0) + Number(item.other_costs_at_making || 0)).toFixed(2)}</p>
                                 </div>
+                                {/* MODIFIED: Added hours and calculated rate to the label */}
                                 <div className="bg-white p-3.5 rounded-xl border border-stone-100 shadow-sm">
-                                  <p className="text-[8px] font-black text-stone-400 uppercase mb-1">Labor Cost</p>
+                                  <p className="text-[8px] font-black text-stone-400 uppercase mb-1">Labor ({Number(item.hours || 0)}h @ ${((Number(item.labor_at_making) || 0) / (Number(item.hours) || 1)).toFixed(2)}/hr)</p>
                                   <p className="text-xs font-black text-slate-700">${Number(item.labor_at_making || 0).toFixed(2)}</p>
                                 </div>
                               </div>
