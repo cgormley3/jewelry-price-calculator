@@ -1177,6 +1177,16 @@ export default function Home() {
                     });
                   };
 
+                  // Calculate saved metal cost specifically for the breakdown display consistency
+                  const savedMetalCost = item.metals?.reduce((acc: number, m: any) => {
+                      const purities: any = { '10K Gold': 0.417, '14K Gold': 0.583, '18K Gold': 0.75, '22K Gold': 0.916, '24K Gold': 0.999, 'Sterling Silver': 0.925, 'Platinum 950': 0.95, 'Palladium': 0.95 };
+                      const purity = purities[m.type] || 1;
+                      const gramWeight = m.weight * UNIT_TO_GRAMS[m.unit];
+                      const spot = m.isManual ? 0 : (m.spotSaved || 0); 
+                      const val = m.isManual ? (m.manualPrice || 0) : (spot / 31.1035) * purity * gramWeight;
+                      return acc + val;
+                  }, 0) || 0;
+
                   return (
                     <div key={item.id} className="bg-white rounded-[2rem] border border-stone-100 shadow-sm overflow-visible relative transition-all hover:shadow-md">
                       <div className="p-5 md:p-6 flex flex-col gap-5">
@@ -1266,6 +1276,9 @@ export default function Home() {
                                 )}
                                 
                                 <div className="flex items-center gap-2 mt-2">
+                                    <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md border bg-slate-100 text-slate-500 border-slate-200 uppercase">
+                                      Strategy {item.strategy}
+                                    </span>
                                     <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-md border ${isUp ? 'bg-green-50 text-green-700 border-green-100' : 'bg-red-50 text-red-700 border-red-100'}`}>
                                         {isUp ? '▲' : '▼'} ${formatCurrency(Math.abs(priceDiff))}
                                     </span>
@@ -1337,7 +1350,7 @@ export default function Home() {
                               <div className="grid grid-cols-2 gap-3 text-center">
                                 <div className="bg-white p-3.5 rounded-xl border border-stone-100 shadow-sm">
                                   <p className="text-[8px] font-black text-stone-400 uppercase mb-1">Materials</p>
-                                  <p className="text-xs font-black text-slate-700">${(Number(item.materials_at_making || 0) + Number(item.other_costs_at_making || 0)).toFixed(2)}</p>
+                                  <p className="text-xs font-black text-slate-700">${(savedMetalCost + Number(item.other_costs_at_making || 0)).toFixed(2)}</p>
                                 </div>
                                 <div className="bg-white p-3.5 rounded-xl border border-stone-100 shadow-sm">
                                   <p className="text-[8px] font-black text-stone-400 uppercase mb-1">Labor ({Number(item.hours || 0)}h @ ${((Number(item.labor_at_making) || 0) / (Number(item.hours) || 1)).toFixed(2)}/hr)</p>
