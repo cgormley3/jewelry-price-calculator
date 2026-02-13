@@ -47,6 +47,10 @@ export default function Home() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [markupB, setMarkupB] = useState(1.8);
 
+  // New states for Password Reset
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+
   const SHOPIFY_PRO_URL = "https://bearsilverandstone.com/products/the-vault-pro";
 
   // Reusable price fetcher
@@ -136,9 +140,14 @@ export default function Home() {
     window.addEventListener('visibilitychange', handleWakeUp);
     window.addEventListener('focus', handleWakeUp);
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setUser(session?.user ?? null);
       if (session) fetchInventory();
+      
+      // Listen for the special recovery event from the email link
+      if (event === "PASSWORD_RECOVERY") {
+        setShowResetModal(true);
+      }
     });
 
     return () => {
@@ -290,6 +299,18 @@ export default function Home() {
     else alert("Password reset link sent! Check your inbox.");
   };
 
+  const handleUpdatePassword = async () => {
+    if (newPassword.length < 6) return alert("Password must be at least 6 characters.");
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) alert(error.message);
+    else {
+      alert("Vault Access Restored! You can now log in with your new password.");
+      setShowResetModal(false);
+      setNewPassword('');
+      window.location.hash = ""; // Clean up the URL
+    }
+  };
+
   const loginWithGoogle = async () => {
     const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
     if (error) alert(error.message);
@@ -311,6 +332,30 @@ export default function Home() {
               <button onClick={() => setEditingItem(null)} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
               <button onClick={handleManualPriceSave} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition shadow-lg">Save Vault</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showResetModal && (
+        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[300] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] border-2 border-[#A5BEAC] p-8 space-y-6 shadow-2xl animate-in zoom-in-95">
+            <div className="text-center">
+              <h3 className="text-xl font-black uppercase italic tracking-tighter">Secure the Vault</h3>
+              <p className="text-[10px] text-stone-400 font-bold uppercase mt-2">Enter your new master password</p>
+            </div>
+            <input 
+              type="password" 
+              placeholder="New Password" 
+              className="w-full p-4 bg-stone-50 border rounded-2xl outline-none focus:border-[#A5BEAC] font-bold"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+            />
+            <button 
+              onClick={handleUpdatePassword}
+              className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-[#A5BEAC] transition-all shadow-lg"
+            >
+              Update Vault Access
+            </button>
           </div>
         </div>
       )}
