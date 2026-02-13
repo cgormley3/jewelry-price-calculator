@@ -479,8 +479,28 @@ export default function Home() {
     }
   };
 
+  // MODIFIED: Search logic now includes Notes, Strategy, and Date
   const filteredInventory = useMemo(() => {
-    return inventory.filter(item => item.name.toLowerCase().includes(searchTerm.toLowerCase()));
+    const lowerTerm = searchTerm.toLowerCase();
+    return inventory.filter(item => {
+        // 1. Name Check
+        if (item.name.toLowerCase().includes(lowerTerm)) return true;
+        
+        // 2. Metals Check
+        if (item.metals.some((m: any) => m.type.toLowerCase().includes(lowerTerm))) return true;
+        
+        // 3. Notes Check (safe navigation)
+        if (item.notes && item.notes.toLowerCase().includes(lowerTerm)) return true;
+        
+        // 4. Strategy Check (safe navigation)
+        if (item.strategy && item.strategy.toLowerCase().includes(lowerTerm)) return true;
+
+        // 5. Date Created Check
+        const dateStr = new Date(item.created_at).toLocaleDateString();
+        if (dateStr.includes(searchTerm)) return true;
+
+        return false;
+    });
   }, [inventory, searchTerm]);
 
   const totalVaultValue = useMemo(() => {
