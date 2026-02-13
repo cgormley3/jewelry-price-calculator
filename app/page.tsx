@@ -46,10 +46,10 @@ export default function Home() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [markupB, setMarkupB] = useState(1.8);
 
-  // Password Visibility and Reset States
   const [showResetModal, setShowResetModal] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [activeTab, setActiveTab] = useState<'calculator' | 'vault' | 'logic'>('calculator');
 
   const SHOPIFY_PRO_URL = "https://bearsilverandstone.com/products/the-vault-pro";
 
@@ -321,7 +321,7 @@ export default function Home() {
     <div className="min-h-screen bg-stone-50 p-4 md:p-10 text-slate-900 font-sans text-left relative">
       {editingItem && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-6">
+          <div className="bg-white w-full max-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-6">
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Manual Price Edit</h3>
             <div className="space-y-4">
               <div><label className="text-[10px] font-black uppercase text-stone-400 mb-1 block">New Retail Price ($)</label>
@@ -337,7 +337,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* RECOVERY MODAL */}
       {showResetModal && (
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[300] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] border-2 border-[#A5BEAC] p-8 space-y-6 shadow-2xl animate-in zoom-in-95">
@@ -372,6 +371,7 @@ export default function Home() {
       )}
 
       <div className="max-w-7xl mx-auto space-y-6">
+        {/* HEADER */}
         <div className="flex flex-col md:flex-row justify-between items-center bg-white px-6 py-8 rounded-[2rem] border-2 shadow-sm gap-8 mb-6 relative border-[#A5BEAC]">
           <div className="hidden md:block md:w-1/4"></div>
           <div className="flex flex-col items-center justify-center text-center w-full md:w-2/4">
@@ -435,7 +435,7 @@ export default function Home() {
         </div>
 
         {/* MARKET TICKER */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 px-2 mb-2 md:mb-6">
           {['gold', 'silver', 'platinum', 'palladium'].map((name) => (
             <div key={name} className="bg-white p-4 rounded-xl border-l-4 border-[#A5BEAC] shadow-sm text-center lg:text-left">
               <p className="text-[10px] font-black uppercase text-stone-400">{name}</p>
@@ -444,8 +444,33 @@ export default function Home() {
           ))}
         </div>
 
+        {/* MOBILE NAVIGATION DROPDOWN */}
+        <div className="md:hidden w-full px-2 mt-0 mb-4">
+          <div className="flex bg-white rounded-2xl border border-[#A5BEAC] shadow-sm overflow-hidden p-1">
+            <button 
+              onClick={() => setActiveTab('calculator')}
+              className={`flex-1 py-3 text-[10px] font-black uppercase tracking-tighter transition-all rounded-xl ${activeTab === 'calculator' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400'}`}
+            >
+              Calculator
+            </button>
+            <button 
+              onClick={() => setActiveTab('vault')}
+              className={`flex-1 py-3 text-[10px] font-black uppercase tracking-tighter transition-all rounded-xl ${activeTab === 'vault' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400'}`}
+            >
+              The Vault
+            </button>
+            <button 
+              onClick={() => setActiveTab('logic')}
+              className={`flex-1 py-3 text-[10px] font-black uppercase tracking-tighter transition-all rounded-xl ${activeTab === 'logic' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400'}`}
+            >
+              Logic
+            </button>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          <div className="lg:col-span-5 space-y-6">
+          {/* CALCULATOR COLUMN */}
+          <div className={`lg:col-span-5 space-y-6 ${activeTab !== 'calculator' ? 'hidden md:block' : ''}`}>
             <div className="bg-white p-8 rounded-[2rem] shadow-xl border-2 border-[#A5BEAC] lg:sticky lg:top-6 space-y-5">
               <h2 className="text-2xl font-black uppercase italic tracking-tighter text-slate-900">Calculator</h2>
               <input placeholder="Product Name" className="w-full p-4 bg-stone-50 border border-stone-200 rounded-2xl outline-none focus:border-[#A5BEAC] transition-all" value={itemName} onChange={e => setItemName(e.target.value)} />
@@ -551,7 +576,8 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="lg:col-span-7 bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm overflow-hidden flex flex-col h-fit">
+          {/* VAULT COLUMN */}
+          <div className={`lg:col-span-7 bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm overflow-hidden flex flex-col h-fit ${activeTab !== 'vault' ? 'hidden md:block' : ''}`}>
             <div className="p-6 border-b border-stone-100 bg-white space-y-4">
               <div className="flex justify-between items-center text-left">
                 <div>
@@ -712,8 +738,9 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-8 pt-10">
-          <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC]">
+        {/* LOGIC SECTION (NEGATIVE MARGIN ADDED ON MOBILE TO REMOVE EXTRA SPACE) */}
+        <div className={`grid grid-cols-1 gap-8 pt-0 mt-[-1.5rem] md:mt-0 md:pt-10 ${activeTab !== 'logic' ? 'hidden md:grid' : ''}`}>
+          <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC] min-h-[400px] md:min-h-0">
             <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">1. MATERIAL CALCULATION DETAIL</h2>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 text-left">
               <div className="space-y-6">
@@ -741,7 +768,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC]">
+          <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC] min-h-[400px] md:min-h-0">
             <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">2. PRICE STRATEGY DETAIL</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
               <div className="p-6 md:p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all flex flex-col justify-between">
