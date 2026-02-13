@@ -51,6 +51,9 @@ export default function Home() {
   const [showPassword, setShowPassword] = useState(false);
   const [activeTab, setActiveTab] = useState<'calculator' | 'vault' | 'logic'>('calculator');
 
+  // Helper to determine if Turnstile is required
+  const isGuest = !user || user.is_anonymous;
+
   const SHOPIFY_PRO_URL = "https://bearsilverandstone.com/products/the-vault-pro";
 
   const fetchPrices = useCallback(async (force = false) => {
@@ -197,7 +200,9 @@ export default function Home() {
   };
 
   const addToInventory = async () => {
-    if (!token || !itemName || metalList.length === 0 || !user) return alert("Missing verification");
+    if (isGuest && !token) return alert("Please complete verification");
+    if (!itemName || metalList.length === 0 || !user) return alert("Missing required fields");
+
     const a = calculateFullBreakdown(metalList, hours, rate, otherCosts);
     const newItem = {
       name: itemName, metals: metalList, wholesale: strategy === 'A' ? a.wholesaleA : a.wholesaleB, retail: strategy === 'A' ? a.retailA : a.retailB,
@@ -434,8 +439,8 @@ export default function Home() {
           </div>
         </div>
 
-        {/* MARKET TICKER */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 px-2 mb-2 md:mb-6">
+        {/* MARKET TICKER (FIXED: mb-6 on mobile for better spacing) */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 px-2 mb-6">
           {['gold', 'silver', 'platinum', 'palladium'].map((name) => (
             <div key={name} className="bg-white p-4 rounded-xl border-l-4 border-[#A5BEAC] shadow-sm text-center lg:text-left">
               <p className="text-[10px] font-black uppercase text-stone-400">{name}</p>
@@ -570,8 +575,8 @@ export default function Home() {
                     </div>
                   </button>
                 </div>
-                <button onClick={addToInventory} disabled={!token} className={`w-full py-5 rounded-[1.8rem] font-black uppercase tracking-[0.15em] text-sm transition-all ${!token ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-[#A5BEAC] text-white shadow-xl hover:bg-slate-900 active:scale-[0.97]'}`}>{token ? "Save to Vault" : "Verifying Human..."}</button>
-                {!token && <div className="w-full flex justify-center mt-4 h-auto overflow-hidden animate-in fade-in slide-in-from-top-1"><Turnstile siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!} onSuccess={(token) => setToken(token)} options={{ theme: 'light', appearance: 'interaction-only' }} /></div>}
+                <button onClick={addToInventory} disabled={isGuest && !token} className={`w-full py-5 rounded-[1.8rem] font-black uppercase tracking-[0.15em] text-sm transition-all ${(isGuest && !token) ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-[#A5BEAC] text-white shadow-xl hover:bg-slate-900 active:scale-[0.97]'}`}>{(isGuest && !token) ? "Verifying Human..." : "Save to Vault"}</button>
+                {isGuest && !token && <div className="w-full flex justify-center mt-4 h-auto overflow-hidden animate-in fade-in slide-in-from-top-1"><Turnstile siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!} onSuccess={(token) => setToken(token)} options={{ theme: 'light', appearance: 'interaction-only' }} /></div>}
               </div>
             </div>
           </div>
@@ -738,8 +743,8 @@ export default function Home() {
           </div>
         </div>
 
-        {/* LOGIC SECTION (NEGATIVE MARGIN ADDED ON MOBILE TO REMOVE EXTRA SPACE) */}
-        <div className={`grid grid-cols-1 gap-8 pt-0 mt-[-1.5rem] md:mt-0 md:pt-10 ${activeTab !== 'logic' ? 'hidden md:grid' : ''}`}>
+        {/* LOGIC SECTION (TIGHTENED POSITIONS & HEIGHT MATCHED) */}
+        <div className={`grid grid-cols-1 gap-8 pt-0 mt-[-1rem] md:mt-0 md:pt-10 ${activeTab !== 'logic' ? 'hidden md:grid' : ''}`}>
           <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC] min-h-[400px] md:min-h-0">
             <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">1. MATERIAL CALCULATION DETAIL</h2>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 text-left">
