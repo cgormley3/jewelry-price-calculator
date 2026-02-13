@@ -19,9 +19,8 @@ export default function Home() {
   const [itemName, setItemName] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   
-  // Menus
-  const [showExportMenu, setShowExportMenu] = useState(false);
-  const [showBatchMenu, setShowBatchMenu] = useState(false);
+  // NEW: Combined Menu State (Replaces showExportMenu and showBatchMenu)
+  const [showVaultMenu, setShowVaultMenu] = useState(false);
   
   // Modals
   const [showGlobalRecalc, setShowGlobalRecalc] = useState(false);
@@ -282,7 +281,7 @@ export default function Home() {
         type: 'confirm',
         onConfirm: async () => {
             setLoading(true);
-            setShowBatchMenu(false);
+            setShowVaultMenu(false);
             
             const updates = inventory.map(async (item) => {
                 const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
@@ -322,7 +321,7 @@ export default function Home() {
       type: 'confirm',
       onConfirm: async () => {
         setLoading(true);
-        setShowBatchMenu(false);
+        setShowVaultMenu(false);
 
         const updates = inventory.map(async (item) => {
             const laborHours = item.hours || 1;
@@ -521,7 +520,7 @@ export default function Home() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri); link.setAttribute("download", "bear-vault-inventory.csv");
-    document.body.appendChild(link); link.click(); setShowExportMenu(false);
+    document.body.appendChild(link); link.click(); setShowVaultMenu(false);
   };
 
   const exportDetailedPDF = () => {
@@ -566,7 +565,7 @@ export default function Home() {
       } else { currentY = Math.max((doc as any).lastAutoTable.finalY + 12, currentY + 25 + (breakdownLines.length * 4)); }
       doc.setDrawColor(220); doc.line(14, currentY - 4, 196, currentY - 4);
     });
-    doc.save(`Vault_Report.pdf`); setShowExportMenu(false);
+    doc.save(`Vault_Report.pdf`); setShowVaultMenu(false);
   };
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -947,8 +946,8 @@ export default function Home() {
           </div>
         </div>
 
-        {/* MARKET TICKER */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 px-2 mb-2 md:mb-6">
+        {/* MARKET TICKER - MODIFIED: Increased mb-2 to mb-6 for spacing */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 px-2 mb-6 md:mb-6">
           {['gold', 'silver', 'platinum', 'palladium'].map((name) => (
             <div key={name} className="bg-white p-4 rounded-xl border-l-4 border-[#A5BEAC] shadow-sm text-center lg:text-left">
               <p className="text-[10px] font-black uppercase text-stone-400">{name}</p>
@@ -957,24 +956,24 @@ export default function Home() {
           ))}
         </div>
 
-        {/* MOBILE NAVIGATION DROPDOWN */}
+        {/* MOBILE NAVIGATION DROPDOWN - MODIFIED: Increased text size */}
         <div className="md:hidden w-full px-2 mt-0 mb-4">
           <div className="flex bg-white rounded-2xl border border-[#A5BEAC] shadow-sm overflow-hidden p-1">
             <button 
               onClick={() => setActiveTab('calculator')}
-              className={`flex-1 py-3 text-[10px] font-black uppercase tracking-tighter transition-all rounded-xl ${activeTab === 'calculator' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400'}`}
+              className={`flex-1 py-3 text-xs font-black uppercase tracking-tighter transition-all rounded-xl ${activeTab === 'calculator' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400'}`}
             >
               Calculator
             </button>
             <button 
               onClick={() => setActiveTab('vault')}
-              className={`flex-1 py-3 text-[10px] font-black uppercase tracking-tighter transition-all rounded-xl ${activeTab === 'vault' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400'}`}
+              className={`flex-1 py-3 text-xs font-black uppercase tracking-tighter transition-all rounded-xl ${activeTab === 'vault' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400'}`}
             >
               The Vault
             </button>
             <button 
               onClick={() => setActiveTab('logic')}
-              className={`flex-1 py-3 text-[10px] font-black uppercase tracking-tighter transition-all rounded-xl ${activeTab === 'logic' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400'}`}
+              className={`flex-1 py-3 text-xs font-black uppercase tracking-tighter transition-all rounded-xl ${activeTab === 'logic' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400'}`}
             >
               Logic
             </button>
@@ -1120,32 +1119,41 @@ export default function Home() {
                   />
                 </div>
                 
-                {/* NEW: Batch Action Dropdown */}
+                {/* NEW: Combined Vault Options Menu */}
                 <div className="relative">
-                    <button onClick={() => setShowBatchMenu(!showBatchMenu)} className="w-full sm:w-auto px-6 py-3 bg-stone-100 text-slate-900 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-stone-200 transition">Actions {showBatchMenu ? '▲' : '▼'}</button>
-                    {showBatchMenu && (
+                    <button 
+                        onClick={() => setShowVaultMenu(!showVaultMenu)} 
+                        className="w-full sm:w-auto px-6 py-3 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-[#A5BEAC] transition shadow-sm"
+                    >
+                        Vault Options {showVaultMenu ? '▲' : '▼'}
+                    </button>
+                    {showVaultMenu && (
                         <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[50] overflow-hidden animate-in fade-in">
-                            <button onClick={syncAllToMarket} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b transition-colors">Sync All to Market</button>
-                            <button onClick={() => { setShowGlobalRecalc(true); setShowBatchMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 transition-colors">Recalculate All</button>
+                            {/* Batch Actions */}
+                            <button onClick={syncAllToMarket} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
+                                Sync All to Market
+                            </button>
+                            <button onClick={() => { setShowGlobalRecalc(true); setShowVaultMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
+                                Recalculate All
+                            </button>
+                            
+                            {/* Export Options */}
+                            {filteredInventory.length > 0 ? (
+                                <>
+                                    <button onClick={() => { exportDetailedPDF(); setShowVaultMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
+                                        Export PDF Report
+                                    </button>
+                                    <button onClick={() => { exportToCSV(); setShowVaultMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 transition-colors">
+                                        Export CSV Spreadsheet
+                                    </button>
+                                </>
+                            ) : (
+                                <div className="px-4 py-3 text-[9px] text-stone-300 italic text-center uppercase font-bold cursor-default">
+                                    Vault Empty - No Exports
+                                </div>
+                            )}
                         </div>
                     )}
-                </div>
-
-                <div className="relative">
-                  {/* MODIFIED: Export button disabled if vault empty */}
-                  <button 
-                    onClick={() => { if(filteredInventory.length > 0) setShowExportMenu(!showExportMenu); }} 
-                    disabled={filteredInventory.length === 0}
-                    className={`w-full sm:w-auto px-6 py-3 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 ${filteredInventory.length === 0 ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-slate-900 text-white hover:bg-[#A5BEAC] transition shadow-sm'}`}
-                  >
-                    Export {showExportMenu ? '▲' : '▼'}
-                  </button>
-                  {showExportMenu && filteredInventory.length > 0 && (
-                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[50] overflow-hidden animate-in fade-in">
-                      <button onClick={() => { exportDetailedPDF(); setShowExportMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b transition-colors">Export PDF Report</button>
-                      <button onClick={() => { exportToCSV(); setShowExportMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 transition-colors">Export CSV Spreadsheet</button>
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
