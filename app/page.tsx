@@ -4,7 +4,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { supabase } from '../lib/supabase';
 import { Turnstile } from '@marsidev/react-turnstile';
-import { GoogleLogin, CredentialResponse } from '@react-oauth/google'; // Added Import
+import { GoogleLogin, CredentialResponse } from '@react-oauth/google';
 import InstallPrompt from './InstallPrompt';
 
 const UNIT_TO_GRAMS: { [key: string]: number } = {
@@ -18,22 +18,28 @@ export default function Home() {
   const [prices, setPrices] = useState<any>({ gold: 0, silver: 0, platinum: 0, palladium: 0, updated_at: null });
   const [itemName, setItemName] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Menus
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [showBatchMenu, setShowBatchMenu] = useState(false);
+  
+  // Modals
+  const [showGlobalRecalc, setShowGlobalRecalc] = useState(false);
   const [openEditId, setOpenEditId] = useState<string | null>(null);
-
   const [editingItem, setEditingItem] = useState<any>(null);
+  const [recalcItem, setRecalcItem] = useState<any>(null);
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);
+
+  // Form States
   const [manualRetail, setManualRetail] = useState('');
   const [manualWholesale, setManualWholesale] = useState('');
-
-  // Recalculate Feature State
-  const [recalcItem, setRecalcItem] = useState<any>(null);
   const [recalcParams, setRecalcParams] = useState({ gold: '', silver: '', platinum: '', palladium: '', laborRate: '' });
-
-  // States for renaming items
   const [editingNameId, setEditingNameId] = useState<string | null>(null);
   const [newNameValue, setNewNameValue] = useState('');
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
+  // Calculator State
   const [metalList, setMetalList] = useState<{ type: string, weight: number, unit: string, isManual?: boolean, manualPrice?: number, spotSaved?: number }[]>([]);
   const [tempMetal, setTempMetal] = useState('Sterling Silver');
   const [tempWeight, setTempWeight] = useState(0);
@@ -46,21 +52,20 @@ export default function Home() {
   const [otherCosts, setOtherCosts] = useState<number | ''>('');
   const [strategy, setStrategy] = useState<'A' | 'B'>('A');
   const [retailMultA, setRetailMultA] = useState(3);
+  const [markupB, setMarkupB] = useState(1.8);
+
+  // App State
   const [inventory, setInventory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [pricesLoaded, setPricesLoaded] = useState(false);
   const [user, setUser] = useState<any>(null);
-  const [showAuth, setShowAuth] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
-  const [markupB, setMarkupB] = useState(1.8);
-
-  const [showResetModal, setShowResetModal] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [activeTab, setActiveTab] = useState<'calculator' | 'vault' | 'logic'>('calculator');
-  
+   
   const [notification, setNotification] = useState<{ 
     title: string; 
     message: string; 
@@ -69,8 +74,6 @@ export default function Home() {
   } | null>(null);
 
   const isGuest = !user || user.is_anonymous;
-
-  const SHOPIFY_PRO_URL = "https://bearsilverandstone.com/products/the-vault-pro";
 
   const fetchPrices = useCallback(async (force = false) => {
     try {
@@ -272,6 +275,103 @@ export default function Home() {
     });
   };
 
+  const syncAllToMarket = async () => {
+    setNotification({
+        title: "Sync All to Market",
+        message: "This will update EVERY item in your vault to reflect current market spot prices. This cannot be undone.",
+        type: 'confirm',
+        onConfirm: async () => {
+            setLoading(true);
+            setShowBatchMenu(false);
+            
+            const updates = inventory.map(async (item) => {
+                const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
+                const labor = item.labor_at_making || 0;
+                const liveWholesale = item.strategy === 'A' ? current.wholesaleA + labor : current.wholesaleB;
+                const liveRetail = item.strategy === 'A' ? (current.totalMaterials + labor) * (item.multiplier || 3) : ((current.totalMaterials * (item.markup_b || 1.8)) + labor) * 2;
+                
+                const updatedMetals = item.metals.map((m: any) => {
+                    let currentSpot = 0;
+                    const type = m.type.toLowerCase();
+                    if (type.includes('gold')) currentSpot = prices.gold;
+                    else if (type.includes('silver')) currentSpot = prices.silver;
+                    else if (type.includes('platinum')) currentSpot = prices.platinum;
+                    else if (type.includes('palladium')) currentSpot = prices.palladium;
+                    
+                    return { ...m, spotSaved: m.isManual ? undefined : currentSpot };
+                });
+
+                return supabase.from('inventory').update({ 
+                    wholesale: liveWholesale, 
+                    retail: liveRetail,
+                    metals: updatedMetals
+                }).eq('id', item.id);
+            });
+
+            await Promise.all(updates);
+            await fetchInventory();
+            setNotification({ title: "Vault Synced", message: "All items have been updated to live market prices.", type: 'success' });
+        }
+    });
+  };
+
+  const handleGlobalRecalcSync = async () => {
+    setNotification({
+      title: "Confirm Global Update",
+      message: `Recalculate ALL items with these new parameters? This will overwrite saved labor costs and spot prices.`,
+      type: 'confirm',
+      onConfirm: async () => {
+        setLoading(true);
+        setShowBatchMenu(false);
+
+        const updates = inventory.map(async (item) => {
+            const laborHours = item.hours || 1;
+            const newLaborCost = recalcParams.laborRate 
+               ? Number(recalcParams.laborRate) * laborHours
+               : Number(item.labor_at_making || 0);
+
+            const calc = calculateFullBreakdown(
+               item.metals || [], 
+               1, 
+               newLaborCost, 
+               item.other_costs_at_making || 0, 
+               item.multiplier, 
+               item.markup_b,
+               recalcParams 
+            );
+
+            const newWholesale = item.strategy === 'A' ? calc.wholesaleA + newLaborCost : calc.wholesaleB;
+            const newRetail = item.strategy === 'A' ? calc.retailA : calc.retailB;
+
+            const updatedMetals = (item.metals || []).map((m: any) => {
+                const type = m.type.toLowerCase();
+                let newSpot = m.spotSaved; 
+
+                if (type.includes('gold') && recalcParams.gold) newSpot = Number(recalcParams.gold);
+                if (type.includes('silver') && recalcParams.silver) newSpot = Number(recalcParams.silver);
+                if (type.includes('platinum') && recalcParams.platinum) newSpot = Number(recalcParams.platinum);
+                if (type.includes('palladium') && recalcParams.palladium) newSpot = Number(recalcParams.palladium);
+
+                return { ...m, spotSaved: m.isManual ? undefined : newSpot };
+            });
+
+            return supabase.from('inventory').update({
+                wholesale: newWholesale,
+                retail: newRetail,
+                labor_at_making: newLaborCost,
+                metals: updatedMetals
+            }).eq('id', item.id);
+        });
+
+        await Promise.all(updates);
+        await fetchInventory();
+        setShowGlobalRecalc(false);
+        setRecalcParams({ gold: '', silver: '', platinum: '', palladium: '', laborRate: '' });
+        setNotification({ title: "Global Update Complete", message: "All items have been recalculated.", type: 'success' });
+      }
+    });
+  };
+
   const handleManualPriceSave = async () => {
     if (!editingItem) return;
     const { error } = await supabase.from('inventory').update({ wholesale: Number(manualWholesale), retail: Number(manualRetail) }).eq('id', editingItem.id);
@@ -394,14 +494,28 @@ export default function Home() {
   }, [inventory, prices, calculateFullBreakdown]);
 
   const exportToCSV = () => {
-    const headers = ["Item Name", "Live Retail", "Live Wholesale", "Saved Retail", "Saved Wholesale", "Notes", "Date Created", "Strategy", "Metals"];
+    const headers = ["Item Name", "Live Retail", "Live Wholesale", "Saved Retail", "Saved Wholesale", "Labor Hours", "Labor Cost", "Materials Cost", "Other Costs", "Notes", "Date Created", "Strategy", "Metals"];
     const rows = filteredInventory.map(item => {
       const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
       const labor = item.labor_at_making || 0;
       const liveWholesale = item.strategy === 'A' ? current.wholesaleA + labor : current.wholesaleB;
       const liveRetail = item.strategy === 'A' ? (current.totalMaterials + labor) * (item.multiplier || 3) : ((current.totalMaterials * (item.markup_b || 1.8)) + labor) * 2;
       const metalsStr = item.metals.map((m: any) => `${m.weight}${m.unit} ${m.type}`).join('; ');
-      return [`"${item.name}"`, liveRetail.toFixed(2), liveWholesale.toFixed(2), Number(item.retail).toFixed(2), Number(item.wholesale).toFixed(2), `"${item.notes?.replace(/"/g, '""') || ''}"`, new Date(item.created_at).toLocaleDateString(), item.strategy, `"${metalsStr}"`];
+      return [
+          `"${item.name}"`, 
+          liveRetail.toFixed(2), 
+          liveWholesale.toFixed(2), 
+          Number(item.retail).toFixed(2), 
+          Number(item.wholesale).toFixed(2), 
+          item.hours || 0,
+          labor.toFixed(2),
+          (Number(item.materials_at_making) + Number(item.other_costs_at_making)).toFixed(2),
+          Number(item.other_costs_at_making).toFixed(2),
+          `"${item.notes?.replace(/"/g, '""') || ''}"`, 
+          new Date(item.created_at).toLocaleDateString(), 
+          item.strategy, 
+          `"${metalsStr}"`
+      ];
     });
     const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
     const encodedUri = encodeURI(csvContent);
@@ -436,7 +550,9 @@ export default function Home() {
 
       const breakdownLines = item.metals.map((m: any) => `${m.weight}${m.unit} ${m.type}`);
       if (item.other_costs_at_making > 0) breakdownLines.push(`Stones/Other: $${Number(item.other_costs_at_making).toFixed(2)}`);
-      if (labor > 0) breakdownLines.push(`Labor Cost: $${Number(labor).toFixed(2)}`);
+      
+      if (labor > 0) breakdownLines.push(`Labor Cost (${item.hours || 0}h): $${Number(labor).toFixed(2)}`);
+      breakdownLines.push(`Materials Total: $${(Number(item.materials_at_making) + Number(item.other_costs_at_making)).toFixed(2)}`);
 
       doc.setFontSize(8); doc.setTextColor(80, 80, 80); doc.setFont("helvetica", "bold"); doc.text("BREAKDOWN:", 140, currentY + 12);
       doc.setFont("helvetica", "normal");
@@ -458,7 +574,7 @@ export default function Home() {
     let result = isSignUp 
       ? await supabase.auth.signUp({ email, password, options: { data: { is_converted_from_anonymous: true } } }) 
       : await supabase.auth.signInWithPassword({ email, password });
-      
+       
     if (result.error) {
         setNotification({ title: "Vault Access Error", message: result.error.message, type: 'error' });
     } else {
@@ -473,7 +589,6 @@ export default function Home() {
     }
   };
 
-  // ADDED: Handshake Handler
   const handleGoogleHandshake = async (credentialResponse: CredentialResponse) => {
     const idToken = credentialResponse.credential;
 
@@ -528,14 +643,6 @@ export default function Home() {
     }
   };
 
-  const loginWithGoogle = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: 'https://vault.bearsilverandstone.com' }
-    });
-    if (error) setNotification({ title: "Google Access Error", message: error.message, type: 'error' });
-  };
-
   return (
     <div className="min-h-screen bg-stone-50 p-4 md:p-10 text-slate-900 font-sans text-left relative">
       {editingItem && (
@@ -556,7 +663,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* RECALCULATE MODAL */}
+      {/* RECALCULATE MODAL (Individual) */}
       {recalcItem && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-5 max-h-[90vh] overflow-y-auto custom-scrollbar">
@@ -614,11 +721,9 @@ export default function Home() {
                      <div className="flex justify-between items-center"><span className="text-[10px] font-bold text-stone-400 uppercase">Recalculated Retail</span><span className="text-xl font-black">${liveRetail.toFixed(2)}</span></div>
                      <div className="flex justify-between items-center"><span className="text-[10px] font-bold text-stone-400 uppercase">Material Cost</span><span className="text-sm font-bold text-stone-300">${calc.totalMaterials.toFixed(2)}</span></div>
                      
-                     {/* ADDED: Individual Metal Price Changes */}
                      <div className="pl-2 space-y-1 my-1 border-l-2 border-stone-600">
                         {recalcItem.metals.map((m: any, idx: number) => {
                             const type = m.type.toLowerCase();
-                            // Logic to determine if user has overridden this metal
                             let hasOverride = false;
                             let newSpotVal = 0;
                             if (type.includes('gold') && recalcParams.gold) { hasOverride = true; newSpotVal = Number(recalcParams.gold); }
@@ -626,14 +731,12 @@ export default function Home() {
                             if (type.includes('platinum') && recalcParams.platinum) { hasOverride = true; newSpotVal = Number(recalcParams.platinum); }
                             if (type.includes('palladium') && recalcParams.palladium) { hasOverride = true; newSpotVal = Number(recalcParams.palladium); }
 
-                            if (!hasOverride) return null; // Only show if overridden
+                            if (!hasOverride) return null;
 
-                            // Calculate Old Value (based on Saved Spot)
                             const purities: any = { '10K Gold': 0.417, '14K Gold': 0.583, '18K Gold': 0.75, '22K Gold': 0.916, '24K Gold': 0.999, 'Sterling Silver': 0.925, 'Platinum 950': 0.95, 'Palladium': 0.95 };
                             const purity = purities[m.type] || 1;
                             const gramWeight = m.weight * UNIT_TO_GRAMS[m.unit];
                             const oldSpot = m.spotSaved || 0;
-                            
                             const oldVal = (oldSpot / 31.1035) * purity * gramWeight;
                             const newVal = (newSpotVal / 31.1035) * purity * gramWeight;
 
@@ -660,6 +763,42 @@ export default function Home() {
             <div className="flex gap-3">
                 <button onClick={() => { setRecalcItem(null); setRecalcParams({ gold: '', silver: '', platinum: '', palladium: '', laborRate: '' }); }} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Close Calculator</button>
                 <button onClick={handleRecalcSync} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition shadow-lg">Sync to Vault</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NEW: GLOBAL RECALCULATE MODAL */}
+      {showGlobalRecalc && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-5 max-h-[90vh] overflow-y-auto custom-scrollbar">
+            <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Global Recalculate</h3>
+            <p className="text-[10px] text-stone-400 font-bold uppercase">Recalculate ENTIRE inventory with new inputs</p>
+            
+            <div className="space-y-4 bg-stone-50 p-4 rounded-2xl border border-stone-100">
+               <div><label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Gold Spot Price ($/oz)</label>
+               <input type="number" placeholder={`${prices.gold}`} className="w-full p-3 bg-white border rounded-xl outline-none focus:border-[#A5BEAC] font-bold text-sm" value={recalcParams.gold} onChange={(e) => setRecalcParams({...recalcParams, gold: e.target.value})} /></div>
+               
+               <div><label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Silver Spot Price ($/oz)</label>
+               <input type="number" placeholder={`${prices.silver}`} className="w-full p-3 bg-white border rounded-xl outline-none focus:border-[#A5BEAC] font-bold text-sm" value={recalcParams.silver} onChange={(e) => setRecalcParams({...recalcParams, silver: e.target.value})} /></div>
+               
+               <div><label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Platinum Spot Price ($/oz)</label>
+               <input type="number" placeholder={`${prices.platinum}`} className="w-full p-3 bg-white border rounded-xl outline-none focus:border-[#A5BEAC] font-bold text-sm" value={recalcParams.platinum} onChange={(e) => setRecalcParams({...recalcParams, platinum: e.target.value})} /></div>
+               
+               <div><label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Palladium Spot Price ($/oz)</label>
+               <input type="number" placeholder={`${prices.palladium}`} className="w-full p-3 bg-white border rounded-xl outline-none focus:border-[#A5BEAC] font-bold text-sm" value={recalcParams.palladium} onChange={(e) => setRecalcParams({...recalcParams, palladium: e.target.value})} /></div>
+               
+               <hr className="border-stone-200" />
+               
+               <div>
+                   <label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">New Labor Rate ($/hr)</label>
+                   <input type="number" placeholder="Enter new rate..." className="w-full p-3 bg-white border rounded-xl outline-none focus:border-[#A5BEAC] font-bold text-sm" value={recalcParams.laborRate} onChange={(e) => setRecalcParams({...recalcParams, laborRate: e.target.value})} />
+               </div>
+            </div>
+
+            <div className="flex gap-3">
+                <button onClick={() => { setShowGlobalRecalc(false); setRecalcParams({ gold: '', silver: '', platinum: '', palladium: '', laborRate: '' }); }} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
+                <button onClick={handleGlobalRecalcSync} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition shadow-lg">Recalculate All</button>
             </div>
           </div>
         </div>
@@ -763,7 +902,6 @@ export default function Home() {
                 <div className="absolute right-0 mt-12 w-full md:w-80 bg-white p-6 rounded-3xl border-2 border-[#A5BEAC] shadow-2xl z-[100] animate-in fade-in slide-in-from-top-2 mx-auto">
                   <button onClick={() => { setShowAuth(false); setShowPassword(false); }} className="absolute top-4 right-4 text-stone-300 hover:text-[#A5BEAC] font-black text-sm">✕</button>
                   <h3 className="text-sm font-black uppercase mb-4 text-center text-slate-900">Vault Access</h3>
-                  {/* MODIFIED: Replaced standard Google button with handshake component */}
                   <div className="w-full flex justify-center mb-4">
                     <GoogleLogin
                       onSuccess={handleGoogleHandshake}
@@ -892,6 +1030,7 @@ export default function Home() {
                     <div className="text-left mb-4 sm:mb-0">
                       <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter mb-1">Retail A</p>
                       <p className="text-3xl font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts).retailA.toFixed(2)}</p>
+                      <p className="text-[9px] font-bold text-stone-400 uppercase tracking-widest mt-1">Wholesale: ${calculateFullBreakdown(metalList, hours, rate, otherCosts).wholesaleA.toFixed(2)}</p>
                     </div>
                     <div className="flex flex-col items-start sm:items-end">
                       <div className="flex items-center gap-1 text-[#a8a29e] italic font-black text-[10px] uppercase whitespace-nowrap">
@@ -918,6 +1057,7 @@ export default function Home() {
                     <div className="text-left mb-4 sm:mb-0">
                       <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter mb-1">Retail B</p>
                       <p className="text-3xl font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts).retailB.toFixed(2)}</p>
+                      <p className="text-[9px] font-bold text-stone-400 uppercase tracking-widest mt-1">Wholesale: ${calculateFullBreakdown(metalList, hours, rate, otherCosts).wholesaleB.toFixed(2)}</p>
                     </div>
                     <div className="flex flex-col items-start sm:items-end">
                       <div className="flex items-center gap-1 text-[#a8a29e] italic font-black text-[10px] uppercase whitespace-nowrap">
@@ -979,9 +1119,28 @@ export default function Home() {
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
+                
+                {/* NEW: Batch Action Dropdown */}
                 <div className="relative">
-                  <button onClick={() => setShowExportMenu(!showExportMenu)} className="w-full sm:w-auto px-6 py-3 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2">Export {showExportMenu ? '▲' : '▼'}</button>
-                  {showExportMenu && (
+                    <button onClick={() => setShowBatchMenu(!showBatchMenu)} className="w-full sm:w-auto px-6 py-3 bg-stone-100 text-slate-900 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-stone-200 transition">Actions {showBatchMenu ? '▲' : '▼'}</button>
+                    {showBatchMenu && (
+                        <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[50] overflow-hidden animate-in fade-in">
+                            <button onClick={syncAllToMarket} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b transition-colors">Sync All to Market</button>
+                            <button onClick={() => { setShowGlobalRecalc(true); setShowBatchMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 transition-colors">Recalculate All</button>
+                        </div>
+                    )}
+                </div>
+
+                <div className="relative">
+                  {/* MODIFIED: Export button disabled if vault empty */}
+                  <button 
+                    onClick={() => { if(filteredInventory.length > 0) setShowExportMenu(!showExportMenu); }} 
+                    disabled={filteredInventory.length === 0}
+                    className={`w-full sm:w-auto px-6 py-3 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 ${filteredInventory.length === 0 ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-slate-900 text-white hover:bg-[#A5BEAC] transition shadow-sm'}`}
+                  >
+                    Export {showExportMenu ? '▲' : '▼'}
+                  </button>
+                  {showExportMenu && filteredInventory.length > 0 && (
                     <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[50] overflow-hidden animate-in fade-in">
                       <button onClick={() => { exportDetailedPDF(); setShowExportMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b transition-colors">Export PDF Report</button>
                       <button onClick={() => { exportToCSV(); setShowExportMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 transition-colors">Export CSV Spreadsheet</button>
@@ -1011,11 +1170,9 @@ export default function Home() {
                   };
 
                   return (
-                    // overflow-visible allows the dropdown to spill out of the card
                     <div key={item.id} className="bg-white rounded-[2rem] border border-stone-100 shadow-sm overflow-visible relative transition-all hover:shadow-md">
                       <div className="p-5 md:p-6 flex flex-col gap-5">
                         <div className="flex flex-col gap-1">
-                          {/* HEADER WRAPPER - FLEX NOWRAP KEEPS ARROW ON THE RIGHT */}
                           <div className="flex items-start flex-nowrap justify-between gap-3 relative">
                             <div className="flex-1 min-w-0">
                                 {editingNameId === item.id ? (
@@ -1035,11 +1192,9 @@ export default function Home() {
                                 </div>
                                 ) : (
                                 <div className="flex items-start flex-nowrap gap-2 w-full">
-                                    {/* Name Column - Allowed to Wrap */}
                                     <h3 className="text-lg font-black text-slate-900 leading-tight uppercase tracking-tight break-words flex-1">
                                         {item.name}
                                     </h3>
-                                    {/* Menu Trigger Column - Locked in Place */}
                                     <div className="relative shrink-0 pt-0.5">
                                         <button 
                                             onClick={() => setOpenMenuId(openMenuId === item.id ? null : item.id)}
@@ -1102,7 +1257,6 @@ export default function Home() {
                                 </div>
                                 )}
                                 
-                                {/* Info Line (Price Diff & Date) */}
                                 <div className="flex items-center gap-2 mt-2">
                                     <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-md border ${isUp ? 'bg-green-50 text-green-700 border-green-100' : 'bg-red-50 text-red-700 border-red-100'}`}>
                                         {isUp ? '▲' : '▼'} ${formatCurrency(Math.abs(priceDiff))}
@@ -1146,7 +1300,6 @@ export default function Home() {
                             <div className="space-y-3">
                               <h4 className="text-[10px] font-black uppercase text-stone-400">Saved Breakdown</h4>
                               {item.metals?.map((m: any, idx: number) => {
-                                // Calculate original value if spotSaved exists
                                 const purities: any = { '10K Gold': 0.417, '14K Gold': 0.583, '18K Gold': 0.75, '22K Gold': 0.916, '24K Gold': 0.999, 'Sterling Silver': 0.925, 'Platinum 950': 0.95, 'Palladium': 0.95 };
                                 const purity = purities[m.type] || 1;
                                 const gramWeight = m.weight * UNIT_TO_GRAMS[m.unit];
@@ -1157,7 +1310,6 @@ export default function Home() {
                                 <div key={idx} className="flex justify-between items-center text-[10px] font-bold border-b border-stone-100 pb-1.5 uppercase">
                                   <div>
                                     <span>{m.weight}{m.unit} {m.type}</span>
-                                    {/* Display saved spot if available */}
                                     {spot > 0 && <span className="block text-[8px] text-stone-400 font-medium normal-case tracking-wide">Spot: ${spot.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>}
                                   </div>
                                   <div className="text-right">
@@ -1179,7 +1331,6 @@ export default function Home() {
                                   <p className="text-[8px] font-black text-stone-400 uppercase mb-1">Materials</p>
                                   <p className="text-xs font-black text-slate-700">${(Number(item.materials_at_making || 0) + Number(item.other_costs_at_making || 0)).toFixed(2)}</p>
                                 </div>
-                                {/* MODIFIED: Added hours and calculated rate to the label */}
                                 <div className="bg-white p-3.5 rounded-xl border border-stone-100 shadow-sm">
                                   <p className="text-[8px] font-black text-stone-400 uppercase mb-1">Labor ({Number(item.hours || 0)}h @ ${((Number(item.labor_at_making) || 0) / (Number(item.hours) || 1)).toFixed(2)}/hr)</p>
                                   <p className="text-xs font-black text-slate-700">${Number(item.labor_at_making || 0).toFixed(2)}</p>
@@ -1294,7 +1445,6 @@ export default function Home() {
               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900">Bear Silver and Stone</span>
             </a>
             <InstallPrompt />
-            {/* Added Privacy Link */}
             <a href="https://bearsilverandstone.com/policies/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-[8px] font-bold uppercase tracking-widest text-stone-300 hover:text-[#A5BEAC] transition-colors mt-2">
                 Privacy Policy
             </a>
