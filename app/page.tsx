@@ -4,6 +4,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { supabase } from '../lib/supabase';
 import { Turnstile } from '@marsidev/react-turnstile';
+import { GoogleLogin, CredentialResponse } from '@react-oauth/google'; // Added Import
 import InstallPrompt from './InstallPrompt';
 
 const UNIT_TO_GRAMS: { [key: string]: number } = {
@@ -472,6 +473,29 @@ export default function Home() {
     }
   };
 
+  // ADDED: Handshake Handler
+  const handleGoogleHandshake = async (credentialResponse: CredentialResponse) => {
+    const idToken = credentialResponse.credential;
+
+    if (!idToken) {
+      setNotification({ title: "Error", message: "No credential received from Google.", type: 'error' });
+      return;
+    }
+
+    const { data, error } = await supabase.auth.signInWithIdToken({
+      provider: 'google',
+      token: idToken,
+    });
+
+    if (error) {
+      setNotification({ title: "Login Failed", message: error.message, type: 'error' });
+    } else {
+      setShowAuth(false);
+      fetchInventory();
+      setNotification({ title: "Welcome to the Vault", message: "Successfully logged in via Google.", type: 'success' });
+    }
+  };
+
   const handleResetPassword = async () => {
     if (!email) {
         setNotification({ title: "Email Required", message: "Please enter your email address first so we know where to send the recovery link.", type: 'info' });
@@ -739,7 +763,18 @@ export default function Home() {
                 <div className="absolute right-0 mt-12 w-full md:w-80 bg-white p-6 rounded-3xl border-2 border-[#A5BEAC] shadow-2xl z-[100] animate-in fade-in slide-in-from-top-2 mx-auto">
                   <button onClick={() => { setShowAuth(false); setShowPassword(false); }} className="absolute top-4 right-4 text-stone-300 hover:text-[#A5BEAC] font-black text-sm">✕</button>
                   <h3 className="text-sm font-black uppercase mb-4 text-center text-slate-900">Vault Access</h3>
-                  <button onClick={loginWithGoogle} className="w-full flex items-center justify-center gap-3 bg-white border-2 border-stone-100 py-3 rounded-xl hover:bg-stone-50 transition mb-4 shadow-sm"><img src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png" className="w-4 h-4" alt="G" /><span className="text-[10px] font-black uppercase text-slate-700">Continue with Google</span></button>
+                  {/* MODIFIED: Replaced standard Google button with handshake component */}
+                  <div className="w-full flex justify-center mb-4">
+                    <GoogleLogin
+                      onSuccess={handleGoogleHandshake}
+                      onError={() => setNotification({ title: "Error", message: "Google Login Failed", type: 'error' })}
+                      theme="outline"
+                      size="large"
+                      width="300"
+                      shape="pill"
+                      text="continue_with"
+                    />
+                  </div>
                   <div className="flex border-b border-stone-100 mb-4">
                     <button onClick={() => { setIsSignUp(false); setShowPassword(false); }} className={`flex-1 py-2 text-[10px] font-black uppercase ${!isSignUp ? 'text-[#A5BEAC] border-b-2 border-[#A5BEAC]' : 'text-stone-300'}`}>Login</button>
                     <button onClick={() => { setIsSignUp(true); setShowPassword(false); }} className={`flex-1 py-2 text-[10px] font-black uppercase ${isSignUp ? 'text-[#A5BEAC] border-b-2 border-[#A5BEAC]' : 'text-stone-300'}`}>Sign Up</button>
@@ -1259,6 +1294,10 @@ export default function Home() {
               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900">Bear Silver and Stone</span>
             </a>
             <InstallPrompt />
+            {/* Added Privacy Link */}
+            <a href="https://bearsilverandstone.com/policies/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-[8px] font-bold uppercase tracking-widest text-stone-300 hover:text-[#A5BEAC] transition-colors mt-2">
+                Privacy Policy
+            </a>
           </div>
         </div>
       </div>
