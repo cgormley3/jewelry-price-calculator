@@ -201,7 +201,8 @@ export default function Home() {
 
   const addToInventory = async () => {
     if (isGuest && !token) return alert("Please complete verification");
-    if (!itemName || metalList.length === 0 || !user) return alert("Missing required fields");
+    if (!itemName) return alert("Please provide a name for this item.");
+    if (metalList.length === 0 || !user) return alert("Missing required fields");
 
     const a = calculateFullBreakdown(metalList, hours, rate, otherCosts);
     const newItem = {
@@ -439,7 +440,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* MARKET TICKER (FIXED: mb-6 on mobile for better spacing) */}
+        {/* MARKET TICKER */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 px-2 mb-6">
           {['gold', 'silver', 'platinum', 'palladium'].map((name) => (
             <div key={name} className="bg-white p-4 rounded-xl border-l-4 border-[#A5BEAC] shadow-sm text-center lg:text-left">
@@ -478,7 +479,7 @@ export default function Home() {
           <div className={`lg:col-span-5 space-y-6 ${activeTab !== 'calculator' ? 'hidden md:block' : ''}`}>
             <div className="bg-white p-8 rounded-[2rem] shadow-xl border-2 border-[#A5BEAC] lg:sticky lg:top-6 space-y-5">
               <h2 className="text-2xl font-black uppercase italic tracking-tighter text-slate-900">Calculator</h2>
-              <input placeholder="Product Name" className="w-full p-4 bg-stone-50 border border-stone-200 rounded-2xl outline-none focus:border-[#A5BEAC] transition-all" value={itemName} onChange={e => setItemName(e.target.value)} />
+              
               <div className="p-4 bg-stone-50 rounded-2xl border-2 border-dotted border-stone-300 space-y-3">
                 <select className="w-full p-3 border rounded-xl font-bold bg-white focus:border-[#2d4a22]" value={tempMetal} onChange={e => setTempMetal(e.target.value)}>
                   <option>Sterling Silver</option><option>10K Gold</option><option>14K Gold</option><option>18K Gold</option><option>22K Gold</option><option>24K Gold</option><option>Platinum 950</option><option>Palladium</option>
@@ -511,7 +512,10 @@ export default function Home() {
                   <div className="flex justify-between items-center py-2 border-b border-stone-200"><span className="text-stone-500 font-bold uppercase text-[10px]">Materials Total</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts).totalMaterials.toFixed(2)}</span></div>
                   <div className="flex justify-between items-center py-2"><span className="text-stone-500 font-bold uppercase text-[10px]">Labor Total ({hours || 0}h)</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts).labor.toFixed(2)}</span></div>
                 </div>
-                <div className="grid grid-cols-1 gap-4 mb-6 w-full">
+
+                <hr className="w-full border-t border-stone-100 my-2" />
+
+                <div className="grid grid-cols-1 gap-4 w-full">
                   <button
                     onClick={() => setStrategy('A')}
                     className={`group flex flex-col sm:flex-row sm:items-center sm:justify-between p-5 rounded-[2rem] border-2 transition-all ${strategy === 'A' ? 'border-[#A5BEAC] bg-stone-50 shadow-md' : 'border-stone-100 bg-white hover:border-stone-200'}`}
@@ -575,7 +579,19 @@ export default function Home() {
                     </div>
                   </button>
                 </div>
-                <button onClick={addToInventory} disabled={isGuest && !token} className={`w-full py-5 rounded-[1.8rem] font-black uppercase tracking-[0.15em] text-sm transition-all ${(isGuest && !token) ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-[#A5BEAC] text-white shadow-xl hover:bg-slate-900 active:scale-[0.97]'}`}>{(isGuest && !token) ? "Verifying Human..." : "Save to Vault"}</button>
+
+                <hr className="w-full border-t border-stone-100 my-2" />
+                
+                <div className="w-full space-y-4">
+                  <input 
+                    placeholder="Product Name" 
+                    className="w-full p-4 bg-stone-50 border border-stone-200 rounded-2xl outline-none focus:border-[#A5BEAC] transition-all font-bold placeholder:font-normal" 
+                    value={itemName} 
+                    onChange={e => setItemName(e.target.value)} 
+                  />
+                  <button onClick={addToInventory} disabled={isGuest && !token} className={`w-full py-5 rounded-[1.8rem] font-black uppercase tracking-[0.15em] text-sm transition-all ${(isGuest && !token) ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-[#A5BEAC] text-white shadow-xl hover:bg-slate-900 active:scale-[0.97]'}`}>{(isGuest && !token) ? "Verifying Human..." : "Save to Vault"}</button>
+                </div>
+
                 {isGuest && !token && <div className="w-full flex justify-center mt-4 h-auto overflow-hidden animate-in fade-in slide-in-from-top-1"><Turnstile siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!} onSuccess={(token) => setToken(token)} options={{ theme: 'light', appearance: 'interaction-only' }} /></div>}
               </div>
             </div>
@@ -743,7 +759,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* LOGIC SECTION (TIGHTENED POSITIONS & HEIGHT MATCHED) */}
+        {/* LOGIC SECTION */}
         <div className={`grid grid-cols-1 gap-8 pt-0 mt-[-1rem] md:mt-0 md:pt-10 ${activeTab !== 'logic' ? 'hidden md:grid' : ''}`}>
           <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC] min-h-[400px] md:min-h-0">
             <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">1. MATERIAL CALCULATION DETAIL</h2>
