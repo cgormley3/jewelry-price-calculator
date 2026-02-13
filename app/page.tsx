@@ -65,6 +65,9 @@ export default function Home() {
   const [showPassword, setShowPassword] = useState(false);
   const [activeTab, setActiveTab] = useState<'calculator' | 'vault' | 'logic'>('calculator');
    
+  // NEW: Image Upload State
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
+
   const [notification, setNotification] = useState<{ 
     title: string; 
     message: string; 
@@ -230,6 +233,43 @@ export default function Home() {
     } else {
       setNotification({ title: "Error", message: "Could not rename item.", type: 'error' });
     }
+  };
+
+  // NEW: Image Upload Logic
+  const handleImageUpload = async (event: any, itemId: string) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Optional: Add size check (e.g., 5MB limit)
+    if (file.size > 5 * 1024 * 1024) {
+       setNotification({ title: "File Too Large", message: "Please select an image under 5MB.", type: 'error' });
+       return;
+    }
+
+    setUploadingId(itemId);
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${user.id}/${itemId}-${Date.now()}.${fileExt}`;
+
+    // Upload to Supabase Storage (Bucket: 'product-images')
+    const { error: uploadError } = await supabase.storage.from('product-images').upload(fileName, file);
+
+    if (uploadError) {
+        setNotification({ title: "Upload Failed", message: "Could not upload image.", type: 'error' });
+    } else {
+        // Get Public URL
+        const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(fileName);
+        
+        // Save URL to Inventory Table
+        const { error: dbError } = await supabase.from('inventory').update({ image_url: publicUrl }).eq('id', itemId);
+        
+        if (!dbError) {
+             // Update local state without fetching all
+             setInventory(inventory.map(item => item.id === itemId ? { ...item, image_url: publicUrl } : item));
+             setNotification({ title: "Image Added", message: "Product card updated successfully.", type: 'success' });
+             setOpenMenuId(null); // Close menu
+        }
+    }
+    setUploadingId(null);
   };
 
   const saveNote = async (id: string, newNote: string) => {
@@ -719,18 +759,18 @@ export default function Home() {
             <div className="p-4 bg-slate-900 rounded-2xl text-white space-y-2">
                {(() => {
                  const laborHours = recalcItem.hours || 1;
-                 const newLaborCost = recalcParams.laborRate 
+                 const newLaborCost = recalcParams.laborRate 
                     ? Number(recalcParams.laborRate) * laborHours
                     : Number(recalcItem.labor_at_making || 0);
                  
                  const calc = calculateFullBreakdown(
-                   recalcItem.metals, 
-                   1, 
-                   newLaborCost, 
-                   recalcItem.other_costs_at_making, 
-                   recalcItem.multiplier, 
+                   recalcItem.metals, 
+                   1, 
+                   newLaborCost, 
+                   recalcItem.other_costs_at_making, 
+                   recalcItem.multiplier, 
                    recalcItem.markup_b,
-                   recalcParams 
+                   recalcParams 
                  );
                  
                  const liveRetail = recalcItem.strategy === 'A' ? (calc.totalMaterials + newLaborCost) * (recalcItem.multiplier || 3) : ((calc.totalMaterials * (recalcItem.markup_b || 1.8)) + newLaborCost) * 2;
@@ -1217,6 +1257,14 @@ export default function Home() {
                       <div className="p-5 md:p-6 flex flex-col gap-5">
                         <div className="flex flex-col gap-1">
                           <div className="flex items-start flex-nowrap justify-between gap-3 relative">
+                            
+                            {/* NEW IMAGE SLOT - Circular 64x64 thumbnail */}
+                            {item.image_url && (
+                                <div className="shrink-0 w-16 h-16 rounded-full overflow-hidden border border-stone-200 shadow-sm">
+                                    <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
+                                </div>
+                            )}
+
                             <div className="flex-1 min-w-0">
                                 {editingNameId === item.id ? (
                                 <div className="w-full animate-in fade-in slide-in-from-left-1 flex items-center gap-2">
@@ -1258,6 +1306,19 @@ export default function Home() {
                                                 >
                                                     <span>✎</span> Edit Name
                                                 </button>
+                                                
+                                                {/* NEW: Image Upload Option */}
+                                                <label className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b transition-colors flex items-center gap-2 cursor-pointer">
+                                                    <span>📷</span> {uploadingId === item.id ? "Uploading..." : "Add/Edit Image"}
+                                                    <input 
+                                                        type="file" 
+                                                        accept="image/*" 
+                                                        className="hidden" 
+                                                        disabled={uploadingId === item.id}
+                                                        onChange={(e) => handleImageUpload(e, item.id)}
+                                                    />
+                                                </label>
+
                                                 <button 
                                                     onClick={() => syncToMarket(item)}
                                                     className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b transition-colors flex items-center gap-2"
