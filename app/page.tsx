@@ -30,9 +30,10 @@ export default function Home() {
   const [showResetModal, setShowResetModal] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   
-  // PDF Export Options Modal
+  // PDF Export Options
   const [showPDFOptions, setShowPDFOptions] = useState(false);
   const [includeLiveInPDF, setIncludeLiveInPDF] = useState(true);
+  const [includeBreakdownInPDF, setIncludeBreakdownInPDF] = useState(true);
 
   // Form States
   const [manualRetail, setManualRetail] = useState('');
@@ -74,8 +75,8 @@ export default function Home() {
   const [cropImage, setCropImage] = useState<string | null>(null);
   const [cropItemId, setCropItemId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
-  const [minZoom, setMinZoom] = useState(0.1); // NEW: Dynamic minimum zoom
-  const [rotation, setRotation] = useState(0); // NEW: Rotation state
+  const [minZoom, setMinZoom] = useState(0.1); 
+  const [rotation, setRotation] = useState(0);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
@@ -213,8 +214,6 @@ export default function Home() {
     reader.onload = () => {
         setCropImage(reader.result as string);
         setCropItemId(itemId);
-        // Reset defaults
-        setZoom(1); 
         setRotation(0);
         setOffset({ x: 0, y: 0 });
         setOpenMenuId(null);
@@ -251,23 +250,15 @@ export default function Home() {
       ctx.clearRect(0,0,size,size);
       ctx.save();
       
-      // 1. Center of canvas
       ctx.translate(size / 2, size / 2);
-      
-      // 2. Circular Clipping
       ctx.beginPath();
       ctx.arc(0, 0, size / 2, 0, Math.PI * 2);
       ctx.clip();
       
-      // 3. User Interaction Transforms
-      // Apply offset (pan)
       ctx.translate(offset.x, offset.y);
-      // Apply rotation (user choice)
       ctx.rotate((rotation * Math.PI) / 180);
-      // Apply Zoom
       ctx.scale(zoom, zoom);
       
-      // 4. Draw image centered on its own origin
       ctx.translate(-img.naturalWidth / 2, -img.naturalHeight / 2);
       ctx.drawImage(img, 0, 0);
       
@@ -646,16 +637,52 @@ export default function Home() {
     document.body.appendChild(link); link.click(); setShowVaultMenu(false);
   };
 
-  const getImageData = async (url: string): Promise<string | null> => {
-      try {
-          const res = await fetch(url);
-          const blob = await res.blob();
-          return new Promise((resolve) => {
-              const reader = new FileReader();
-              reader.onloadend = () => resolve(reader.result as string);
-              reader.readAsDataURL(blob);
-          });
-      } catch (e) { return null; }
+  // UPDATED: Use circular cropping in memory for PDF
+  const getCircularImageData = (url: string): Promise<string | null> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = "Anonymous";
+      img.src = url;
+      img.onload = () => {
+        // Create a square canvas to fit the image
+        const size = Math.min(img.width, img.height);
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+            // 1. Draw the circle mask
+            ctx.beginPath();
+            ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+            ctx.closePath();
+            ctx.clip();
+            
+            // 2. Draw the image centered and cover
+            // We need to calculate aspect ratio to simulate object-cover
+            const aspect = img.width / img.height;
+            let drawW = size;
+            let drawH = size;
+            let offsetX = 0;
+            let offsetY = 0;
+
+            if (aspect > 1) {
+                // Landscape
+                drawW = size * aspect;
+                offsetX = -(drawW - size) / 2;
+            } else {
+                // Portrait
+                drawH = size / aspect;
+                offsetY = -(drawH - size) / 2;
+            }
+            
+            ctx.drawImage(img, offsetX, offsetY, drawW, drawH);
+            resolve(canvas.toDataURL("image/png"));
+        } else {
+            resolve(null);
+        }
+      };
+      img.onerror = () => resolve(null);
+    });
   };
 
   const exportDetailedPDF = async () => {
@@ -670,7 +697,7 @@ export default function Home() {
         doc.text(`Total Vault live Market Value: $${totalVaultValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, 14, 31);
     }
 
-    let currentY = 40;
+    let currentY = 45; // Moved down to avoid header
 
     for (const item of filteredInventory) {
       if (currentY > 230) { doc.addPage(); currentY = 20; }
@@ -681,27 +708,16 @@ export default function Home() {
 
       let titleX = 14;
       if (item.image_url) {
-          const imgData = await getImageData(item.image_url);
+          const imgData = await getCircularImageData(item.image_url); // Use the new safe helper
           if (imgData) {
-              // NEW: PDF Circular Clip
-              doc.saveGraphicsState();
-              doc.setDrawColor(255, 255, 255);
-              // Draw image
-              doc.addImage(imgData, 'PNG', 14, currentY, 20, 20);
-              
-              // Draw a thick white circle border to visually "clip" any edges if square
-              // Note: True clipping is complex in basic jsPDF, masking with a white border is the stable cross-client hack
-              doc.setLineWidth(1);
-              doc.circle(24, currentY + 10, 10, 'S'); 
-              doc.restoreGraphicsState();
-              
+              doc.addImage(imgData, 'PNG', 14, currentY, 20, 20); 
               titleX = 40; 
           }
       }
 
-      doc.setFont("helvetica", "bold"); doc.setFontSize(14); doc.setTextColor(0, 0, 0); doc.text(`${item.name.toUpperCase()}`, titleX, currentY + 6);
+      doc.setFont("helvetica", "bold"); doc.setFontSize(14); doc.setTextColor(0, 0, 0); doc.text(`${item.name.toUpperCase()}`, titleX, currentY + 8);
       doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(150, 150, 150);
-      doc.text(`Strategy: ${item.strategy} | Saved: ${new Date(item.created_at).toLocaleDateString()}`, titleX, currentY + 11);
+      doc.text(`Strategy: ${item.strategy} | Saved: ${new Date(item.created_at).toLocaleDateString()}`, titleX, currentY + 13);
 
       const tableHead = includeLiveInPDF 
           ? [['Financial Metric', 'Saved (Original)', 'Live (Current Market)']]
@@ -716,33 +732,40 @@ export default function Home() {
       if (includeLiveInPDF) wholesaleRow.push({ content: `$${liveWholesale.toFixed(2)}`, styles: { textColor: [0, 0, 0] } });
       tableBody.push(wholesaleRow);
 
+      // UPDATED: Margin top for table to ensure it doesn't overlap image
       autoTable(doc, {
-        startY: currentY + 14, 
+        startY: currentY + 22, 
         head: tableHead,
         body: tableBody,
         theme: 'grid', headStyles: { fillColor: [165, 190, 172], textColor: 255, fontSize: 8 },
         styles: { fontSize: 8, cellPadding: 2 }, margin: { left: 14 }, tableWidth: includeLiveInPDF ? 120 : 80
       });
 
-      const breakdownLines = item.metals.map((m: any) => `${m.weight}${m.unit} ${m.type}`);
-      if (item.other_costs_at_making > 0) breakdownLines.push(`Stones/Other: $${Number(item.other_costs_at_making).toFixed(2)}`);
-      if (labor > 0) breakdownLines.push(`Labor Cost (${item.hours || 0}h): $${Number(labor).toFixed(2)}`);
-      breakdownLines.push(`Materials Total: $${(Number(item.materials_at_making) + Number(item.other_costs_at_making)).toFixed(2)}`);
-
-      doc.setFontSize(8); doc.setTextColor(80, 80, 80); doc.setFont("helvetica", "bold"); doc.text("BREAKDOWN:", 140, currentY + 18);
-      doc.setFont("helvetica", "normal");
-      breakdownLines.forEach((line: string, i: number) => doc.text(line, 140, currentY + 23 + (i * 4)));
-
       let nextY = (doc as any).lastAutoTable.finalY + 6;
 
+      if (includeBreakdownInPDF) {
+          const breakdownLines = item.metals.map((m: any) => `${m.weight}${m.unit} ${m.type}`);
+          if (item.other_costs_at_making > 0) breakdownLines.push(`Stones/Other: $${Number(item.other_costs_at_making).toFixed(2)}`);
+          if (labor > 0) breakdownLines.push(`Labor Cost (${item.hours || 0}h): $${Number(labor).toFixed(2)}`);
+          breakdownLines.push(`Materials Total: $${(Number(item.materials_at_making) + Number(item.other_costs_at_making)).toFixed(2)}`);
+
+          doc.setFontSize(8); doc.setTextColor(80, 80, 80); doc.setFont("helvetica", "bold"); doc.text("BREAKDOWN:", 140, currentY + 28);
+          doc.setFont("helvetica", "normal");
+          breakdownLines.forEach((line: string, i: number) => doc.text(line, 140, currentY + 33 + (i * 4)));
+          
+          nextY = Math.max(nextY, currentY + 33 + (breakdownLines.length * 4) + 5);
+      }
+
       if (item.notes) {
+        if (nextY > 270) { doc.addPage(); nextY = 20; }
+        
         doc.setFont("helvetica", "bold"); doc.text("NOTES:", 14, nextY);
         doc.setFont("helvetica", "italic"); doc.setTextColor(100, 100, 100);
         doc.text(item.notes, 14, nextY + 4, { maxWidth: 120 });
         nextY += 14; 
       }
 
-      currentY = Math.max(nextY + 10, currentY + 30 + (breakdownLines.length * 4));
+      currentY = nextY + 10;
       doc.setDrawColor(220); doc.line(14, currentY - 5, 196, currentY - 5);
     }
 
@@ -828,7 +851,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-stone-50 p-4 md:p-10 text-slate-900 font-sans text-left relative">
       
-      {/* NEW: Image Adjuster Modal */}
+      {/* Image Adjuster Modal */}
       {cropImage && (
           <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[500] flex items-center justify-center p-4 animate-in fade-in">
               <div className="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl space-y-4">
@@ -861,10 +884,10 @@ export default function Home() {
                            img.style.marginTop = `-${img.naturalHeight / 2}px`;
                            img.style.opacity = '1';
                            
-                           // NEW: Calculate perfect fit scale
-                           const fitScale = Math.max(256 / img.naturalWidth, 256 / img.naturalHeight);
-                           setMinZoom(fitScale * 0.8); // Allow slightly smaller to see edges
-                           setZoom(fitScale); 
+                           // FIXED: Calculate perfect fit scale (contain)
+                           const fitScale = 256 / Math.min(img.naturalWidth, img.naturalHeight);
+                           setMinZoom(fitScale); 
+                           setZoom(fitScale); // Start at fit scale
                         }}
                         draggable={false}
                       />
@@ -874,12 +897,12 @@ export default function Home() {
                   <div className="space-y-4">
                       <div className="flex justify-between items-center text-xs font-bold text-stone-400 uppercase">
                           <span>Zoom</span>
-                          <button onClick={() => setRotation(r => (r + 90) % 360)} className="text-[#A5BEAC] hover:text-slate-900 transition-colors">⟳ Rotate</button>
+                          <button onClick={() => setRotation(r => (r + 90) % 360)} className="text-[#A5BEAC] hover:text-slate-900 transition-colors">⟳ Rotate 90°</button>
                       </div>
                       <input 
                         type="range" 
                         min={minZoom}
-                        max={minZoom * 4} 
+                        max={minZoom * 5} 
                         step="0.01" 
                         value={zoom} 
                         onChange={(e) => setZoom(parseFloat(e.target.value))}
@@ -899,19 +922,32 @@ export default function Home() {
           </div>
       )}
 
-      {/* NEW: PDF Options Modal */}
+      {/* PDF Options Modal */}
       {showPDFOptions && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
               <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-6">
                   <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">PDF Options</h3>
                   
-                  <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setIncludeLiveInPDF(!includeLiveInPDF)}>
-                      <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${includeLiveInPDF ? 'bg-[#A5BEAC] border-[#A5BEAC] text-white' : 'bg-white border-stone-300'}`}>
-                          {includeLiveInPDF && '✓'}
+                  <div className="space-y-3">
+                      <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setIncludeLiveInPDF(!includeLiveInPDF)}>
+                          <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${includeLiveInPDF ? 'bg-[#A5BEAC] border-[#A5BEAC] text-white' : 'bg-white border-stone-300'}`}>
+                              {includeLiveInPDF && '✓'}
+                          </div>
+                          <div>
+                              <p className="text-xs font-black uppercase text-slate-900">Include Live Prices</p>
+                              <p className="text-[10px] text-stone-400 font-bold">Show current market value calculations</p>
+                          </div>
                       </div>
-                      <div>
-                          <p className="text-xs font-black uppercase text-slate-900">Include Live Prices</p>
-                          <p className="text-[10px] text-stone-400 font-bold">Show current market value calculations</p>
+                      
+                      {/* Breakdown Toggle */}
+                      <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setIncludeBreakdownInPDF(!includeBreakdownInPDF)}>
+                          <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${includeBreakdownInPDF ? 'bg-[#A5BEAC] border-[#A5BEAC] text-white' : 'bg-white border-stone-300'}`}>
+                              {includeBreakdownInPDF && '✓'}
+                          </div>
+                          <div>
+                              <p className="text-xs font-black uppercase text-slate-900">Include Breakdown</p>
+                              <p className="text-[10px] text-stone-400 font-bold">Show list of metals and labor costs</p>
+                          </div>
                       </div>
                   </div>
 
