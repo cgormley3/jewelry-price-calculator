@@ -1142,8 +1142,13 @@ export default function Home() {
                 {/* NEW: Combined Vault Options Menu */}
                 <div className="relative">
                     <button 
-                        onClick={() => setShowVaultMenu(!showVaultMenu)} 
-                        className="w-full sm:w-auto px-6 py-3 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-[#A5BEAC] transition shadow-sm"
+                        onClick={() => { if (inventory.length > 0) setShowVaultMenu(!showVaultMenu); }} 
+                        disabled={inventory.length === 0}
+                        className={`w-full sm:w-auto px-6 py-3 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 transition shadow-sm ${
+                            inventory.length === 0 
+                            ? 'bg-stone-200 text-stone-400 cursor-not-allowed' 
+                            : 'bg-slate-900 text-white hover:bg-[#A5BEAC]'
+                        }`}
                     >
                         Vault Options {showVaultMenu ? '▲' : '▼'}
                     </button>
