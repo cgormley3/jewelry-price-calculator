@@ -30,7 +30,7 @@ export default function Home() {
   const [showResetModal, setShowResetModal] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   
-  // PDF Export Options
+  // PDF Export Options Modal
   const [showPDFOptions, setShowPDFOptions] = useState(false);
   const [includeLiveInPDF, setIncludeLiveInPDF] = useState(true);
   const [includeBreakdownInPDF, setIncludeBreakdownInPDF] = useState(true);
@@ -82,6 +82,13 @@ export default function Home() {
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
+
+  // Selection & Location State
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  // MODIFIED: Start with only Main Vault
+  const [locations, setLocations] = useState<string[]>(['Main Vault']); 
+  const [showLocationMenuId, setShowLocationMenuId] = useState<string | null>(null);
+  const [newLocationInput, setNewLocationInput] = useState('');
 
   const [notification, setNotification] = useState<{ 
     title: string; 
@@ -198,9 +205,50 @@ export default function Home() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user?.id) { setLoading(false); return; }
     const { data, error } = await supabase.from('inventory').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false });
-    if (!error && data) setInventory(data);
+    if (!error && data) {
+        setInventory(data);
+        // Extract unique locations from DB
+        const uniqueLocs = Array.from(new Set(data.map(i => i.location).filter(Boolean)));
+        setLocations(prev => Array.from(new Set([...prev, ...uniqueLocs])));
+    }
     setLoading(false);
   }
+
+  // --- SELECTION & LOCATION HANDLERS ---
+  const toggleSelection = (id: string) => {
+      const newSet = new Set(selectedItems);
+      if (newSet.has(id)) newSet.delete(id);
+      else newSet.add(id);
+      setSelectedItems(newSet);
+  };
+
+  const toggleSelectAll = () => {
+      if (selectedItems.size === filteredInventory.length && filteredInventory.length > 0) {
+          setSelectedItems(new Set());
+      } else {
+          setSelectedItems(new Set(filteredInventory.map(i => i.id)));
+      }
+  };
+
+  const updateLocation = async (id: string, newLoc: string) => {
+      const { error } = await supabase.from('inventory').update({ location: newLoc }).eq('id', id);
+      if (!error) {
+          setInventory(inventory.map(i => i.id === id ? { ...i, location: newLoc } : i));
+          setShowLocationMenuId(null);
+      }
+  };
+
+  const addCustomLocation = async (id: string) => {
+      if (!newLocationInput.trim()) return;
+      setLocations(prev => Array.from(new Set([...prev, newLocationInput])));
+      await updateLocation(id, newLocationInput);
+      setNewLocationInput('');
+  };
+
+  // NEW: Delete Location Handler
+  const deleteLocation = (locToDelete: string) => {
+    setLocations(locations.filter(l => l !== locToDelete));
+  };
 
   // --- Image Crop Handlers ---
   const onFileSelect = (event: any, itemId: string) => {
@@ -236,48 +284,37 @@ export default function Home() {
 
   const performCropAndUpload = async () => {
       if (!canvasRef.current || !imageRef.current || !cropItemId) return;
-      
       const canvas = canvasRef.current;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
-
       const size = 256;
       canvas.width = size;
       canvas.height = size;
-      
       const img = imageRef.current;
-      
       ctx.clearRect(0,0,size,size);
       ctx.save();
-      
       ctx.translate(size / 2, size / 2);
       ctx.beginPath();
       ctx.arc(0, 0, size / 2, 0, Math.PI * 2);
       ctx.clip();
-      
       ctx.translate(offset.x, offset.y);
       ctx.rotate((rotation * Math.PI) / 180);
       ctx.scale(zoom, zoom);
-      
       ctx.translate(-img.naturalWidth / 2, -img.naturalHeight / 2);
       ctx.drawImage(img, 0, 0);
-      
       ctx.restore();
 
       canvas.toBlob(async (blob) => {
           if (!blob) return;
           setUploadingId(cropItemId);
           setCropImage(null); 
-          
           const fileName = `${user.id}/${cropItemId}-${Date.now()}.png`;
           const { error: uploadError } = await supabase.storage.from('product-images').upload(fileName, blob);
-          
           if (uploadError) {
              setNotification({ title: "Upload Failed", message: "Could not upload cropped image.", type: 'error' });
           } else {
              const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(fileName);
              const { error: dbError } = await supabase.from('inventory').update({ image_url: publicUrl }).eq('id', cropItemId);
-             
              if (!dbError) {
                  setInventory(inventory.map(item => item.id === cropItemId ? { ...item, image_url: publicUrl } : item));
                  setNotification({ title: "Image Updated", message: "New photo saved successfully.", type: 'success' });
@@ -317,6 +354,11 @@ export default function Home() {
         const { error } = await supabase.from('inventory').delete().eq('id', id);
         if (!error) {
           setInventory(inventory.filter(item => item.id !== id));
+          if (selectedItems.has(id)) {
+              const newSet = new Set(selectedItems);
+              newSet.delete(id);
+              setSelectedItems(newSet);
+          }
           setNotification({ title: "Deleted", message: `"${name}" has been removed.`, type: 'success' });
         } else {
           setNotification({ title: "Error", message: "Could not delete item.", type: 'error' });
@@ -379,15 +421,21 @@ export default function Home() {
   };
 
   const syncAllToMarket = async () => {
+    const targetItems = selectedItems.size > 0 
+        ? inventory.filter(i => selectedItems.has(i.id))
+        : inventory;
+
+    const count = targetItems.length;
+
     setNotification({
-        title: "Sync All to Market",
-        message: "This will update EVERY item in your vault to reflect current market spot prices. This cannot be undone.",
+        title: `Sync ${selectedItems.size > 0 ? `Selected (${count})` : 'All'}`,
+        message: `Update ${count} item(s) to reflect current market spot prices? This cannot be undone.`,
         type: 'confirm',
         onConfirm: async () => {
             setLoading(true);
             setShowVaultMenu(false);
             
-            const updates = inventory.map(async (item) => {
+            const updates = targetItems.map(async (item) => {
                 const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
                 const labor = item.labor_at_making || 0;
                 const liveWholesale = item.strategy === 'A' ? current.wholesaleA + labor : current.wholesaleB;
@@ -413,21 +461,27 @@ export default function Home() {
 
             await Promise.all(updates);
             await fetchInventory();
-            setNotification({ title: "Vault Synced", message: "All items have been updated to live market prices.", type: 'success' });
+            setNotification({ title: "Vault Synced", message: `${count} items updated to live market prices.`, type: 'success' });
         }
     });
   };
 
   const handleGlobalRecalcSync = async () => {
+    const targetItems = selectedItems.size > 0 
+        ? inventory.filter(i => selectedItems.has(i.id))
+        : inventory;
+    
+    const count = targetItems.length;
+
     setNotification({
-      title: "Confirm Global Update",
-      message: `Recalculate ALL items with these new parameters? This will overwrite saved labor costs and spot prices.`,
+      title: `Recalculate ${selectedItems.size > 0 ? `Selected (${count})` : 'All'}`,
+      message: `Recalculate ${count} item(s) with these new parameters? This will overwrite saved labor costs and spot prices.`,
       type: 'confirm',
       onConfirm: async () => {
         setLoading(true);
         setShowVaultMenu(false);
 
-        const updates = inventory.map(async (item) => {
+        const updates = targetItems.map(async (item) => {
             const laborHours = item.hours || 1;
             const newLaborCost = recalcParams.laborRate 
                ? Number(recalcParams.laborRate) * laborHours
@@ -470,7 +524,7 @@ export default function Home() {
         await fetchInventory();
         setShowGlobalRecalc(false);
         setRecalcParams({ gold: '', silver: '', platinum: '', palladium: '', laborRate: '' });
-        setNotification({ title: "Global Update Complete", message: "All items have been recalculated.", type: 'success' });
+        setNotification({ title: "Update Complete", message: `${count} items have been recalculated.`, type: 'success' });
       }
     });
   };
@@ -568,7 +622,8 @@ export default function Home() {
       markup_b: markupB, 
       user_id: user.id, 
       notes: '',
-      hours: Number(hours) || 0 
+      hours: Number(hours) || 0,
+      location: 'Main Vault' // Default location
     };
     const { data, error } = await supabase.from('inventory').insert([newItem]).select();
     if (!error && data) { 
@@ -590,6 +645,7 @@ export default function Home() {
         if (item.metals.some((m: any) => m.type.toLowerCase().includes(lowerTerm))) return true;
         if (item.notes && item.notes.toLowerCase().includes(lowerTerm)) return true;
         if (item.strategy && item.strategy.toLowerCase().includes(lowerTerm)) return true;
+        if (item.location && item.location.toLowerCase().includes(lowerTerm)) return true;
         const dateStr = new Date(item.created_at).toLocaleDateString();
         if (dateStr.includes(searchTerm)) return true;
         return false;
@@ -606,8 +662,12 @@ export default function Home() {
   }, [inventory, prices, calculateFullBreakdown]);
 
   const exportToCSV = () => {
-    const headers = ["Item Name", "Live Retail", "Live Wholesale", "Saved Retail", "Saved Wholesale", "Labor Hours", "Labor Cost", "Materials Cost", "Other Costs", "Notes", "Date Created", "Strategy", "Metals", "Image URL"];
-    const rows = filteredInventory.map(item => {
+    const targetItems = selectedItems.size > 0 
+        ? filteredInventory.filter(i => selectedItems.has(i.id))
+        : filteredInventory;
+
+    const headers = ["Item Name", "Location", "Live Retail", "Live Wholesale", "Saved Retail", "Saved Wholesale", "Labor Hours", "Labor Cost", "Materials Cost", "Other Costs", "Notes", "Date Created", "Strategy", "Metals", "Image URL"];
+    const rows = targetItems.map(item => {
       const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
       const labor = item.labor_at_making || 0;
       const liveWholesale = item.strategy === 'A' ? current.wholesaleA + labor : current.wholesaleB;
@@ -615,6 +675,7 @@ export default function Home() {
       const metalsStr = item.metals.map((m: any) => `${m.weight}${m.unit} ${m.type}`).join('; ');
       return [
           `"${item.name}"`, 
+          `"${item.location || 'Main Vault'}"`,
           liveRetail.toFixed(2), 
           liveWholesale.toFixed(2), 
           Number(item.retail).toFixed(2), 
@@ -637,45 +698,18 @@ export default function Home() {
     document.body.appendChild(link); link.click(); setShowVaultMenu(false);
   };
 
-  // UPDATED: Use circular cropping in memory for PDF
-  const getCircularImageData = (url: string): Promise<string | null> => {
+  const getImageData = (url: string): Promise<string | null> => {
     return new Promise((resolve) => {
       const img = new Image();
       img.crossOrigin = "Anonymous";
       img.src = url;
       img.onload = () => {
-        // Create a square canvas to fit the image
-        const size = Math.min(img.width, img.height);
         const canvas = document.createElement("canvas");
-        canvas.width = size;
-        canvas.height = size;
+        canvas.width = img.width;
+        canvas.height = img.height;
         const ctx = canvas.getContext("2d");
         if (ctx) {
-            // 1. Draw the circle mask
-            ctx.beginPath();
-            ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
-            ctx.closePath();
-            ctx.clip();
-            
-            // 2. Draw the image centered and cover
-            // We need to calculate aspect ratio to simulate object-cover
-            const aspect = img.width / img.height;
-            let drawW = size;
-            let drawH = size;
-            let offsetX = 0;
-            let offsetY = 0;
-
-            if (aspect > 1) {
-                // Landscape
-                drawW = size * aspect;
-                offsetX = -(drawW - size) / 2;
-            } else {
-                // Portrait
-                drawH = size / aspect;
-                offsetY = -(drawH - size) / 2;
-            }
-            
-            ctx.drawImage(img, offsetX, offsetY, drawW, drawH);
+            ctx.drawImage(img, 0, 0);
             resolve(canvas.toDataURL("image/png"));
         } else {
             resolve(null);
@@ -689,6 +723,10 @@ export default function Home() {
     setLoading(true);
     setShowPDFOptions(false); 
 
+    const targetItems = selectedItems.size > 0 
+        ? filteredInventory.filter(i => selectedItems.has(i.id))
+        : filteredInventory;
+
     const doc = new jsPDF();
     doc.setFontSize(22); doc.setTextColor(45, 74, 34); doc.text('THE VAULT INVENTORY REPORT', 14, 20);
     doc.setFontSize(9); doc.setTextColor(100, 100, 100); doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 26);
@@ -697,10 +735,12 @@ export default function Home() {
         doc.text(`Total Vault live Market Value: $${totalVaultValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, 14, 31);
     }
 
-    let currentY = 45; // Moved down to avoid header
+    let currentY = 45; 
 
-    for (const item of filteredInventory) {
-      if (currentY > 230) { doc.addPage(); currentY = 20; }
+    for (const item of targetItems) {
+      // PAGE BREAK CHECK: Ensure roughly 4 items fit (approx 60-70mm per item needed)
+      if (currentY > 230) { doc.addPage(); currentY = 20; } 
+      
       const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
       const labor = item.labor_at_making || 0;
       const liveWholesale = item.strategy === 'A' ? current.wholesaleA + labor : current.wholesaleB;
@@ -708,16 +748,31 @@ export default function Home() {
 
       let titleX = 14;
       if (item.image_url) {
-          const imgData = await getCircularImageData(item.image_url); // Use the new safe helper
+          const imgData = await getImageData(item.image_url);
           if (imgData) {
-              doc.addImage(imgData, 'PNG', 14, currentY, 20, 20); 
-              titleX = 40; 
+              const canvas = document.createElement("canvas");
+              canvas.width = 100;
+              canvas.height = 100;
+              const ctx = canvas.getContext("2d");
+              if (ctx) {
+                  // Manually draw circular mask on temp canvas to avoid jsPDF clip issues
+                  const img = new Image();
+                  img.src = imgData;
+                  ctx.beginPath();
+                  ctx.arc(50, 50, 50, 0, Math.PI * 2);
+                  ctx.clip();
+                  ctx.drawImage(img, 0, 0, 100, 100);
+                  const circleData = canvas.toDataURL("image/png");
+                  doc.addImage(circleData, 'PNG', 14, currentY, 20, 20);
+              }
+              titleX = 42; 
           }
       }
 
       doc.setFont("helvetica", "bold"); doc.setFontSize(14); doc.setTextColor(0, 0, 0); doc.text(`${item.name.toUpperCase()}`, titleX, currentY + 8);
       doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(150, 150, 150);
-      doc.text(`Strategy: ${item.strategy} | Saved: ${new Date(item.created_at).toLocaleDateString()}`, titleX, currentY + 13);
+      doc.text(`Location: ${item.location || 'Main Vault'} | Strategy: ${item.strategy}`, titleX, currentY + 13);
+      doc.text(`Saved: ${new Date(item.created_at).toLocaleDateString()}`, titleX, currentY + 17);
 
       const tableHead = includeLiveInPDF 
           ? [['Financial Metric', 'Saved (Original)', 'Live (Current Market)']]
@@ -732,9 +787,8 @@ export default function Home() {
       if (includeLiveInPDF) wholesaleRow.push({ content: `$${liveWholesale.toFixed(2)}`, styles: { textColor: [0, 0, 0] } });
       tableBody.push(wholesaleRow);
 
-      // UPDATED: Margin top for table to ensure it doesn't overlap image
       autoTable(doc, {
-        startY: currentY + 22, 
+        startY: currentY + 24, 
         head: tableHead,
         body: tableBody,
         theme: 'grid', headStyles: { fillColor: [165, 190, 172], textColor: 255, fontSize: 8 },
@@ -884,10 +938,10 @@ export default function Home() {
                            img.style.marginTop = `-${img.naturalHeight / 2}px`;
                            img.style.opacity = '1';
                            
-                           // FIXED: Calculate perfect fit scale (contain)
+                           // UPDATED: Calculate perfect fit scale (contain)
                            const fitScale = 256 / Math.min(img.naturalWidth, img.naturalHeight);
                            setMinZoom(fitScale); 
-                           setZoom(fitScale); // Start at fit scale
+                           setZoom(fitScale); 
                         }}
                         draggable={false}
                       />
@@ -939,7 +993,7 @@ export default function Home() {
                           </div>
                       </div>
                       
-                      {/* Breakdown Toggle */}
+                      {/* NEW: Breakdown Toggle */}
                       <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setIncludeBreakdownInPDF(!includeBreakdownInPDF)}>
                           <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${includeBreakdownInPDF ? 'bg-[#A5BEAC] border-[#A5BEAC] text-white' : 'bg-white border-stone-300'}`}>
                               {includeBreakdownInPDF && '✓'}
@@ -1295,7 +1349,8 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* MODIFIED: items-start to allow vault column to stretch to full height */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* CALCULATOR COLUMN */}
           <div className={`lg:col-span-5 space-y-6 ${activeTab !== 'calculator' ? 'hidden md:block' : ''}`}>
             <div className="bg-white p-8 rounded-[2rem] shadow-xl border-2 border-[#A5BEAC] lg:sticky lg:top-6 space-y-5">
@@ -1409,7 +1464,8 @@ export default function Home() {
           </div>
 
           {/* VAULT COLUMN */}
-          <div className={`lg:col-span-7 bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm overflow-hidden flex flex-col h-fit ${activeTab !== 'vault' ? 'hidden md:block' : ''}`}>
+          {/* MODIFIED: Changed h-fit to h-full */}
+          <div className={`lg:col-span-7 bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm overflow-hidden flex flex-col h-full ${activeTab !== 'vault' ? 'hidden md:block' : ''}`}>
             <div className="p-6 border-b border-stone-100 bg-white space-y-4">
               <div className="flex justify-between items-center text-left">
                 <div>
@@ -1449,22 +1505,28 @@ export default function Home() {
                     </button>
                     {showVaultMenu && (
                         <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[50] overflow-hidden animate-in fade-in">
+                            {/* Selection Checkbox */}
+                            <div className="px-4 py-3 border-b border-stone-100 flex items-center justify-between">
+                                <span className="text-[10px] font-black uppercase text-slate-900">Select All</span>
+                                <input type="checkbox" onChange={toggleSelectAll} checked={selectedItems.size === filteredInventory.length && filteredInventory.length > 0} className="accent-[#A5BEAC] w-4 h-4 cursor-pointer" />
+                            </div>
+
                             {/* Batch Actions */}
                             <button onClick={syncAllToMarket} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
-                                Sync All to Market
+                                Sync {selectedItems.size > 0 ? `Selected (${selectedItems.size})` : 'All'} to Market
                             </button>
                             <button onClick={() => { setShowGlobalRecalc(true); setShowVaultMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
-                                Recalculate All
+                                Recalculate {selectedItems.size > 0 ? `Selected (${selectedItems.size})` : 'All'}
                             </button>
                             
                             {/* Export Options */}
                             {filteredInventory.length > 0 ? (
                                 <>
                                     <button onClick={() => { setShowPDFOptions(true); setShowVaultMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
-                                        Export PDF Report
+                                        Export PDF Report {selectedItems.size > 0 && `(${selectedItems.size})`}
                                     </button>
                                     <button onClick={() => { exportToCSV(); setShowVaultMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 transition-colors">
-                                        Export CSV Spreadsheet
+                                        Export CSV Spreadsheet {selectedItems.size > 0 && `(${selectedItems.size})`}
                                     </button>
                                 </>
                             ) : (
@@ -1508,7 +1570,17 @@ export default function Home() {
                   }, 0) || 0;
 
                   return (
-                    <div key={item.id} className="bg-white rounded-[2rem] border border-stone-100 shadow-sm overflow-visible relative transition-all hover:shadow-md">
+                    <div key={item.id} className="bg-white rounded-[2rem] border border-stone-100 shadow-sm overflow-visible relative transition-all hover:shadow-md pl-12">
+                      {/* Selection Checkbox */}
+                      <div className="absolute left-4 top-6 flex items-center justify-center">
+                          <input 
+                              type="checkbox" 
+                              checked={selectedItems.has(item.id)} 
+                              onChange={() => toggleSelection(item.id)} 
+                              className="w-5 h-5 accent-[#A5BEAC] cursor-pointer rounded-md border-stone-300"
+                          />
+                      </div>
+                      
                       <div className="p-5 md:p-6 flex flex-col gap-5">
                         <div className="flex flex-col gap-1">
                           <div className="flex items-start flex-nowrap justify-between gap-3 relative">
@@ -1616,14 +1688,63 @@ export default function Home() {
                                 </div>
                                 )}
                                 
-                                <div className="flex items-center gap-2 mt-2">
-                                    <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md border bg-slate-100 text-slate-500 border-slate-200 uppercase">
+                                <div className="flex flex-wrap items-start gap-2 mt-2">
+                                    <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md border bg-slate-100 text-slate-500 border-slate-200 uppercase leading-none flex items-center h-[18px]">
                                       Strategy {item.strategy}
                                     </span>
-                                    <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-md border ${isUp ? 'bg-green-50 text-green-700 border-green-100' : 'bg-red-50 text-red-700 border-red-100'}`}>
+                                    
+                                    {/* NEW: Location Badge & Dropdown */}
+                                    <div className="relative">
+                                        <button 
+                                            onClick={() => setShowLocationMenuId(showLocationMenuId === item.id ? null : item.id)}
+                                            className="text-[8px] font-black px-1.5 py-0.5 rounded-md border bg-blue-50 text-blue-600 border-blue-100 uppercase hover:bg-blue-100 transition-colors leading-none flex items-center h-[18px]"
+                                        >
+                                            📍 {item.location || 'Main Vault'}
+                                        </button>
+                                        
+                                        {showLocationMenuId === item.id && (
+                                            <div className="absolute top-full left-0 mt-1 w-32 bg-white border border-stone-200 rounded-xl shadow-lg z-[60] overflow-hidden animate-in fade-in">
+                                                {locations.map(loc => (
+                                                    <div key={loc} className="flex items-center justify-between border-b border-stone-50 last:border-0 hover:bg-stone-50 pr-2">
+                                                        <button 
+                                                            onClick={() => updateLocation(item.id, loc)}
+                                                            className="flex-1 px-3 py-2 text-left text-[9px] font-bold uppercase text-slate-600"
+                                                        >
+                                                            {loc}
+                                                        </button>
+                                                        {loc !== 'Main Vault' && (
+                                                            <button 
+                                                                onClick={(e) => { e.stopPropagation(); deleteLocation(loc); }}
+                                                                className="text-red-400 text-[10px] font-bold px-1 hover:text-red-600"
+                                                            >
+                                                                ×
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                                <div className="p-2 border-t border-stone-100 bg-stone-50">
+                                                    <input 
+                                                        type="text" 
+                                                        placeholder="New Location..."
+                                                        className="w-full p-1 text-[9px] border rounded bg-white mb-1"
+                                                        value={newLocationInput}
+                                                        onChange={(e) => setNewLocationInput(e.target.value)}
+                                                    />
+                                                    <button 
+                                                        onClick={() => addCustomLocation(item.id)}
+                                                        className="w-full py-1 bg-[#A5BEAC] text-white rounded text-[9px] font-bold uppercase hover:bg-slate-900"
+                                                    >
+                                                        Add +
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-md border leading-none flex items-center h-[18px] ${isUp ? 'bg-green-50 text-green-700 border-green-100' : 'bg-red-50 text-red-700 border-red-100'}`}>
                                         {isUp ? '▲' : '▼'} ${formatCurrency(Math.abs(priceDiff))}
                                     </span>
-                                    <p className="text-[9px] text-stone-400 font-bold uppercase tracking-widest text-left">
+                                    <p className="text-[9px] text-stone-400 font-bold uppercase tracking-widest text-left leading-none flex items-center h-[18px]">
                                         {new Date(item.created_at).toLocaleDateString()}
                                     </p>
                                 </div>
