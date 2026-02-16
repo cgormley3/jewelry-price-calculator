@@ -85,7 +85,7 @@ export default function Home() {
 
   // Selection & Location State
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
-  // MODIFIED: Start with only Main Vault
+  // MODIFIED: Initial state only has Main Vault
   const [locations, setLocations] = useState<string[]>(['Main Vault']); 
   const [showLocationMenuId, setShowLocationMenuId] = useState<string | null>(null);
   const [newLocationInput, setNewLocationInput] = useState('');
@@ -207,7 +207,7 @@ export default function Home() {
     const { data, error } = await supabase.from('inventory').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false });
     if (!error && data) {
         setInventory(data);
-        // Extract unique locations from DB
+        // Extract unique locations from DB, keep unique and add default
         const uniqueLocs = Array.from(new Set(data.map(i => i.location).filter(Boolean)));
         setLocations(prev => Array.from(new Set([...prev, ...uniqueLocs])));
     }
@@ -245,7 +245,7 @@ export default function Home() {
       setNewLocationInput('');
   };
 
-  // NEW: Delete Location Handler
+  // MODIFIED: Delete location handler
   const deleteLocation = (locToDelete: string) => {
     setLocations(locations.filter(l => l !== locToDelete));
   };
@@ -597,7 +597,28 @@ export default function Home() {
     });
   };
 
+  // UPDATED: Robust auth handling
   const addToInventory = async () => {
+    let currentUser = user;
+    
+    // 1. Recover Session if missing
+    if (!currentUser) {
+       const { data: { session } } = await supabase.auth.getSession();
+       currentUser = session?.user;
+       
+       if (!currentUser) {
+           // Try one last ditch effort to sign in anon
+           const { data: anonData } = await supabase.auth.signInAnonymously();
+           currentUser = anonData?.user;
+       }
+    }
+
+    // 2. Auth Check - If still no user, we can't save. Prompt auth.
+    if (!currentUser) {
+        setShowAuth(true); 
+        return;
+    }
+
     if (isGuest && !token) {
         setNotification({ title: "Verification Required", message: "Please complete the human verification to save items as a guest.", type: 'info' });
         return;
@@ -606,7 +627,7 @@ export default function Home() {
         setNotification({ title: "Name Required", message: "Please provide a name for this piece to save it to your Vault.", type: 'info' });
         return;
     }
-    if (metalList.length === 0 || !user) return;
+    if (metalList.length === 0) return;
 
     const a = calculateFullBreakdown(metalList, hours, rate, otherCosts);
     const newItem = {
@@ -620,11 +641,12 @@ export default function Home() {
       strategy: strategy, 
       multiplier: retailMultA, 
       markup_b: markupB, 
-      user_id: user.id, 
+      user_id: currentUser.id, // Use the resolved currentUser.id
       notes: '',
       hours: Number(hours) || 0,
-      location: 'Main Vault' // Default location
+      location: 'Main Vault' 
     };
+
     const { data, error } = await supabase.from('inventory').insert([newItem]).select();
     if (!error && data) { 
         setInventory([data[0], ...inventory]); 
@@ -635,6 +657,12 @@ export default function Home() {
         setOtherCosts(''); 
         setToken(null);
         setNotification({ title: "Item Saved", message: `"${newItem.name}" is now stored in your Vault.`, type: 'success' });
+        
+        // Update user state if we recovered a session
+        if (!user) setUser(currentUser);
+    } else {
+        console.error(error);
+        setNotification({ title: "Save Failed", message: error?.message || "Could not save item.", type: 'error' });
     }
   };
 
@@ -719,6 +747,7 @@ export default function Home() {
     });
   };
 
+  // MODIFIED: PDF formatting to fit ~4 items cleanly
   const exportDetailedPDF = async () => {
     setLoading(true);
     setShowPDFOptions(false); 
@@ -735,11 +764,11 @@ export default function Home() {
         doc.text(`Total Vault live Market Value: $${totalVaultValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, 14, 31);
     }
 
-    let currentY = 45; 
+    let currentY = 40; // Initial start Y
 
     for (const item of targetItems) {
-      // PAGE BREAK CHECK: Ensure roughly 4 items fit (approx 60-70mm per item needed)
-      if (currentY > 230) { doc.addPage(); currentY = 20; } 
+      // Check space: Need ~60-70mm. If close to bottom (297mm), new page.
+      if (currentY + 60 > 280) { doc.addPage(); currentY = 20; } 
       
       const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
       const labor = item.labor_at_making || 0;
@@ -755,7 +784,6 @@ export default function Home() {
               canvas.height = 100;
               const ctx = canvas.getContext("2d");
               if (ctx) {
-                  // Manually draw circular mask on temp canvas to avoid jsPDF clip issues
                   const img = new Image();
                   img.src = imgData;
                   ctx.beginPath();
@@ -769,10 +797,11 @@ export default function Home() {
           }
       }
 
-      doc.setFont("helvetica", "bold"); doc.setFontSize(14); doc.setTextColor(0, 0, 0); doc.text(`${item.name.toUpperCase()}`, titleX, currentY + 8);
+      // Compact header info
+      doc.setFont("helvetica", "bold"); doc.setFontSize(14); doc.setTextColor(0, 0, 0); doc.text(`${item.name.toUpperCase()}`, titleX, currentY + 6);
       doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(150, 150, 150);
-      doc.text(`Location: ${item.location || 'Main Vault'} | Strategy: ${item.strategy}`, titleX, currentY + 13);
-      doc.text(`Saved: ${new Date(item.created_at).toLocaleDateString()}`, titleX, currentY + 17);
+      doc.text(`Location: ${item.location || 'Main Vault'} | Strategy: ${item.strategy}`, titleX, currentY + 11);
+      doc.text(`Saved: ${new Date(item.created_at).toLocaleDateString()}`, titleX, currentY + 15);
 
       const tableHead = includeLiveInPDF 
           ? [['Financial Metric', 'Saved (Original)', 'Live (Current Market)']]
@@ -787,15 +816,16 @@ export default function Home() {
       if (includeLiveInPDF) wholesaleRow.push({ content: `$${liveWholesale.toFixed(2)}`, styles: { textColor: [0, 0, 0] } });
       tableBody.push(wholesaleRow);
 
+      // Compact table vertical start
       autoTable(doc, {
-        startY: currentY + 24, 
+        startY: currentY + 22, 
         head: tableHead,
         body: tableBody,
         theme: 'grid', headStyles: { fillColor: [165, 190, 172], textColor: 255, fontSize: 8 },
         styles: { fontSize: 8, cellPadding: 2 }, margin: { left: 14 }, tableWidth: includeLiveInPDF ? 120 : 80
       });
 
-      let nextY = (doc as any).lastAutoTable.finalY + 6;
+      let nextY = (doc as any).lastAutoTable.finalY + 4;
 
       if (includeBreakdownInPDF) {
           const breakdownLines = item.metals.map((m: any) => `${m.weight}${m.unit} ${m.type}`);
@@ -803,24 +833,24 @@ export default function Home() {
           if (labor > 0) breakdownLines.push(`Labor Cost (${item.hours || 0}h): $${Number(labor).toFixed(2)}`);
           breakdownLines.push(`Materials Total: $${(Number(item.materials_at_making) + Number(item.other_costs_at_making)).toFixed(2)}`);
 
-          doc.setFontSize(8); doc.setTextColor(80, 80, 80); doc.setFont("helvetica", "bold"); doc.text("BREAKDOWN:", 140, currentY + 28);
+          // Compact breakdown layout
+          doc.setFontSize(8); doc.setTextColor(80, 80, 80); doc.setFont("helvetica", "bold"); doc.text("BREAKDOWN:", 140, currentY + 26);
           doc.setFont("helvetica", "normal");
-          breakdownLines.forEach((line: string, i: number) => doc.text(line, 140, currentY + 33 + (i * 4)));
+          breakdownLines.forEach((line: string, i: number) => doc.text(line, 140, currentY + 31 + (i * 3.5)));
           
-          nextY = Math.max(nextY, currentY + 33 + (breakdownLines.length * 4) + 5);
+          nextY = Math.max(nextY, currentY + 31 + (breakdownLines.length * 3.5) + 2);
       }
 
       if (item.notes) {
         if (nextY > 270) { doc.addPage(); nextY = 20; }
-        
         doc.setFont("helvetica", "bold"); doc.text("NOTES:", 14, nextY);
         doc.setFont("helvetica", "italic"); doc.setTextColor(100, 100, 100);
         doc.text(item.notes, 14, nextY + 4, { maxWidth: 120 });
-        nextY += 14; 
+        nextY += 12; 
       }
 
-      currentY = nextY + 10;
-      doc.setDrawColor(220); doc.line(14, currentY - 5, 196, currentY - 5);
+      currentY = nextY + 6;
+      doc.setDrawColor(220); doc.line(14, currentY - 3, 196, currentY - 3);
     }
 
     doc.save(`Vault_Report.pdf`); 
@@ -938,7 +968,7 @@ export default function Home() {
                            img.style.marginTop = `-${img.naturalHeight / 2}px`;
                            img.style.opacity = '1';
                            
-                           // UPDATED: Calculate perfect fit scale (contain)
+                           // UPDATED: Calculate fit scale so image fits perfectly (contain)
                            const fitScale = 256 / Math.min(img.naturalWidth, img.naturalHeight);
                            setMinZoom(fitScale); 
                            setZoom(fitScale); 
@@ -1688,7 +1718,7 @@ export default function Home() {
                                 </div>
                                 )}
                                 
-                                <div className="flex flex-wrap items-start gap-2 mt-2">
+                                <div className="flex flex-wrap items-center gap-2 mt-2">
                                     <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md border bg-slate-100 text-slate-500 border-slate-200 uppercase leading-none flex items-center h-[18px]">
                                       Strategy {item.strategy}
                                     </span>
