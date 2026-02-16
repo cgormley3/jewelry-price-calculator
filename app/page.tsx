@@ -21,7 +21,17 @@ export default function Home() {
   
   // Menus
   const [showVaultMenu, setShowVaultMenu] = useState(false);
+  const [showFilterMenu, setShowFilterMenu] = useState(false); // NEW: Filter Menu State
   
+  // Filter States
+  const [filterLocation, setFilterLocation] = useState('All');
+  const [filterStrategy, setFilterStrategy] = useState('All');
+  const [filterMetal, setFilterMetal] = useState('All');
+  const [filterMinPrice, setFilterMinPrice] = useState('');
+  const [filterMaxPrice, setFilterMaxPrice] = useState('');
+  const [filterStartDate, setFilterStartDate] = useState('');
+  const [filterEndDate, setFilterEndDate] = useState('');
+
   // Modals
   const [showGlobalRecalc, setShowGlobalRecalc] = useState(false);
   const [openEditId, setOpenEditId] = useState<string | null>(null);
@@ -85,7 +95,6 @@ export default function Home() {
 
   // Selection & Location State
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
-  // MODIFIED: Initial state only has Main Vault
   const [locations, setLocations] = useState<string[]>(['Main Vault']); 
   const [showLocationMenuId, setShowLocationMenuId] = useState<string | null>(null);
   const [newLocationInput, setNewLocationInput] = useState('');
@@ -207,7 +216,6 @@ export default function Home() {
     const { data, error } = await supabase.from('inventory').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false });
     if (!error && data) {
         setInventory(data);
-        // Extract unique locations from DB, keep unique and add default
         const uniqueLocs = Array.from(new Set(data.map(i => i.location).filter(Boolean)));
         setLocations(prev => Array.from(new Set([...prev, ...uniqueLocs])));
     }
@@ -245,7 +253,6 @@ export default function Home() {
       setNewLocationInput('');
   };
 
-  // MODIFIED: Delete location handler
   const deleteLocation = (locToDelete: string) => {
     setLocations(locations.filter(l => l !== locToDelete));
   };
@@ -597,28 +604,17 @@ export default function Home() {
     });
   };
 
-  // UPDATED: Robust auth handling
   const addToInventory = async () => {
     let currentUser = user;
-    
-    // 1. Recover Session if missing
     if (!currentUser) {
        const { data: { session } } = await supabase.auth.getSession();
        currentUser = session?.user;
-       
        if (!currentUser) {
-           // Try one last ditch effort to sign in anon
            const { data: anonData } = await supabase.auth.signInAnonymously();
            currentUser = anonData?.user;
        }
     }
-
-    // 2. Auth Check - If still no user, we can't save. Prompt auth.
-    if (!currentUser) {
-        setShowAuth(true); 
-        return;
-    }
-
+    if (!currentUser) { setShowAuth(true); return; }
     if (isGuest && !token) {
         setNotification({ title: "Verification Required", message: "Please complete the human verification to save items as a guest.", type: 'info' });
         return;
@@ -641,7 +637,7 @@ export default function Home() {
       strategy: strategy, 
       multiplier: retailMultA, 
       markup_b: markupB, 
-      user_id: currentUser.id, // Use the resolved currentUser.id
+      user_id: currentUser.id, 
       notes: '',
       hours: Number(hours) || 0,
       location: 'Main Vault' 
@@ -657,8 +653,6 @@ export default function Home() {
         setOtherCosts(''); 
         setToken(null);
         setNotification({ title: "Item Saved", message: `"${newItem.name}" is now stored in your Vault.`, type: 'success' });
-        
-        // Update user state if we recovered a session
         if (!user) setUser(currentUser);
     } else {
         console.error(error);
@@ -667,18 +661,53 @@ export default function Home() {
   };
 
   const filteredInventory = useMemo(() => {
-    const lowerTerm = searchTerm.toLowerCase();
     return inventory.filter(item => {
-        if (item.name.toLowerCase().includes(lowerTerm)) return true;
-        if (item.metals.some((m: any) => m.type.toLowerCase().includes(lowerTerm))) return true;
-        if (item.notes && item.notes.toLowerCase().includes(lowerTerm)) return true;
-        if (item.strategy && item.strategy.toLowerCase().includes(lowerTerm)) return true;
-        if (item.location && item.location.toLowerCase().includes(lowerTerm)) return true;
-        const dateStr = new Date(item.created_at).toLocaleDateString();
-        if (dateStr.includes(searchTerm)) return true;
-        return false;
+        // Text Search
+        const lowerTerm = searchTerm.toLowerCase();
+        if (searchTerm) {
+             const matchName = item.name.toLowerCase().includes(lowerTerm);
+             const matchMetal = item.metals.some((m: any) => m.type.toLowerCase().includes(lowerTerm));
+             const matchNotes = item.notes && item.notes.toLowerCase().includes(lowerTerm);
+             const matchLocation = item.location && item.location.toLowerCase().includes(lowerTerm);
+             const matchDate = new Date(item.created_at).toLocaleDateString().includes(searchTerm);
+             if (!matchName && !matchMetal && !matchNotes && !matchLocation && !matchDate) return false;
+        }
+
+        // Location Filter
+        if (filterLocation !== 'All' && (item.location || 'Main Vault') !== filterLocation) return false;
+
+        // Strategy Filter
+        if (filterStrategy !== 'All' && item.strategy !== filterStrategy) return false;
+
+        // Metal Filter
+        if (filterMetal !== 'All') {
+            if (!item.metals.some((m: any) => m.type.toLowerCase().includes(filterMetal.toLowerCase()))) return false;
+        }
+
+        // Date Range
+        if (filterStartDate || filterEndDate) {
+            const itemDate = new Date(item.created_at).getTime();
+            if (filterStartDate && itemDate < new Date(filterStartDate).getTime()) return false;
+            if (filterEndDate) {
+                const end = new Date(filterEndDate);
+                end.setHours(23, 59, 59, 999);
+                if (itemDate > end.getTime()) return false;
+            }
+        }
+
+        // Price Range
+        if (filterMinPrice || filterMaxPrice) {
+            const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
+            const labor = item.labor_at_making || 0;
+            const liveRetail = item.strategy === 'A' ? (current.totalMaterials + labor) * (item.multiplier || 3) : ((current.totalMaterials * (item.markup_b || 1.8)) + labor) * 2;
+            
+            if (filterMinPrice && liveRetail < Number(filterMinPrice)) return false;
+            if (filterMaxPrice && liveRetail > Number(filterMaxPrice)) return false;
+        }
+
+        return true;
     });
-  }, [inventory, searchTerm]);
+  }, [inventory, searchTerm, filterLocation, filterStrategy, filterMetal, filterMinPrice, filterMaxPrice, filterStartDate, filterEndDate, prices]);
 
   const totalVaultValue = useMemo(() => {
     return inventory.reduce((acc, item) => {
@@ -747,7 +776,6 @@ export default function Home() {
     });
   };
 
-  // MODIFIED: PDF formatting to fit ~4 items cleanly
   const exportDetailedPDF = async () => {
     setLoading(true);
     setShowPDFOptions(false); 
@@ -764,10 +792,9 @@ export default function Home() {
         doc.text(`Total Vault live Market Value: $${totalVaultValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, 14, 31);
     }
 
-    let currentY = 40; // Initial start Y
+    let currentY = 40; 
 
     for (const item of targetItems) {
-      // Check space: Need ~60-70mm. If close to bottom (297mm), new page.
       if (currentY + 60 > 280) { doc.addPage(); currentY = 20; } 
       
       const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
@@ -797,7 +824,6 @@ export default function Home() {
           }
       }
 
-      // Compact header info
       doc.setFont("helvetica", "bold"); doc.setFontSize(14); doc.setTextColor(0, 0, 0); doc.text(`${item.name.toUpperCase()}`, titleX, currentY + 6);
       doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(150, 150, 150);
       doc.text(`Location: ${item.location || 'Main Vault'} | Strategy: ${item.strategy}`, titleX, currentY + 11);
@@ -816,7 +842,6 @@ export default function Home() {
       if (includeLiveInPDF) wholesaleRow.push({ content: `$${liveWholesale.toFixed(2)}`, styles: { textColor: [0, 0, 0] } });
       tableBody.push(wholesaleRow);
 
-      // Compact table vertical start
       autoTable(doc, {
         startY: currentY + 22, 
         head: tableHead,
@@ -833,7 +858,6 @@ export default function Home() {
           if (labor > 0) breakdownLines.push(`Labor Cost (${item.hours || 0}h): $${Number(labor).toFixed(2)}`);
           breakdownLines.push(`Materials Total: $${(Number(item.materials_at_making) + Number(item.other_costs_at_making)).toFixed(2)}`);
 
-          // Compact breakdown layout
           doc.setFontSize(8); doc.setTextColor(80, 80, 80); doc.setFont("helvetica", "bold"); doc.text("BREAKDOWN:", 140, currentY + 26);
           doc.setFont("helvetica", "normal");
           breakdownLines.forEach((line: string, i: number) => doc.text(line, 140, currentY + 31 + (i * 3.5)));
@@ -1509,15 +1533,78 @@ export default function Home() {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-4">
-                <div className="relative flex-1">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-300 text-xs">🔍</span>
-                  <input
-                    type="text"
-                    placeholder="Search items..."
-                    className="w-full pl-10 pr-4 py-3 bg-stone-50 border rounded-xl text-xs font-bold outline-none focus:border-[#A5BEAC] transition-all"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
+                <div className="relative flex-1 flex gap-2">
+                  {/* NEW: Filter Button */}
+                  <div className="relative">
+                      <button 
+                         onClick={() => setShowFilterMenu(!showFilterMenu)}
+                         className={`h-full aspect-square flex items-center justify-center rounded-xl border transition-all ${showFilterMenu ? 'bg-slate-900 text-white border-slate-900' : 'bg-stone-50 border-stone-200 text-stone-400 hover:border-[#A5BEAC]'}`}
+                      >
+                         <span className="text-lg">⚡</span>
+                      </button>
+                      
+                      {/* Filter Menu Dropdown */}
+                      {showFilterMenu && (
+                          <div className="absolute top-full left-0 mt-2 w-72 bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[100] p-4 animate-in fade-in slide-in-from-top-2 space-y-4">
+                              <div className="flex justify-between items-center">
+                                  <h4 className="text-xs font-black uppercase text-slate-900">Filters</h4>
+                                  <button onClick={() => {
+                                      setFilterLocation('All'); setFilterStrategy('All'); setFilterMetal('All');
+                                      setFilterMinPrice(''); setFilterMaxPrice(''); setFilterStartDate(''); setFilterEndDate('');
+                                  }} className="text-[9px] font-bold text-[#A5BEAC] uppercase hover:text-slate-900">Reset</button>
+                              </div>
+                              
+                              {/* Location */}
+                              <div className="space-y-1">
+                                  <label className="text-[9px] font-bold text-stone-400 uppercase">Location</label>
+                                  <select value={filterLocation} onChange={e => setFilterLocation(e.target.value)} className="w-full p-2 bg-stone-50 border rounded-lg text-xs font-bold">
+                                      <option>All</option>
+                                      {locations.map(l => <option key={l}>{l}</option>)}
+                                  </select>
+                              </div>
+
+                              {/* Strategy */}
+                              <div className="space-y-1">
+                                  <label className="text-[9px] font-bold text-stone-400 uppercase">Strategy</label>
+                                  <div className="flex gap-2">
+                                      {['All', 'A', 'B'].map(s => (
+                                          <button key={s} onClick={() => setFilterStrategy(s)} className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase border ${filterStrategy === s ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-400'}`}>{s}</button>
+                                      ))}
+                                  </div>
+                              </div>
+
+                              {/* Metal */}
+                              <div className="space-y-1">
+                                  <label className="text-[9px] font-bold text-stone-400 uppercase">Metal Type</label>
+                                  <div className="grid grid-cols-2 gap-2">
+                                      {['All', 'Gold', 'Silver', 'Platinum'].map(m => (
+                                          <button key={m} onClick={() => setFilterMetal(m)} className={`py-1.5 rounded-lg text-[9px] font-black uppercase border ${filterMetal === m ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-400'}`}>{m}</button>
+                                      ))}
+                                  </div>
+                              </div>
+
+                              {/* Price Range */}
+                              <div className="space-y-1">
+                                  <label className="text-[9px] font-bold text-stone-400 uppercase">Live Retail Price ($)</label>
+                                  <div className="flex gap-2">
+                                      <input type="number" placeholder="Min" value={filterMinPrice} onChange={e => setFilterMinPrice(e.target.value)} className="w-full p-2 bg-stone-50 border rounded-lg text-xs font-bold" />
+                                      <input type="number" placeholder="Max" value={filterMaxPrice} onChange={e => setFilterMaxPrice(e.target.value)} className="w-full p-2 bg-stone-50 border rounded-lg text-xs font-bold" />
+                                  </div>
+                              </div>
+                          </div>
+                      )}
+                  </div>
+
+                  <div className="relative flex-1">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-300 text-xs">🔍</span>
+                    <input
+                      type="text"
+                      placeholder="Search items..."
+                      className="w-full pl-10 pr-4 py-3 bg-stone-50 border rounded-xl text-xs font-bold outline-none focus:border-[#A5BEAC] transition-all"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
                 </div>
                 
                 {/* NEW: Combined Vault Options Menu */}
@@ -1570,7 +1657,7 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="p-4 md:p-6 space-y-4 overflow-y-auto max-h-[850px] custom-scrollbar overscroll-behavior-contain touch-pan-y bg-stone-50/20">
+            <div className="p-4 md:p-6 space-y-4 overflow-y-auto flex-1 min-h-0 custom-scrollbar overscroll-behavior-contain touch-pan-y bg-stone-50/20">
               {loading ? (
                 <div className="p-20 text-center text-stone-400 font-bold uppercase text-xs tracking-widest animate-pulse">Opening Vault...</div>
               ) : (
@@ -1718,7 +1805,7 @@ export default function Home() {
                                 </div>
                                 )}
                                 
-                                <div className="flex flex-wrap items-center gap-2 mt-2">
+                                <div className="flex flex-wrap items-start gap-2 mt-2">
                                     <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md border bg-slate-100 text-slate-500 border-slate-200 uppercase leading-none flex items-center h-[18px]">
                                       Strategy {item.strategy}
                                     </span>
