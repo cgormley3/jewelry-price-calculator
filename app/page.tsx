@@ -21,7 +21,7 @@ export default function Home() {
   
   // Menus
   const [showVaultMenu, setShowVaultMenu] = useState(false);
-  const [showFilterMenu, setShowFilterMenu] = useState(false); // NEW: Filter Menu State
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
   
   // Filter States
   const [filterLocation, setFilterLocation] = useState('All');
@@ -107,6 +107,40 @@ export default function Home() {
   } | null>(null);
 
   const isGuest = !user || user.is_anonymous;
+
+  // UPDATED: Global Click Outside Handler
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+        const target = event.target as HTMLElement;
+
+        // Close Filter Menu
+        if (showFilterMenu && !target.closest('.filter-menu-container')) {
+            setShowFilterMenu(false);
+        }
+        // Close Vault Options
+        if (showVaultMenu && !target.closest('.vault-menu-container')) {
+            setShowVaultMenu(false);
+        }
+        // Close Item Actions Menu
+        if (openMenuId && !target.closest('.item-menu-container')) {
+            setOpenMenuId(null);
+        }
+        // Close Location Menu
+        if (showLocationMenuId && !target.closest('.location-menu-container')) {
+            setShowLocationMenuId(null);
+        }
+        // Close Auth/Login Menu
+        if (showAuth && !target.closest('.auth-menu-container')) {
+            setShowAuth(false);
+        }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showFilterMenu, showVaultMenu, openMenuId, showLocationMenuId, showAuth]);
+
 
   const fetchPrices = useCallback(async (force = false) => {
     try {
@@ -662,7 +696,6 @@ export default function Home() {
 
   const filteredInventory = useMemo(() => {
     return inventory.filter(item => {
-        // Text Search
         const lowerTerm = searchTerm.toLowerCase();
         if (searchTerm) {
              const matchName = item.name.toLowerCase().includes(lowerTerm);
@@ -673,18 +706,12 @@ export default function Home() {
              if (!matchName && !matchMetal && !matchNotes && !matchLocation && !matchDate) return false;
         }
 
-        // Location Filter
         if (filterLocation !== 'All' && (item.location || 'Main Vault') !== filterLocation) return false;
-
-        // Strategy Filter
         if (filterStrategy !== 'All' && item.strategy !== filterStrategy) return false;
-
-        // Metal Filter
         if (filterMetal !== 'All') {
             if (!item.metals.some((m: any) => m.type.toLowerCase().includes(filterMetal.toLowerCase()))) return false;
         }
 
-        // Date Range
         if (filterStartDate || filterEndDate) {
             const itemDate = new Date(item.created_at).getTime();
             if (filterStartDate && itemDate < new Date(filterStartDate).getTime()) return false;
@@ -695,7 +722,6 @@ export default function Home() {
             }
         }
 
-        // Price Range
         if (filterMinPrice || filterMaxPrice) {
             const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
             const labor = item.labor_at_making || 0;
@@ -755,25 +781,21 @@ export default function Home() {
     document.body.appendChild(link); link.click(); setShowVaultMenu(false);
   };
 
-  const getImageData = (url: string): Promise<string | null> => {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.crossOrigin = "Anonymous";
-      img.src = url;
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-            ctx.drawImage(img, 0, 0);
-            resolve(canvas.toDataURL("image/png"));
-        } else {
-            resolve(null);
-        }
-      };
-      img.onerror = () => resolve(null);
-    });
+  // UPDATED: Reliable Image Fetch for PDF
+  const getImageData = async (url: string): Promise<string | null> => {
+      try {
+          const response = await fetch(url, { mode: 'cors' });
+          if (!response.ok) return null;
+          const blob = await response.blob();
+          return new Promise((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.onerror = () => resolve(null);
+              reader.readAsDataURL(blob);
+          });
+      } catch (error) {
+          return null;
+      }
   };
 
   const exportDetailedPDF = async () => {
@@ -806,20 +828,7 @@ export default function Home() {
       if (item.image_url) {
           const imgData = await getImageData(item.image_url);
           if (imgData) {
-              const canvas = document.createElement("canvas");
-              canvas.width = 100;
-              canvas.height = 100;
-              const ctx = canvas.getContext("2d");
-              if (ctx) {
-                  const img = new Image();
-                  img.src = imgData;
-                  ctx.beginPath();
-                  ctx.arc(50, 50, 50, 0, Math.PI * 2);
-                  ctx.clip();
-                  ctx.drawImage(img, 0, 0, 100, 100);
-                  const circleData = canvas.toDataURL("image/png");
-                  doc.addImage(circleData, 'PNG', 14, currentY, 20, 20);
-              }
+              doc.addImage(imgData, 'PNG', 14, currentY, 20, 20);
               titleX = 42; 
           }
       }
@@ -992,7 +1001,6 @@ export default function Home() {
                            img.style.marginTop = `-${img.naturalHeight / 2}px`;
                            img.style.opacity = '1';
                            
-                           // UPDATED: Calculate fit scale so image fits perfectly (contain)
                            const fitScale = 256 / Math.min(img.naturalWidth, img.naturalHeight);
                            setMinZoom(fitScale); 
                            setZoom(fitScale); 
@@ -1047,7 +1055,7 @@ export default function Home() {
                           </div>
                       </div>
                       
-                      {/* NEW: Breakdown Toggle */}
+                      {/* Breakdown Toggle */}
                       <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setIncludeBreakdownInPDF(!includeBreakdownInPDF)}>
                           <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${includeBreakdownInPDF ? 'bg-[#A5BEAC] border-[#A5BEAC] text-white' : 'bg-white border-stone-300'}`}>
                               {includeBreakdownInPDF && '✓'}
@@ -1321,7 +1329,7 @@ export default function Home() {
                 <button onClick={async () => { await supabase.auth.signOut(); window.location.reload(); }} className="text-[10px] font-black uppercase bg-stone-100 text-slate-900 px-8 py-3 rounded-xl hover:bg-stone-200 transition">Logout</button>
               )}
               {showAuth && (
-                <div className="absolute right-0 mt-12 w-full md:w-80 bg-white p-6 rounded-3xl border-2 border-[#A5BEAC] shadow-2xl z-[100] animate-in fade-in slide-in-from-top-2 mx-auto">
+                <div className="absolute right-0 mt-12 w-full md:w-80 bg-white p-6 rounded-3xl border-2 border-[#A5BEAC] shadow-2xl z-[100] animate-in fade-in slide-in-from-top-2 mx-auto auth-menu-container">
                   <button onClick={() => { setShowAuth(false); setShowPassword(false); }} className="absolute top-4 right-4 text-stone-300 hover:text-[#A5BEAC] font-black text-sm">✕</button>
                   <h3 className="text-sm font-black uppercase mb-4 text-center text-slate-900">Vault Access</h3>
                   <div className="w-full flex justify-center mb-4">
@@ -1403,8 +1411,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* MODIFIED: items-start to allow vault column to stretch to full height */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start"> {/* Removed items-start constraint */}
           {/* CALCULATOR COLUMN */}
           <div className={`lg:col-span-5 space-y-6 ${activeTab !== 'calculator' ? 'hidden md:block' : ''}`}>
             <div className="bg-white p-8 rounded-[2rem] shadow-xl border-2 border-[#A5BEAC] lg:sticky lg:top-6 space-y-5">
@@ -1518,7 +1525,7 @@ export default function Home() {
           </div>
 
           {/* VAULT COLUMN */}
-          {/* MODIFIED: Changed h-fit to h-full */}
+          {/* FIXED: Changed max-h to flex-1 min-h-0 to make list fill space on desktop */}
           <div className={`lg:col-span-7 bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm overflow-hidden flex flex-col h-full ${activeTab !== 'vault' ? 'hidden md:block' : ''}`}>
             <div className="p-6 border-b border-stone-100 bg-white space-y-4">
               <div className="flex justify-between items-center text-left">
@@ -1533,19 +1540,19 @@ export default function Home() {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-4">
-                <div className="relative flex-1 flex gap-2">
-                  {/* NEW: Filter Button */}
-                  <div className="relative">
+                <div className="relative flex-1 flex gap-2 w-full"> {/* Added w-full for mobile */}
+                  {/* NEW: Filter Button (Fixed w-12 h-12) */}
+                  <div className="relative filter-menu-container shrink-0">
                       <button 
                          onClick={() => setShowFilterMenu(!showFilterMenu)}
-                         className={`h-full aspect-square flex items-center justify-center rounded-xl border transition-all ${showFilterMenu ? 'bg-slate-900 text-white border-slate-900' : 'bg-stone-50 border-stone-200 text-stone-400 hover:border-[#A5BEAC]'}`}
+                         className={`filter-menu-trigger w-12 h-12 flex items-center justify-center rounded-xl border transition-all ${showFilterMenu ? 'bg-slate-900 text-white border-slate-900' : 'bg-stone-50 border-stone-200 text-stone-400 hover:border-[#A5BEAC]'}`}
                       >
                          <span className="text-lg">⚡</span>
                       </button>
                       
                       {/* Filter Menu Dropdown */}
                       {showFilterMenu && (
-                          <div className="absolute top-full left-0 mt-2 w-72 bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[100] p-4 animate-in fade-in slide-in-from-top-2 space-y-4">
+                          <div className="filter-menu-dropdown absolute top-full left-0 mt-2 w-72 bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[100] p-4 animate-in fade-in slide-in-from-top-2 space-y-4">
                               <div className="flex justify-between items-center">
                                   <h4 className="text-xs font-black uppercase text-slate-900">Filters</h4>
                                   <button onClick={() => {
@@ -1595,7 +1602,7 @@ export default function Home() {
                       )}
                   </div>
 
-                  <div className="relative flex-1">
+                  <div className="relative flex-1 min-w-0">
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-300 text-xs">🔍</span>
                     <input
                       type="text"
@@ -1608,11 +1615,11 @@ export default function Home() {
                 </div>
                 
                 {/* NEW: Combined Vault Options Menu */}
-                <div className="relative">
+                <div className="relative vault-menu-container">
                     <button 
                         onClick={() => { if (inventory.length > 0) setShowVaultMenu(!showVaultMenu); }} 
                         disabled={inventory.length === 0}
-                        className={`w-full sm:w-auto px-6 py-3 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 transition shadow-sm ${
+                        className={`vault-menu-trigger w-full sm:w-auto px-6 py-3 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 transition shadow-sm ${
                             inventory.length === 0 
                             ? 'bg-stone-200 text-stone-400 cursor-not-allowed' 
                             : 'bg-slate-900 text-white hover:bg-[#A5BEAC]'
@@ -1621,7 +1628,7 @@ export default function Home() {
                         Vault Options {showVaultMenu ? '▲' : '▼'}
                     </button>
                     {showVaultMenu && (
-                        <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[50] overflow-hidden animate-in fade-in">
+                        <div className="vault-menu-dropdown absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[50] overflow-hidden animate-in fade-in">
                             {/* Selection Checkbox */}
                             <div className="px-4 py-3 border-b border-stone-100 flex items-center justify-between">
                                 <span className="text-[10px] font-black uppercase text-slate-900">Select All</span>
@@ -1657,6 +1664,7 @@ export default function Home() {
               </div>
             </div>
 
+            {/* FIXED: Removed max-h, added flex-1 min-h-0 to make list fill space on desktop */}
             <div className="p-4 md:p-6 space-y-4 overflow-y-auto flex-1 min-h-0 custom-scrollbar overscroll-behavior-contain touch-pan-y bg-stone-50/20">
               {loading ? (
                 <div className="p-20 text-center text-stone-400 font-bold uppercase text-xs tracking-widest animate-pulse">Opening Vault...</div>
@@ -1730,16 +1738,16 @@ export default function Home() {
                                     <h3 className="text-lg font-black text-slate-900 leading-tight uppercase tracking-tight break-words flex-1">
                                         {item.name}
                                     </h3>
-                                    <div className="relative shrink-0 pt-0.5">
+                                    <div className="relative shrink-0 pt-0.5 item-menu-container">
                                         <button 
                                             onClick={() => setOpenMenuId(openMenuId === item.id ? null : item.id)}
-                                            className="w-8 h-8 flex items-center justify-center rounded-full bg-stone-50 text-[#A5BEAC] border border-stone-100 hover:bg-stone-100 transition-all shadow-sm"
+                                            className="item-menu-trigger w-8 h-8 flex items-center justify-center rounded-full bg-stone-50 text-[#A5BEAC] border border-stone-100 hover:bg-stone-100 transition-all shadow-sm"
                                         >
                                             <span className="text-[10px] transform transition-transform duration-200" style={{ transform: openMenuId === item.id ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
                                         </button>
                                         
                                         {openMenuId === item.id && (
-                                            <div className="absolute top-full left-auto right-0 mt-2 w-48 bg-white border border-[#A5BEAC] rounded-2xl shadow-xl z-[150] overflow-hidden animate-in fade-in slide-in-from-top-1">
+                                            <div className="item-menu-dropdown absolute top-full left-auto right-0 mt-2 w-48 bg-white border border-[#A5BEAC] rounded-2xl shadow-xl z-[150] overflow-hidden animate-in fade-in slide-in-from-top-1">
                                                 <button 
                                                     onClick={() => {
                                                     setEditingNameId(item.id);
@@ -1805,13 +1813,13 @@ export default function Home() {
                                 </div>
                                 )}
                                 
-                                <div className="flex flex-wrap items-start gap-2 mt-2">
+                                <div className="flex flex-wrap items-center gap-2 mt-2">
                                     <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md border bg-slate-100 text-slate-500 border-slate-200 uppercase leading-none flex items-center h-[18px]">
                                       Strategy {item.strategy}
                                     </span>
                                     
                                     {/* NEW: Location Badge & Dropdown */}
-                                    <div className="relative">
+                                    <div className="relative location-menu-container">
                                         <button 
                                             onClick={() => setShowLocationMenuId(showLocationMenuId === item.id ? null : item.id)}
                                             className="text-[8px] font-black px-1.5 py-0.5 rounded-md border bg-blue-50 text-blue-600 border-blue-100 uppercase hover:bg-blue-100 transition-colors leading-none flex items-center h-[18px]"
@@ -1820,7 +1828,7 @@ export default function Home() {
                                         </button>
                                         
                                         {showLocationMenuId === item.id && (
-                                            <div className="absolute top-full left-0 mt-1 w-32 bg-white border border-stone-200 rounded-xl shadow-lg z-[60] overflow-hidden animate-in fade-in">
+                                            <div className="location-menu-dropdown absolute top-full left-0 mt-1 w-32 bg-white border border-stone-200 rounded-xl shadow-lg z-[60] overflow-hidden animate-in fade-in">
                                                 {locations.map(loc => (
                                                     <div key={loc} className="flex items-center justify-between border-b border-stone-50 last:border-0 hover:bg-stone-50 pr-2">
                                                         <button 
