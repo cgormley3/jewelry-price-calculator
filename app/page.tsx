@@ -705,8 +705,7 @@ export default function Home() {
 
         const itemStatus = item.status || 'active';
         if (filterStatus === 'Active' && itemStatus !== 'active') return false;
-        // FIXED: Correct logic for Archived filter (shows both sold and archived)
-        if (filterStatus === 'Archived' && itemStatus === 'active') return false; 
+        if (filterStatus === 'Archived' && itemStatus === 'active') return false;
 
         if (filterStartDate || filterEndDate) {
             const itemDate = new Date(item.created_at).getTime();
@@ -1541,10 +1540,10 @@ export default function Home() {
               <div className="flex flex-col sm:flex-row gap-4">
                 <div className="relative flex-1 flex gap-2 w-full"> {/* Added w-full for mobile */}
                   {/* NEW: Filter Button (Fixed w-12 h-12) */}
-                  <div className="relative filter-menu-container shrink-0">
+                  <div className="relative filter-menu-container shrink-0 h-12 w-12"> {/* Explicit w-12 h-full */}
                       <button 
                          onClick={() => setShowFilterMenu(!showFilterMenu)}
-                         className={`filter-menu-trigger w-12 h-12 flex items-center justify-center rounded-xl border transition-all ${showFilterMenu ? 'bg-slate-900 text-white border-slate-900' : 'bg-stone-50 border-stone-200 text-stone-400 hover:border-[#A5BEAC]'}`}
+                         className={`filter-menu-trigger w-full h-full flex items-center justify-center rounded-xl border transition-all ${showFilterMenu ? 'bg-slate-900 text-white border-slate-900' : 'bg-stone-50 border-stone-200 text-stone-400 hover:border-[#A5BEAC]'}`}
                       >
                          <span className="text-lg">⚡</span>
                       </button>
@@ -1611,12 +1610,12 @@ export default function Home() {
                       )}
                   </div>
 
-                  <div className="relative flex-1 min-w-0">
+                  <div className="relative flex-1 min-w-0 h-12"> {/* h-full ensures consistent height */}
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-300 text-xs">🔍</span>
                     <input
                       type="text"
                       placeholder="Search items..."
-                      className="w-full pl-10 pr-4 py-3 bg-stone-50 border rounded-xl text-xs font-bold outline-none focus:border-[#A5BEAC] transition-all h-12"
+                      className="w-full h-full pl-10 pr-4 bg-stone-50 border rounded-xl text-xs font-bold outline-none focus:border-[#A5BEAC] transition-all"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                     />
@@ -1624,11 +1623,11 @@ export default function Home() {
                 </div>
                 
                 {/* NEW: Combined Vault Options Menu */}
-                <div className="relative vault-menu-container">
+                <div className="relative vault-menu-container h-12">
                     <button 
                         onClick={() => { if (inventory.length > 0) setShowVaultMenu(!showVaultMenu); }} 
                         disabled={inventory.length === 0}
-                        className={`vault-menu-trigger w-full sm:w-auto px-6 py-3 h-12 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 transition shadow-sm ${
+                        className={`vault-menu-trigger w-full h-full sm:w-auto px-6 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 transition shadow-sm ${
                             inventory.length === 0 
                             ? 'bg-stone-200 text-stone-400 cursor-not-allowed' 
                             : 'bg-slate-900 text-white hover:bg-[#A5BEAC]'
@@ -1740,7 +1739,8 @@ export default function Home() {
                                 <div className="w-full animate-in fade-in slide-in-from-left-1 flex items-center gap-2">
                                     <input 
                                     type="text" 
-                                    className="flex-1 bg-stone-50 border-2 border-[#A5BEAC] rounded-xl px-4 py-2 text-sm font-black uppercase outline-none shadow-inner"
+                                    // FIXED: Added min-w-0 to prevent flex item blowout on mobile
+                                    className="flex-1 bg-stone-50 border-2 border-[#A5BEAC] rounded-xl px-4 py-2 text-sm font-black uppercase outline-none shadow-inner min-w-0"
                                     value={newNameValue}
                                     autoFocus
                                     onChange={(e) => setNewNameValue(e.target.value)}
@@ -1939,13 +1939,26 @@ export default function Home() {
                         <summary className="list-none cursor-pointer py-2 text-center text-[8px] font-black uppercase tracking-[0.3em] text-stone-300 hover:text-[#A5BEAC] transition-colors">View Breakdown & Notes</summary>
                         <div className="p-5 md:p-6 bg-stone-50/50 space-y-6">
                             
-                          {/* MOVED: Strategy Banner Here */}
-                          <div className="w-full bg-white border border-stone-200 rounded-xl p-3 text-center shadow-sm">
-                              <span className="text-[10px] font-black uppercase text-stone-400 tracking-widest block mb-1">Calculation Strategy</span>
-                              <span className="text-sm font-black text-slate-900 uppercase">Strategy {item.strategy}</span>
+                          {/* MOVED & UPDATED: Compact Strategy Grid Box */}
+                          <div className="grid grid-cols-2 gap-3 text-center">
+                              {/* Strategy Box */}
+                              <div className="bg-white p-3.5 rounded-xl border border-stone-100 shadow-sm flex flex-col justify-center">
+                                  <p className="text-[8px] font-black text-stone-400 uppercase mb-1">Strategy</p>
+                                  <p className="text-xs font-black text-slate-700 uppercase">{item.strategy}</p>
+                              </div>
+                              {/* Materials Box */}
+                              <div className="bg-white p-3.5 rounded-xl border border-stone-100 shadow-sm flex flex-col justify-center">
+                                  <p className="text-[8px] font-black text-stone-400 uppercase mb-1">Materials</p>
+                                  <p className="text-xs font-black text-slate-700">${(savedMetalCost + Number(item.other_costs_at_making || 0)).toFixed(2)}</p>
+                              </div>
+                              {/* Labor Box - Spans Full Width */}
+                              <div className="bg-white p-3.5 rounded-xl border border-stone-100 shadow-sm col-span-2 flex flex-col justify-center">
+                                  <p className="text-[8px] font-black text-stone-400 uppercase mb-1">Labor ({Number(item.hours || 0)}h @ ${((Number(item.labor_at_making) || 0) / (Number(item.hours) || 1)).toFixed(2)}/hr)</p>
+                                  <p className="text-xs font-black text-slate-700">${Number(item.labor_at_making || 0).toFixed(2)}</p>
+                              </div>
                           </div>
 
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
+                          <div className="grid grid-cols-1 gap-8 text-left">
                             <div className="space-y-3">
                               <h4 className="text-[10px] font-black uppercase text-stone-400">Saved Breakdown</h4>
                               {item.metals?.map((m: any, idx: number) => {
@@ -1974,19 +1987,8 @@ export default function Home() {
                                 </div>
                               )}
                             </div>
-                            <div className="space-y-5">
-                              <div className="grid grid-cols-2 gap-3 text-center">
-                                <div className="bg-white p-3.5 rounded-xl border border-stone-100 shadow-sm">
-                                  <p className="text-[8px] font-black text-stone-400 uppercase mb-1">Materials</p>
-                                  <p className="text-xs font-black text-slate-700">${(savedMetalCost + Number(item.other_costs_at_making || 0)).toFixed(2)}</p>
-                                </div>
-                                <div className="bg-white p-3.5 rounded-xl border border-stone-100 shadow-sm">
-                                  <p className="text-[8px] font-black text-stone-400 uppercase mb-1">Labor ({Number(item.hours || 0)}h @ ${((Number(item.labor_at_making) || 0) / (Number(item.hours) || 1)).toFixed(2)}/hr)</p>
-                                  <p className="text-xs font-black text-slate-700">${Number(item.labor_at_making || 0).toFixed(2)}</p>
-                                </div>
-                              </div>
-                            </div>
                           </div>
+                          
                           <div className="bg-white p-4 rounded-2xl border border-stone-200 text-left">
                             <h4 className="text-[9px] font-black uppercase text-stone-400 mb-2">Vault Notes</h4>
                             <textarea className="w-full p-3 bg-stone-50 border border-stone-100 rounded-xl text-xs italic text-slate-600 resize-none h-24 outline-none focus:border-[#A5BEAC] transition-all" placeholder="Click to add notes..." defaultValue={item.notes || ''} onBlur={(e) => saveNote(item.id, (e.target as HTMLTextAreaElement).value)} />
@@ -1998,6 +2000,105 @@ export default function Home() {
                 })
               )}
             </div>
+          </div>
+        </div>
+
+        {/* LOGIC SECTION */}
+        <div className={`grid grid-cols-1 gap-8 pt-0 mt-[-1rem] md:mt-0 md:pt-10 ${activeTab !== 'logic' ? 'hidden md:grid' : ''}`}>
+          <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC] min-h-[400px] md:min-h-0">
+            <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">1. MATERIAL CALCULATION DETAIL</h2>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 text-left">
+              <div className="space-y-6">
+                <div className="bg-stone-50 p-6 md:p-8 rounded-[2rem] border border-stone-100 text-left">
+                  <h3 className="text-xs font-black text-[#A5BEAC] uppercase tracking-widest mb-6">THE LOGIC</h3>
+                  <div className="font-mono text-sm bg-white p-6 rounded-2xl border border-stone-100 text-center shadow-sm">
+                    <p className="text-slate-900 font-bold break-words">Cost = (Spot ÷ 31.1035) × Grams × Purity</p>
+                  </div>
+                </div>
+                <p className="text-xs text-stone-500 leading-relaxed italic px-2">Spot prices are quoted per Troy Ounce. We divide by 31.1035 to get the price per gram, then multiply by the specific metal purity.</p>
+              </div>
+              <div className="bg-stone-50 p-6 md:p-8 rounded-[2rem] border border-stone-100 text-left">
+                <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6">PURITY CONSTANTS:</h3>
+                <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-[10px] font-bold text-stone-400 uppercase tracking-tighter">
+                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>24K Gold</span><span>99.9%</span></div>
+                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>22K Gold</span><span>91.6%</span></div>
+                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>18K Gold</span><span>75.0%</span></div>
+                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>14K Gold</span><span>58.3%</span></div>
+                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>10K Gold</span><span>41.7%</span></div>
+                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>Sterling Silver</span><span>92.5%</span></div>
+                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>Plat 950</span><span>95.0%</span></div>
+                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>Palladium</span><span>95.0%</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC] min-h-[400px] md:min-h-0">
+            <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">2. PRICE STRATEGY DETAIL</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
+              <div className="p-6 md:p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all flex flex-col justify-between">
+                <div>
+                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6">STRATEGY A (STANDARD MULTIPLIER)</h3>
+                  <div className="space-y-4 mb-8">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-white border border-stone-200 flex items-center justify-center font-black text-xs shrink-0">W</div>
+                      <span className="text-xs font-bold text-stone-400">=</span>
+                      <span className="text-xs font-bold text-slate-900 break-words">Materials (M) + Labor (L)</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-black text-xs shrink-0">R</div>
+                      <span className="text-xs font-bold text-stone-400">=</span>
+                      <span className="text-xs font-bold text-slate-900 break-words">Wholesale (W) × {retailMultA}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="pt-4 border-t border-stone-200/60">
+                  <p className="text-[11px] text-[#a8a29e] leading-relaxed italic uppercase font-bold tracking-tight">
+                    * The standard retail model. Best for production pieces where a 2-3x markup covers overhead, marketing, and business growth.
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-6 md:p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all flex flex-col justify-between">
+                <div>
+                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6">STRATEGY B (MATERIALS MARKUP)</h3>
+                  <div className="space-y-4 mb-8">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-white border border-stone-200 flex items-center justify-center font-black text-xs shrink-0">W</div>
+                      <span className="text-xs font-bold text-stone-400">=</span>
+                      <span className="text-xs font-bold text-slate-900 break-words">(Materials × {markupB}) + Labor</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-black text-xs shrink-0">R</div>
+                      <span className="text-xs font-bold text-stone-400">=</span>
+                      <span className="text-xs font-bold text-slate-900 break-words">Wholesale (W) × 2</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="pt-4 border-t border-stone-200/60">
+                  <p className="text-[11px] text-[#a8a29e] leading-relaxed italic uppercase font-bold tracking-tight">
+                    * The custom model. Best for high-material-cost work where you markup the metals first by 1.5-1.8X to protect against market volatility.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col items-center justify-center gap-2 py-8 border-t border-stone-200 mt-10">
+            <a href="https://bearsilverandstone.com" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400">Powered by</span>
+              <img
+                src="/icon.png?v=2"
+                alt="Bear Silver and Stone"
+                className="w-6 h-6 object-contain brightness-110 contrast-125 mb-3"
+                style={{ mixBlendMode: 'multiply' }}
+              />
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900">Bear Silver and Stone</span>
+            </a>
+            <InstallPrompt />
+            <a href="https://bearsilverandstone.com/policies/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-[8px] font-bold uppercase tracking-widest text-stone-300 hover:text-[#A5BEAC] transition-colors mt-2">
+                Privacy Policy
+            </a>
           </div>
         </div>
       </div>
