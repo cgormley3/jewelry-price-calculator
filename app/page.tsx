@@ -27,6 +27,7 @@ export default function Home() {
   const [filterLocation, setFilterLocation] = useState('All');
   const [filterStrategy, setFilterStrategy] = useState('All');
   const [filterMetal, setFilterMetal] = useState('All');
+  const [filterStatus, setFilterStatus] = useState('Active'); 
   const [filterMinPrice, setFilterMinPrice] = useState('');
   const [filterMaxPrice, setFilterMaxPrice] = useState('');
   const [filterStartDate, setFilterStartDate] = useState('');
@@ -108,39 +109,19 @@ export default function Home() {
 
   const isGuest = !user || user.is_anonymous;
 
-  // UPDATED: Global Click Outside Handler
+  // Global Click Outside Handler
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
         const target = event.target as HTMLElement;
-
-        // Close Filter Menu
-        if (showFilterMenu && !target.closest('.filter-menu-container')) {
-            setShowFilterMenu(false);
-        }
-        // Close Vault Options
-        if (showVaultMenu && !target.closest('.vault-menu-container')) {
-            setShowVaultMenu(false);
-        }
-        // Close Item Actions Menu
-        if (openMenuId && !target.closest('.item-menu-container')) {
-            setOpenMenuId(null);
-        }
-        // Close Location Menu
-        if (showLocationMenuId && !target.closest('.location-menu-container')) {
-            setShowLocationMenuId(null);
-        }
-        // Close Auth/Login Menu
-        if (showAuth && !target.closest('.auth-menu-container')) {
-            setShowAuth(false);
-        }
+        if (showFilterMenu && !target.closest('.filter-menu-container')) setShowFilterMenu(false);
+        if (showVaultMenu && !target.closest('.vault-menu-container')) setShowVaultMenu(false);
+        if (openMenuId && !target.closest('.item-menu-container')) setOpenMenuId(null);
+        if (showLocationMenuId && !target.closest('.location-menu-container')) setShowLocationMenuId(null);
+        if (showAuth && !target.closest('.auth-menu-container')) setShowAuth(false);
     };
-
     document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-        document.removeEventListener('mousedown', handleClickOutside);
-    };
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showFilterMenu, showVaultMenu, openMenuId, showLocationMenuId, showAuth]);
-
 
   const fetchPrices = useCallback(async (force = false) => {
     try {
@@ -277,6 +258,15 @@ export default function Home() {
       if (!error) {
           setInventory(inventory.map(i => i.id === id ? { ...i, location: newLoc } : i));
           setShowLocationMenuId(null);
+      }
+  };
+
+  const updateStatus = async (id: string, status: string) => {
+      const { error } = await supabase.from('inventory').update({ status: status }).eq('id', id);
+      if (!error) {
+          setInventory(inventory.map(i => i.id === id ? { ...i, status: status } : i));
+          setOpenMenuId(null);
+          setNotification({ title: "Status Updated", message: `Item marked as ${status === 'active' ? 'Active' : 'Archived/Sold'}.`, type: 'success' });
       }
   };
 
@@ -674,7 +664,8 @@ export default function Home() {
       user_id: currentUser.id, 
       notes: '',
       hours: Number(hours) || 0,
-      location: 'Main Vault' 
+      location: 'Main Vault',
+      status: 'active' 
     };
 
     const { data, error } = await supabase.from('inventory').insert([newItem]).select();
@@ -712,6 +703,11 @@ export default function Home() {
             if (!item.metals.some((m: any) => m.type.toLowerCase().includes(filterMetal.toLowerCase()))) return false;
         }
 
+        const itemStatus = item.status || 'active';
+        if (filterStatus === 'Active' && itemStatus !== 'active') return false;
+        // FIXED: Correct logic for Archived filter (shows both sold and archived)
+        if (filterStatus === 'Archived' && itemStatus === 'active') return false; 
+
         if (filterStartDate || filterEndDate) {
             const itemDate = new Date(item.created_at).getTime();
             if (filterStartDate && itemDate < new Date(filterStartDate).getTime()) return false;
@@ -733,10 +729,11 @@ export default function Home() {
 
         return true;
     });
-  }, [inventory, searchTerm, filterLocation, filterStrategy, filterMetal, filterMinPrice, filterMaxPrice, filterStartDate, filterEndDate, prices]);
+  }, [inventory, searchTerm, filterLocation, filterStrategy, filterMetal, filterStatus, filterMinPrice, filterMaxPrice, filterStartDate, filterEndDate, prices]);
 
   const totalVaultValue = useMemo(() => {
     return inventory.reduce((acc, item) => {
+      if (item.status === 'archived' || item.status === 'sold') return acc;
       const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
       const labor = item.labor_at_making || 0;
       const liveRetail = item.strategy === 'A' ? (current.totalMaterials + labor) * (item.multiplier || 3) : ((current.totalMaterials * (item.markup_b || 1.8)) + labor) * 2;
@@ -749,7 +746,7 @@ export default function Home() {
         ? filteredInventory.filter(i => selectedItems.has(i.id))
         : filteredInventory;
 
-    const headers = ["Item Name", "Location", "Live Retail", "Live Wholesale", "Saved Retail", "Saved Wholesale", "Labor Hours", "Labor Cost", "Materials Cost", "Other Costs", "Notes", "Date Created", "Strategy", "Metals", "Image URL"];
+    const headers = ["Item Name", "Status", "Location", "Live Retail", "Live Wholesale", "Saved Retail", "Saved Wholesale", "Labor Hours", "Labor Cost", "Materials Cost", "Other Costs", "Notes", "Date Created", "Strategy", "Metals", "Image URL"];
     const rows = targetItems.map(item => {
       const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
       const labor = item.labor_at_making || 0;
@@ -758,6 +755,7 @@ export default function Home() {
       const metalsStr = item.metals.map((m: any) => `${m.weight}${m.unit} ${m.type}`).join('; ');
       return [
           `"${item.name}"`, 
+          `"${item.status || 'active'}"`,
           `"${item.location || 'Main Vault'}"`,
           liveRetail.toFixed(2), 
           liveWholesale.toFixed(2), 
@@ -781,7 +779,6 @@ export default function Home() {
     document.body.appendChild(link); link.click(); setShowVaultMenu(false);
   };
 
-  // UPDATED: Reliable Image Fetch for PDF
   const getImageData = async (url: string): Promise<string | null> => {
       try {
           const response = await fetch(url, { mode: 'cors' });
@@ -835,7 +832,7 @@ export default function Home() {
 
       doc.setFont("helvetica", "bold"); doc.setFontSize(14); doc.setTextColor(0, 0, 0); doc.text(`${item.name.toUpperCase()}`, titleX, currentY + 6);
       doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(150, 150, 150);
-      doc.text(`Location: ${item.location || 'Main Vault'} | Strategy: ${item.strategy}`, titleX, currentY + 11);
+      doc.text(`Status: ${item.status === 'archived' || item.status === 'sold' ? 'Archived' : 'Active'} | Loc: ${item.location || 'Main Vault'}`, titleX, currentY + 11);
       doc.text(`Saved: ${new Date(item.created_at).toLocaleDateString()}`, titleX, currentY + 15);
 
       const tableHead = includeLiveInPDF 
@@ -1411,7 +1408,8 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start"> {/* Removed items-start constraint */}
+        {/* MODIFIED: items-start to allow vault column to stretch to full height */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* CALCULATOR COLUMN */}
           <div className={`lg:col-span-5 space-y-6 ${activeTab !== 'calculator' ? 'hidden md:block' : ''}`}>
             <div className="bg-white p-8 rounded-[2rem] shadow-xl border-2 border-[#A5BEAC] lg:sticky lg:top-6 space-y-5">
@@ -1525,9 +1523,10 @@ export default function Home() {
           </div>
 
           {/* VAULT COLUMN */}
-          {/* FIXED: Changed max-h to flex-1 min-h-0 to make list fill space on desktop */}
-          <div className={`lg:col-span-7 bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm overflow-hidden flex flex-col h-full ${activeTab !== 'vault' ? 'hidden md:block' : ''}`}>
-            <div className="p-6 border-b border-stone-100 bg-white space-y-4">
+          {/* FIXED: Removed max-h, added flex-1 min-h-0 to make list fill space on desktop */}
+          {/* FIXED: Removed overflow-hidden from parent so dropdowns are not clipped */}
+          <div className={`lg:col-span-7 bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm flex flex-col h-full ${activeTab !== 'vault' ? 'hidden md:block' : ''}`}>
+            <div className="p-6 border-b border-stone-100 bg-white space-y-4 rounded-t-[2.5rem]">
               <div className="flex justify-between items-center text-left">
                 <div>
                   <h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Vault Inventory</h2>
@@ -1556,7 +1555,7 @@ export default function Home() {
                               <div className="flex justify-between items-center">
                                   <h4 className="text-xs font-black uppercase text-slate-900">Filters</h4>
                                   <button onClick={() => {
-                                      setFilterLocation('All'); setFilterStrategy('All'); setFilterMetal('All');
+                                      setFilterLocation('All'); setFilterStrategy('All'); setFilterMetal('All'); setFilterStatus('Active');
                                       setFilterMinPrice(''); setFilterMaxPrice(''); setFilterStartDate(''); setFilterEndDate('');
                                   }} className="text-[9px] font-bold text-[#A5BEAC] uppercase hover:text-slate-900">Reset</button>
                               </div>
@@ -1568,6 +1567,16 @@ export default function Home() {
                                       <option>All</option>
                                       {locations.map(l => <option key={l}>{l}</option>)}
                                   </select>
+                              </div>
+
+                              {/* Status */}
+                              <div className="space-y-1">
+                                  <label className="text-[9px] font-bold text-stone-400 uppercase">Item Status</label>
+                                  <div className="flex gap-2 bg-stone-100 p-1 rounded-lg">
+                                      {['Active', 'Archived', 'All'].map(s => ( 
+                                          <button key={s} onClick={() => setFilterStatus(s)} className={`flex-1 py-1.5 rounded-md text-[8px] font-black uppercase transition-all ${filterStatus === s ? 'bg-white text-slate-900 shadow-sm' : 'text-stone-400 hover:text-stone-600'}`}>{s}</button>
+                                      ))}
+                                  </div>
                               </div>
 
                               {/* Strategy */}
@@ -1607,7 +1616,7 @@ export default function Home() {
                     <input
                       type="text"
                       placeholder="Search items..."
-                      className="w-full pl-10 pr-4 py-3 bg-stone-50 border rounded-xl text-xs font-bold outline-none focus:border-[#A5BEAC] transition-all"
+                      className="w-full pl-10 pr-4 py-3 bg-stone-50 border rounded-xl text-xs font-bold outline-none focus:border-[#A5BEAC] transition-all h-12"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                     />
@@ -1619,7 +1628,7 @@ export default function Home() {
                     <button 
                         onClick={() => { if (inventory.length > 0) setShowVaultMenu(!showVaultMenu); }} 
                         disabled={inventory.length === 0}
-                        className={`vault-menu-trigger w-full sm:w-auto px-6 py-3 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 transition shadow-sm ${
+                        className={`vault-menu-trigger w-full sm:w-auto px-6 py-3 h-12 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 transition shadow-sm ${
                             inventory.length === 0 
                             ? 'bg-stone-200 text-stone-400 cursor-not-allowed' 
                             : 'bg-slate-900 text-white hover:bg-[#A5BEAC]'
@@ -1664,8 +1673,9 @@ export default function Home() {
               </div>
             </div>
 
-            {/* FIXED: Removed max-h, added flex-1 min-h-0 to make list fill space on desktop */}
-            <div className="p-4 md:p-6 space-y-4 overflow-y-auto flex-1 min-h-0 custom-scrollbar overscroll-behavior-contain touch-pan-y bg-stone-50/20">
+            {/* FIXED: Removed max-h, added flex-1 min-h-0 and min-h-[600px] to ensure list has height */}
+            {/* Added pb-40 to allow scrolling past last item so dropdown is visible */}
+            <div className="p-4 md:p-6 space-y-4 overflow-y-auto flex-1 min-h-[600px] pb-40 custom-scrollbar overscroll-behavior-contain touch-pan-y bg-stone-50/20 rounded-b-[2.5rem]">
               {loading ? (
                 <div className="p-20 text-center text-stone-400 font-bold uppercase text-xs tracking-widest animate-pulse">Opening Vault...</div>
               ) : (
@@ -1694,8 +1704,16 @@ export default function Home() {
                       return acc + val;
                   }, 0) || 0;
 
+                  const isSold = item.status === 'sold';
+                  const isArchived = item.status === 'archived';
+
                   return (
-                    <div key={item.id} className="bg-white rounded-[2rem] border border-stone-100 shadow-sm overflow-visible relative transition-all hover:shadow-md pl-12">
+                    <div 
+                        key={item.id} 
+                        // UPDATED: Dynamic z-index for stacking context
+                        className={`bg-white rounded-[2rem] border border-stone-100 shadow-sm overflow-visible relative transition-all hover:shadow-md pl-12 ${isSold || isArchived ? 'opacity-70 bg-stone-50' : ''}`}
+                        style={{ zIndex: openMenuId === item.id ? 20 : 0 }} 
+                    >
                       {/* Selection Checkbox */}
                       <div className="absolute left-4 top-6 flex items-center justify-center">
                           <input 
@@ -1735,7 +1753,7 @@ export default function Home() {
                                 </div>
                                 ) : (
                                 <div className="flex items-start flex-nowrap gap-2 w-full">
-                                    <h3 className="text-lg font-black text-slate-900 leading-tight uppercase tracking-tight break-words flex-1">
+                                    <h3 className={`text-lg font-black leading-tight uppercase tracking-tight break-words flex-1 ${isSold ? 'line-through text-stone-400' : 'text-slate-900'}`}>
                                         {item.name}
                                     </h3>
                                     <div className="relative shrink-0 pt-0.5 item-menu-container">
@@ -1748,45 +1766,53 @@ export default function Home() {
                                         
                                         {openMenuId === item.id && (
                                             <div className="item-menu-dropdown absolute top-full left-auto right-0 mt-2 w-48 bg-white border border-[#A5BEAC] rounded-2xl shadow-xl z-[150] overflow-hidden animate-in fade-in slide-in-from-top-1">
-                                                <button 
-                                                    onClick={() => {
-                                                    setEditingNameId(item.id);
-                                                    setNewNameValue(item.name);
-                                                    setOpenMenuId(null);
-                                                    }}
-                                                    className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b transition-colors flex items-center gap-2"
-                                                >
-                                                    <span>✎</span> Edit Name
-                                                </button>
-                                                
-                                                {/* NEW: Image Upload Option */}
-                                                <label className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b transition-colors flex items-center gap-2 cursor-pointer">
-                                                    <span>📷</span> {uploadingId === item.id ? "Uploading..." : "Add/Edit Image"}
-                                                    <input 
-                                                        type="file" 
-                                                        accept="image/*" 
-                                                        className="hidden" 
-                                                        disabled={uploadingId === item.id}
-                                                        onChange={(e) => onFileSelect(e, item.id)}
-                                                    />
-                                                </label>
+                                                {/* GRID LAYOUT FOR ACTIONS */}
+                                                <div className="grid grid-cols-2 border-b border-stone-100">
+                                                    <button 
+                                                        onClick={() => {
+                                                        setEditingNameId(item.id);
+                                                        setNewNameValue(item.name);
+                                                        setOpenMenuId(null);
+                                                        }}
+                                                        className="px-2 py-3 text-center text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-r border-stone-100 transition-colors flex flex-col items-center gap-1"
+                                                    >
+                                                        <span className="text-lg leading-none">✎</span> 
+                                                        <span>Name</span>
+                                                    </button>
+                                                    <label className="px-2 py-3 text-center text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 transition-colors flex flex-col items-center gap-1 cursor-pointer">
+                                                        <span className="text-lg leading-none">📷</span> 
+                                                        <span>Image</span>
+                                                        <input 
+                                                            type="file" 
+                                                            accept="image/*" 
+                                                            className="hidden" 
+                                                            disabled={uploadingId === item.id}
+                                                            onChange={(e) => onFileSelect(e, item.id)}
+                                                        />
+                                                    </label>
+                                                </div>
 
-                                                <button 
-                                                    onClick={() => syncToMarket(item)}
-                                                    className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b transition-colors flex items-center gap-2"
-                                                >
-                                                    <span>🔄</span> Sync to Market
-                                                </button>
-                                                <button 
-                                                    onClick={() => {
-                                                    setRecalcItem(item);
-                                                    setRecalcParams({ gold: '', silver: '', platinum: '', palladium: '', laborRate: '' });
-                                                    setOpenMenuId(null);
-                                                    }}
-                                                    className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b transition-colors flex items-center gap-2"
-                                                >
-                                                    <span>🧮</span> Recalculate
-                                                </button>
+                                                <div className="grid grid-cols-2 border-b border-stone-100">
+                                                    <button 
+                                                        onClick={() => syncToMarket(item)}
+                                                        className="px-2 py-3 text-center text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-r border-stone-100 transition-colors flex flex-col items-center gap-1"
+                                                    >
+                                                        <span className="text-lg leading-none">🔄</span> 
+                                                        <span>Sync</span>
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => {
+                                                            setRecalcItem(item);
+                                                            setRecalcParams({ gold: '', silver: '', platinum: '', palladium: '', laborRate: '' });
+                                                            setOpenMenuId(null);
+                                                        }}
+                                                        className="px-2 py-3 text-center text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 transition-colors flex flex-col items-center gap-1"
+                                                    >
+                                                        <span className="text-lg leading-none">🧮</span> 
+                                                        <span>Recalc</span>
+                                                    </button>
+                                                </div>
+
                                                 <button 
                                                     onClick={() => {
                                                     setEditingItem(item);
@@ -1798,6 +1824,16 @@ export default function Home() {
                                                 >
                                                     <span>⚙️</span> Manual Price Edit
                                                 </button>
+                                                
+                                                {/* MODIFIED: Consolidated Status Button */}
+                                                <button 
+                                                    onClick={() => updateStatus(item.id, item.status === 'archived' ? 'active' : 'archived')}
+                                                    className={`w-full px-4 py-3 text-left text-[10px] font-black uppercase hover:bg-stone-50 border-b transition-colors flex items-center gap-2 ${item.status === 'archived' ? 'text-green-600' : 'text-stone-500'}`}
+                                                >
+                                                    <span>{item.status === 'archived' ? '♻️' : '📦'}</span> 
+                                                    <span>{item.status === 'archived' ? 'Restore to Active' : 'Mark Sold / Archive'}</span>
+                                                </button>
+
                                                 <button 
                                                     onClick={() => {
                                                     deleteInventoryItem(item.id, item.name);
@@ -1814,9 +1850,7 @@ export default function Home() {
                                 )}
                                 
                                 <div className="flex flex-wrap items-center gap-2 mt-2">
-                                    <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md border bg-slate-100 text-slate-500 border-slate-200 uppercase leading-none flex items-center h-[18px]">
-                                      Strategy {item.strategy}
-                                    </span>
+                                    {(isSold || isArchived) && <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-stone-200 text-stone-600 uppercase">SOLD / ARCHIVED</span>}
                                     
                                     {/* NEW: Location Badge & Dropdown */}
                                     <div className="relative location-menu-container">
@@ -1904,6 +1938,13 @@ export default function Home() {
                       <details className="group border-t border-stone-50 text-left">
                         <summary className="list-none cursor-pointer py-2 text-center text-[8px] font-black uppercase tracking-[0.3em] text-stone-300 hover:text-[#A5BEAC] transition-colors">View Breakdown & Notes</summary>
                         <div className="p-5 md:p-6 bg-stone-50/50 space-y-6">
+                            
+                          {/* MOVED: Strategy Banner Here */}
+                          <div className="w-full bg-white border border-stone-200 rounded-xl p-3 text-center shadow-sm">
+                              <span className="text-[10px] font-black uppercase text-stone-400 tracking-widest block mb-1">Calculation Strategy</span>
+                              <span className="text-sm font-black text-slate-900 uppercase">Strategy {item.strategy}</span>
+                          </div>
+
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
                             <div className="space-y-3">
                               <h4 className="text-[10px] font-black uppercase text-stone-400">Saved Breakdown</h4>
@@ -1957,105 +1998,6 @@ export default function Home() {
                 })
               )}
             </div>
-          </div>
-        </div>
-
-        {/* LOGIC SECTION */}
-        <div className={`grid grid-cols-1 gap-8 pt-0 mt-[-1rem] md:mt-0 md:pt-10 ${activeTab !== 'logic' ? 'hidden md:grid' : ''}`}>
-          <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC] min-h-[400px] md:min-h-0">
-            <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">1. MATERIAL CALCULATION DETAIL</h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 text-left">
-              <div className="space-y-6">
-                <div className="bg-stone-50 p-6 md:p-8 rounded-[2rem] border border-stone-100 text-left">
-                  <h3 className="text-xs font-black text-[#A5BEAC] uppercase tracking-widest mb-6">THE LOGIC</h3>
-                  <div className="font-mono text-sm bg-white p-6 rounded-2xl border border-stone-100 text-center shadow-sm">
-                    <p className="text-slate-900 font-bold break-words">Cost = (Spot ÷ 31.1035) × Grams × Purity</p>
-                  </div>
-                </div>
-                <p className="text-xs text-stone-500 leading-relaxed italic px-2">Spot prices are quoted per Troy Ounce. We divide by 31.1035 to get the price per gram, then multiply by the specific metal purity.</p>
-              </div>
-              <div className="bg-stone-50 p-6 md:p-8 rounded-[2rem] border border-stone-100 text-left">
-                <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6">PURITY CONSTANTS:</h3>
-                <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-[10px] font-bold text-stone-400 uppercase tracking-tighter">
-                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>24K Gold</span><span>99.9%</span></div>
-                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>22K Gold</span><span>91.6%</span></div>
-                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>18K Gold</span><span>75.0%</span></div>
-                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>14K Gold</span><span>58.3%</span></div>
-                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>10K Gold</span><span>41.7%</span></div>
-                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>Sterling Silver</span><span>92.5%</span></div>
-                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>Plat 950</span><span>95.0%</span></div>
-                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>Palladium</span><span>95.0%</span></div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC] min-h-[400px] md:min-h-0">
-            <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">2. PRICE STRATEGY DETAIL</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
-              <div className="p-6 md:p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all flex flex-col justify-between">
-                <div>
-                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6">STRATEGY A (STANDARD MULTIPLIER)</h3>
-                  <div className="space-y-4 mb-8">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-white border border-stone-200 flex items-center justify-center font-black text-xs shrink-0">W</div>
-                      <span className="text-xs font-bold text-stone-400">=</span>
-                      <span className="text-xs font-bold text-slate-900 break-words">Materials (M) + Labor (L)</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-black text-xs shrink-0">R</div>
-                      <span className="text-xs font-bold text-stone-400">=</span>
-                      <span className="text-xs font-bold text-slate-900 break-words">Wholesale (W) × {retailMultA}</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="pt-4 border-t border-stone-200/60">
-                  <p className="text-[11px] text-[#a8a29e] leading-relaxed italic uppercase font-bold tracking-tight">
-                    * The standard retail model. Best for production pieces where a 2-3x markup covers overhead, marketing, and business growth.
-                  </p>
-                </div>
-              </div>
-
-              <div className="p-6 md:p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all flex flex-col justify-between">
-                <div>
-                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6">STRATEGY B (MATERIALS MARKUP)</h3>
-                  <div className="space-y-4 mb-8">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-white border border-stone-200 flex items-center justify-center font-black text-xs shrink-0">W</div>
-                      <span className="text-xs font-bold text-stone-400">=</span>
-                      <span className="text-xs font-bold text-slate-900 break-words">(Materials × {markupB}) + Labor</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-black text-xs shrink-0">R</div>
-                      <span className="text-xs font-bold text-stone-400">=</span>
-                      <span className="text-xs font-bold text-slate-900 break-words">Wholesale (W) × 2</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="pt-4 border-t border-stone-200/60">
-                  <p className="text-[11px] text-[#a8a29e] leading-relaxed italic uppercase font-bold tracking-tight">
-                    * The custom model. Best for high-material-cost work where you markup the metals first by 1.5-1.8X to protect against market volatility.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex flex-col items-center justify-center gap-2 py-8 border-t border-stone-200 mt-10">
-            <a href="https://bearsilverandstone.com" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400">Powered by</span>
-              <img
-                src="/icon.png?v=2"
-                alt="Bear Silver and Stone"
-                className="w-6 h-6 object-contain brightness-110 contrast-125 mb-3"
-                style={{ mixBlendMode: 'multiply' }}
-              />
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900">Bear Silver and Stone</span>
-            </a>
-            <InstallPrompt />
-            <a href="https://bearsilverandstone.com/policies/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-[8px] font-bold uppercase tracking-widest text-stone-300 hover:text-[#A5BEAC] transition-colors mt-2">
-                Privacy Policy
-            </a>
           </div>
         </div>
       </div>
