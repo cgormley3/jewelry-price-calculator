@@ -64,7 +64,14 @@ export default function Home() {
   const [token, setToken] = useState<string | null>(null);
   const [hours, setHours] = useState<number | ''>('');
   const [rate, setRate] = useState<number | ''>('');
+  
+  // Inputs for Stone and Overhead
+  const [stoneCost, setStoneCost] = useState<number | ''>('');
+  const [stoneMarkup, setStoneMarkup] = useState<number>(1.5);
+  const [overheadCost, setOverheadCost] = useState<number | ''>('');
+  const [overheadType, setOverheadType] = useState<'flat' | 'percent'>('flat'); 
   const [otherCosts, setOtherCosts] = useState<number | ''>('');
+  
   const [strategy, setStrategy] = useState<'A' | 'B'>('A');
   const [retailMultA, setRetailMultA] = useState(3);
   const [markupB, setMarkupB] = useState(1.8);
@@ -156,7 +163,7 @@ export default function Home() {
     }
   }, []);
 
-  const calculateFullBreakdown = useCallback((metals: any[], h: any, r: any, o: any, customMult?: number, customMarkup?: number, priceOverride?: any) => {
+  const calculateFullBreakdown = useCallback((metals: any[], h: any, r: any, o: any, sCost: any, sMark: any, ovCost: any, ovType: 'flat' | 'percent', customMult?: number, customMarkup?: number, priceOverride?: any) => {
     let rawMaterialCost = 0;
     metals.forEach(m => {
       let pricePerGram = 0;
@@ -176,13 +183,37 @@ export default function Home() {
       }
       rawMaterialCost += pricePerGram * (m.weight * UNIT_TO_GRAMS[m.unit]);
     });
-    const totalMaterials = rawMaterialCost + (Number(o) || 0);
+
     const labor = (Number(h) || 0) * (Number(r) || 0);
-    const wholesaleA = totalMaterials + labor;
-    const retailA = wholesaleA * (customMult ?? retailMultA);
-    const wholesaleB = (totalMaterials * (customMarkup ?? markupB)) + labor;
+    const other = Number(o) || 0;
+    const stones = Number(sCost) || 0;
+    const stoneMult = Number(sMark) || 1.5;
+    
+    // Calculate Overhead Dollar Value
+    let overhead = 0;
+    const ovInput = Number(ovCost) || 0;
+    
+    if (ovType === 'percent') {
+        // Percentage of (Materials + Labor)
+        overhead = (rawMaterialCost + stones + other + labor) * (ovInput / 100);
+    } else {
+        // Flat Overhead
+        overhead = ovInput;
+    }
+
+    const metalCost = rawMaterialCost;
+    const totalMaterials = rawMaterialCost + other + stones; 
+    
+    // Strategy A: Metal + Labor + Other + Overhead + Stones = Wholesale
+    const coreCostA = metalCost + labor + other + overhead + stones;
+    const wholesaleA = coreCostA;
+    const retailA = coreCostA * (customMult ?? retailMultA);
+
+    // Strategy B: ((Metal + Other) * markupB) + Labor + Overhead + Stones
+    const wholesaleB = ((metalCost + other) * (customMarkup ?? markupB)) + labor + overhead + stones;
     const retailB = wholesaleB * 2;
-    return { wholesaleA, retailA, wholesaleB, retailB, totalMaterials, labor };
+
+    return { wholesaleA, retailA, wholesaleB, retailB, totalMaterials, labor, metalCost, stones, overhead, other };
   }, [prices, retailMultA, markupB]);
 
   useEffect(() => {
@@ -420,10 +451,21 @@ export default function Home() {
         message: `Update "${item.name}" to reflect current market spot prices?`,
         type: 'confirm',
         onConfirm: async () => {
-            const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
-            const labor = item.labor_at_making || 0;
-            const liveWholesale = item.strategy === 'A' ? current.wholesaleA + labor : current.wholesaleB;
-            const liveRetail = item.strategy === 'A' ? (current.totalMaterials + labor) * (item.multiplier || 3) : ((current.totalMaterials * (item.markup_b || 1.8)) + labor) * 2;
+            const current = calculateFullBreakdown(
+                item.metals || [], 
+                1, 
+                item.labor_at_making || 0, // Using total labor cost as rate, with 1 hour
+                item.other_costs_at_making || 0, 
+                item.stone_cost || 0,
+                item.stone_markup || 1.5,
+                item.overhead_cost || 0,
+                'flat', // Force flat to use the saved dollar amount
+                item.multiplier, 
+                item.markup_b
+            );
+            
+            const liveRetail = item.strategy === 'A' ? current.retailA : current.retailB;
+            const liveWholesaleFinal = item.strategy === 'A' ? current.wholesaleA : current.wholesaleB; 
             
             const updatedMetals = item.metals.map((m: any) => {
                 let currentSpot = 0;
@@ -437,7 +479,7 @@ export default function Home() {
             });
 
             const { error } = await supabase.from('inventory').update({ 
-                wholesale: liveWholesale, 
+                wholesale: liveWholesaleFinal, 
                 retail: liveRetail,
                 metals: updatedMetals
             }).eq('id', item.id);
@@ -467,10 +509,21 @@ export default function Home() {
             setShowVaultMenu(false);
             
             const updates = targetItems.map(async (item) => {
-                const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
-                const labor = item.labor_at_making || 0;
-                const liveWholesale = item.strategy === 'A' ? current.wholesaleA + labor : current.wholesaleB;
-                const liveRetail = item.strategy === 'A' ? (current.totalMaterials + labor) * (item.multiplier || 3) : ((current.totalMaterials * (item.markup_b || 1.8)) + labor) * 2;
+                const calc = calculateFullBreakdown(
+                    item.metals || [],
+                    1, 
+                    item.labor_at_making || 0, // CORRECTED: Use saved labor cost
+                    item.other_costs_at_making || 0,
+                    item.stone_cost || 0,
+                    item.stone_markup || 1.5,
+                    item.overhead_cost || 0,
+                    'flat', // Force flat
+                    item.multiplier,
+                    item.markup_b
+                );
+                
+                const liveRetail = item.strategy === 'A' ? calc.retailA : calc.retailB;
+                const liveWholesale = item.strategy === 'A' ? calc.wholesaleA : calc.wholesaleB;
                 
                 const updatedMetals = item.metals.map((m: any) => {
                     let currentSpot = 0;
@@ -485,7 +538,7 @@ export default function Home() {
 
                 return supabase.from('inventory').update({ 
                     wholesale: liveWholesale, 
-                    retail: liveRetail,
+                    retail: liveRetail, 
                     metals: updatedMetals
                 }).eq('id', item.id);
             });
@@ -523,12 +576,16 @@ export default function Home() {
                1, 
                newLaborCost, 
                item.other_costs_at_making || 0, 
+               item.stone_cost || 0,
+               item.stone_markup || 1.5,
+               item.overhead_cost || 0,
+               'flat', // Force flat for global recalc unless logic changes
                item.multiplier, 
                item.markup_b,
                recalcParams 
             );
 
-            const newWholesale = item.strategy === 'A' ? calc.wholesaleA + newLaborCost : calc.wholesaleB;
+            const newWholesale = item.strategy === 'A' ? calc.wholesaleA : calc.wholesaleB;
             const newRetail = item.strategy === 'A' ? calc.retailA : calc.retailB;
 
             const updatedMetals = (item.metals || []).map((m: any) => {
@@ -589,12 +646,16 @@ export default function Home() {
            1, 
            newLaborCost, 
            recalcItem.other_costs_at_making, 
+           recalcItem.stone_cost || 0,
+           recalcItem.stone_markup || 1.5,
+           recalcItem.overhead_cost || 0,
+           'flat',
            recalcItem.multiplier, 
            recalcItem.markup_b,
            recalcParams 
         );
 
-        const newWholesale = recalcItem.strategy === 'A' ? calc.wholesaleA + newLaborCost : calc.wholesaleB;
+        const newWholesale = recalcItem.strategy === 'A' ? calc.wholesaleA : calc.wholesaleB;
         const newRetail = recalcItem.strategy === 'A' ? calc.retailA : calc.retailB;
 
         const updatedMetals = recalcItem.metals.map((m: any) => {
@@ -649,15 +710,22 @@ export default function Home() {
     }
     if (metalList.length === 0) return;
 
-    const a = calculateFullBreakdown(metalList, hours, rate, otherCosts);
+    // Calculate with new inputs
+    const a = calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneCost, stoneMarkup, overheadCost, overheadType);
+    
     const newItem = {
       name: itemName, 
       metals: metalList, 
       wholesale: strategy === 'A' ? a.wholesaleA : a.wholesaleB, 
       retail: strategy === 'A' ? a.retailA : a.retailB,
-      materials_at_making: a.totalMaterials - (Number(otherCosts) || 0), 
+      materials_at_making: a.metalCost, 
       labor_at_making: a.labor, 
       other_costs_at_making: Number(otherCosts) || 0,
+      stone_cost: Number(stoneCost) || 0,
+      stone_markup: Number(stoneMarkup) || 1.5,
+      // CHANGE THIS: Save the calculated dollar amount from 'a', not the raw input
+      overhead_cost: a.overhead, 
+      overhead_type: overheadType,
       strategy: strategy, 
       multiplier: retailMultA, 
       markup_b: markupB, 
@@ -676,6 +744,9 @@ export default function Home() {
         setHours(''); 
         setRate(''); 
         setOtherCosts(''); 
+        setStoneCost('');
+        setOverheadCost('');
+        setStoneMarkup(1.5); // Reset to default
         setToken(null);
         setNotification({ title: "Item Saved", message: `"${newItem.name}" is now stored in your Vault.`, type: 'success' });
         if (!user) setUser(currentUser);
@@ -718,9 +789,10 @@ export default function Home() {
         }
 
         if (filterMinPrice || filterMaxPrice) {
-            const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
-            const labor = item.labor_at_making || 0;
-            const liveRetail = item.strategy === 'A' ? (current.totalMaterials + labor) * (item.multiplier || 3) : ((current.totalMaterials * (item.markup_b || 1.8)) + labor) * 2;
+            // FIX: Force overhead_type to 'flat' here to correctly calculate Live Retail using the stored Dollar value
+            // FIX: Pass labor cost so live price includes labor
+            const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, item.stone_cost || 0, item.stone_markup || 1.5, item.overhead_cost || 0, 'flat', item.multiplier, item.markup_b);
+            const liveRetail = item.strategy === 'A' ? current.retailA : current.retailB;
             
             if (filterMinPrice && liveRetail < Number(filterMinPrice)) return false;
             if (filterMaxPrice && liveRetail > Number(filterMaxPrice)) return false;
@@ -733,9 +805,10 @@ export default function Home() {
   const totalVaultValue = useMemo(() => {
     return inventory.reduce((acc, item) => {
       if (item.status === 'archived' || item.status === 'sold') return acc;
-      const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
-      const labor = item.labor_at_making || 0;
-      const liveRetail = item.strategy === 'A' ? (current.totalMaterials + labor) * (item.multiplier || 3) : ((current.totalMaterials * (item.markup_b || 1.8)) + labor) * 2;
+      // FIX: Force overhead_type to 'flat' here to correctly calculate Live Retail using the stored Dollar value
+      // FIX: Pass labor cost so live price includes labor
+      const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, item.stone_cost || 0, item.stone_markup || 1.5, item.overhead_cost || 0, 'flat', item.multiplier, item.markup_b);
+      const liveRetail = item.strategy === 'A' ? current.retailA : current.retailB;
       return acc + liveRetail;
     }, 0);
   }, [inventory, prices, calculateFullBreakdown]);
@@ -745,13 +818,17 @@ export default function Home() {
         ? filteredInventory.filter(i => selectedItems.has(i.id))
         : filteredInventory;
 
-    const headers = ["Item Name", "Status", "Location", "Live Retail", "Live Wholesale", "Saved Retail", "Saved Wholesale", "Labor Hours", "Labor Cost", "Materials Cost", "Other Costs", "Notes", "Date Created", "Strategy", "Metals", "Image URL"];
+    const headers = ["Item Name", "Status", "Location", "Live Retail", "Live Wholesale", "Saved Retail", "Saved Wholesale", "Labor Hours", "Labor Cost", "Materials Cost", "Other Costs", "Stone Retail", "Stone Cost", "Stone Markup", "Overhead Cost", "Overhead Type", "Notes", "Date Created", "Strategy", "Metals", "Image URL"];
     const rows = targetItems.map(item => {
-      const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
-      const labor = item.labor_at_making || 0;
-      const liveWholesale = item.strategy === 'A' ? current.wholesaleA + labor : current.wholesaleB;
-      const liveRetail = item.strategy === 'A' ? (current.totalMaterials + labor) * (item.multiplier || 3) : ((current.totalMaterials * (item.markup_b || 1.8)) + labor) * 2;
+      // FIX: Force overhead_type to 'flat' for live calc
+      // FIX: Pass labor cost
+      const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, item.stone_cost || 0, item.stone_markup || 1.5, item.overhead_cost || 0, 'flat', item.multiplier, item.markup_b);
+      const liveWholesale = item.strategy === 'A' ? current.wholesaleA : current.wholesaleB;
+      const liveRetail = item.strategy === 'A' ? current.retailA : current.retailB;
       const metalsStr = item.metals.map((m: any) => `${m.weight}${m.unit} ${m.type}`).join('; ');
+      
+      const stoneRetail = Number(item.stone_cost || 0) * Number(item.stone_markup || 1.5);
+
       return [
           `"${item.name}"`, 
           `"${item.status || 'active'}"`,
@@ -761,9 +838,14 @@ export default function Home() {
           Number(item.retail).toFixed(2), 
           Number(item.wholesale).toFixed(2), 
           item.hours || 0,
-          labor.toFixed(2),
-          (Number(item.materials_at_making) + Number(item.other_costs_at_making)).toFixed(2),
+          Number(item.labor_at_making || 0).toFixed(2),
+          (Number(current.metalCost)).toFixed(2),
           Number(item.other_costs_at_making).toFixed(2),
+          stoneRetail.toFixed(2),
+          Number(item.stone_cost || 0).toFixed(2),
+          Number(item.stone_markup || 1.5).toFixed(2),
+          Number(item.overhead_cost || 0).toFixed(2),
+          `"${item.overhead_type || 'flat'}"`,
           `"${item.notes?.replace(/"/g, '""') || ''}"`, 
           new Date(item.created_at).toLocaleDateString(), 
           item.strategy, 
@@ -815,10 +897,12 @@ export default function Home() {
     for (const item of targetItems) {
       if (currentY + 60 > 280) { doc.addPage(); currentY = 20; } 
       
-      const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
+      // FIX: Force overhead_type to 'flat' here to correctly calculate Live Retail using the stored Dollar value
+      // FIX: Pass labor cost
+      const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, item.stone_cost || 0, item.stone_markup || 1.5, item.overhead_cost || 0, 'flat', item.multiplier, item.markup_b);
       const labor = item.labor_at_making || 0;
-      const liveWholesale = item.strategy === 'A' ? current.wholesaleA + labor : current.wholesaleB;
-      const liveRetail = item.strategy === 'A' ? (current.totalMaterials + labor) * (item.multiplier || 3) : ((current.totalMaterials * (item.markup_b || 1.8)) + labor) * 2;
+      const liveWholesale = item.strategy === 'A' ? current.wholesaleA : current.wholesaleB;
+      const liveRetail = item.strategy === 'A' ? current.retailA : current.retailB;
 
       let titleX = 14;
       if (item.image_url) {
@@ -859,10 +943,25 @@ export default function Home() {
 
       if (includeBreakdownInPDF) {
           const breakdownLines = item.metals.map((m: any) => `${m.weight}${m.unit} ${m.type}`);
-          if (item.other_costs_at_making > 0) breakdownLines.push(`Stones/Other: $${Number(item.other_costs_at_making).toFixed(2)}`);
-          if (labor > 0) breakdownLines.push(`Labor Cost (${item.hours || 0}h): $${Number(labor).toFixed(2)}`);
-          breakdownLines.push(`Materials Total: $${(Number(item.materials_at_making) + Number(item.other_costs_at_making)).toFixed(2)}`);
-
+          if (item.other_costs_at_making > 0) breakdownLines.push(`Findings/Other: $${Number(item.other_costs_at_making).toFixed(2)}`);
+          
+          // PDF Stone Breakdown Logic Updated
+          if (item.stone_cost > 0) {
+              const stoneRetail = Number(item.stone_cost) * Number(item.stone_markup || 1.5);
+              breakdownLines.push(`Stones: $${stoneRetail.toFixed(2)} (Markup: ${item.stone_markup || 1.5}x | Cost: $${Number(item.stone_cost).toFixed(2)})`);
+          }
+          
+          // PDF Overhead Percentage Calculation - UPDATED DENOMINATOR
+          if (item.overhead_cost > 0) {
+              const denominator = Number(item.materials_at_making) + Number(item.labor_at_making) + Number(item.other_costs_at_making) + Number(item.stone_cost);
+              const ovPct = item.overhead_type === 'percent' && denominator > 0
+                ? ((Number(item.overhead_cost) / denominator) * 100).toFixed(1)
+                : null;
+              breakdownLines.push(`Overhead: $${Number(item.overhead_cost).toFixed(2)} ${ovPct ? `(${ovPct}%)` : ''}`);
+          }
+          
+          if (current.labor > 0) breakdownLines.push(`Labor Cost (${item.hours || 0}h): $${Number(current.labor).toFixed(2)}`);
+          
           doc.setFontSize(8); doc.setTextColor(80, 80, 80); doc.setFont("helvetica", "bold"); doc.text("BREAKDOWN:", 140, currentY + 26);
           doc.setFont("helvetica", "normal");
           breakdownLines.forEach((line: string, i: number) => doc.text(line, 140, currentY + 31 + (i * 3.5)));
@@ -892,7 +991,7 @@ export default function Home() {
     let result = isSignUp 
       ? await supabase.auth.signUp({ email, password, options: { data: { is_converted_from_anonymous: true } } }) 
       : await supabase.auth.signInWithPassword({ email, password });
-       
+        
     if (result.error) {
         setNotification({ title: "Vault Access Error", message: result.error.message, type: 'error' });
     } else {
@@ -1126,21 +1225,25 @@ export default function Home() {
             <div className="p-4 bg-slate-900 rounded-2xl text-white space-y-2">
                {(() => {
                  const laborHours = recalcItem.hours || 1;
-                 const newLaborCost = recalcParams.laborRate 
+                 const newLaborCost = recalcParams.laborRate 
                     ? Number(recalcParams.laborRate) * laborHours
                     : Number(recalcItem.labor_at_making || 0);
                  
                  const calc = calculateFullBreakdown(
-                   recalcItem.metals, 
-                   1, 
-                   newLaborCost, 
-                   recalcItem.other_costs_at_making, 
-                   recalcItem.multiplier, 
+                   recalcItem.metals, 
+                   1, 
+                   newLaborCost, 
+                   recalcItem.other_costs_at_making, 
+                   recalcItem.stone_cost,
+                   recalcItem.stone_markup,
+                   recalcItem.overhead_cost,
+                   'flat', // Force flat for recalc to avoid % of old dollar value issue
+                   recalcItem.multiplier, 
                    recalcItem.markup_b,
-                   recalcParams 
+                   recalcParams 
                  );
                  
-                 const liveRetail = recalcItem.strategy === 'A' ? (calc.totalMaterials + newLaborCost) * (recalcItem.multiplier || 3) : ((calc.totalMaterials * (recalcItem.markup_b || 1.8)) + newLaborCost) * 2;
+                 const liveRetail = recalcItem.strategy === 'A' ? calc.retailA : calc.retailB;
                  
                  return (
                    <>
@@ -1408,10 +1511,10 @@ export default function Home() {
         </div>
 
         {/* MODIFIED: items-start to allow vault column to stretch to full height */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* CALCULATOR COLUMN */}
-          <div className={`lg:col-span-5 space-y-6 ${activeTab !== 'calculator' ? 'hidden md:block' : ''}`}>
-            <div className="bg-white p-8 rounded-[2rem] shadow-xl border-2 border-[#A5BEAC] lg:sticky lg:top-6 space-y-5">
+          <div className={`lg:col-span-5 space-y-6 lg:sticky lg:top-6 self-start ${activeTab !== 'calculator' ? 'hidden md:block' : ''}`}>
+            <div className="bg-white p-8 rounded-[2rem] shadow-xl border-2 border-[#A5BEAC] space-y-5">
               <h2 className="text-2xl font-black uppercase italic tracking-tighter text-slate-900">Calculator</h2>
               
               <div className="p-4 bg-stone-50 rounded-2xl border-2 border-dotted border-stone-300 space-y-3">
@@ -1440,11 +1543,35 @@ export default function Home() {
                 <input type="number" placeholder="Labor $/hr" className="p-3 border rounded-xl focus:border-[#2d4a22]" value={rate} onChange={e => setRate(e.target.value === '' ? '' : Number(e.target.value))} />
                 <input type="number" placeholder="Hours" className="p-3 border rounded-xl focus:border-[#2d4a22]" value={hours} onChange={e => setHours(e.target.value === '' ? '' : Number(e.target.value))} />
               </div>
-              <input type="number" placeholder="Stones/Other Costs ($)" className="w-full p-3 border rounded-xl focus:border-[#2d4a22]" value={otherCosts} onChange={e => setOtherCosts(e.target.value === '' ? '' : Number(e.target.value))} />
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex gap-2">
+                  <input type="number" placeholder="Stones ($)" className="w-full p-3 border rounded-xl focus:border-[#2d4a22]" value={stoneCost} onChange={e => setStoneCost(e.target.value === '' ? '' : Number(e.target.value))} />
+                  <div className="flex flex-col justify-center">
+                      <label className="text-[8px] font-bold uppercase text-stone-400 text-center">Markup</label>
+                      <input type="number" step="0.1" placeholder="1.5" className="w-12 p-2 border rounded-lg text-center text-xs font-bold" value={stoneMarkup} onChange={e => setStoneMarkup(Number(e.target.value))} />
+                  </div>
+                </div>
+                {/* Overhead Input with Toggle */}
+                <div className="relative">
+                  <input type="number" placeholder="Overhead" className="w-full p-3 border rounded-xl focus:border-[#2d4a22] pr-10" value={overheadCost} onChange={e => setOverheadCost(e.target.value === '' ? '' : Number(e.target.value))} />
+                  <button 
+                      onClick={() => setOverheadType(overheadType === 'flat' ? 'percent' : 'flat')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-black uppercase text-stone-400 hover:text-slate-900 bg-stone-100 p-1 rounded"
+                  >
+                      {overheadType === 'flat' ? '$' : '%'}
+                  </button>
+                </div>
+              </div>
+              
+              <input type="number" placeholder="Findings/Other Costs ($)" className="w-full p-3 border rounded-xl focus:border-[#2d4a22]" value={otherCosts} onChange={e => setOtherCosts(e.target.value === '' ? '' : Number(e.target.value))} />
+              
               <div className="mt-4 flex flex-col items-center gap-4">
                 <div className="w-full p-4 rounded-xl bg-stone-100 border border-stone-200 space-y-3 text-left">
-                  <div className="flex justify-between items-center py-2 border-b border-stone-200"><span className="text-stone-500 font-bold uppercase text-[10px]">Materials Total</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts).totalMaterials.toFixed(2)}</span></div>
-                  <div className="flex justify-between items-center py-2"><span className="text-stone-500 font-bold uppercase text-[10px]">Labor Total ({hours || 0}h)</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts).labor.toFixed(2)}</span></div>
+                  <div className="flex justify-between items-center py-2 border-b border-stone-200"><span className="text-stone-500 font-bold uppercase text-[10px]">Materials Total (Metal+Stone+Other)</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneCost, stoneMarkup, overheadCost, overheadType).totalMaterials.toFixed(2)}</span></div>
+                  <div className="flex justify-between items-center py-2 border-b border-stone-200"><span className="text-stone-500 font-bold uppercase text-[10px]">Labor Total ({hours || 0}h)</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneCost, stoneMarkup, overheadCost, overheadType).labor.toFixed(2)}</span></div>
+                   {/* NEW: Overhead Total Line Item */}
+                  <div className="flex justify-between items-center py-2"><span className="text-stone-500 font-bold uppercase text-[10px]">Overhead Total ({overheadType === 'percent' ? `${overheadCost || 0}%` : 'Flat'})</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneCost, stoneMarkup, overheadCost, overheadType).overhead.toFixed(2)}</span></div>
                 </div>
 
                 <hr className="w-full border-t border-stone-100 my-2" />
@@ -1456,8 +1583,8 @@ export default function Home() {
                   >
                     <div className="text-left mb-4 sm:mb-0">
                       <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter mb-1">Retail A</p>
-                      <p className="text-3xl font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts).retailA.toFixed(2)}</p>
-                      <p className="text-[9px] font-bold text-stone-400 uppercase tracking-widest mt-1">Wholesale: ${calculateFullBreakdown(metalList, hours, rate, otherCosts).wholesaleA.toFixed(2)}</p>
+                      <p className="text-3xl font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneCost, stoneMarkup, overheadCost, overheadType).retailA.toFixed(2)}</p>
+                      <p className="text-[9px] font-bold text-stone-400 uppercase tracking-widest mt-1">Wholesale: ${calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneCost, stoneMarkup, overheadCost, overheadType).wholesaleA.toFixed(2)}</p>
                     </div>
                     <div className="flex flex-col items-start sm:items-end">
                       <div className="flex items-center gap-1 text-[#a8a29e] italic font-black text-[10px] uppercase whitespace-nowrap">
@@ -1483,8 +1610,8 @@ export default function Home() {
                   >
                     <div className="text-left mb-4 sm:mb-0">
                       <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter mb-1">Retail B</p>
-                      <p className="text-3xl font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts).retailB.toFixed(2)}</p>
-                      <p className="text-[9px] font-bold text-stone-400 uppercase tracking-widest mt-1">Wholesale: ${calculateFullBreakdown(metalList, hours, rate, otherCosts).wholesaleB.toFixed(2)}</p>
+                      <p className="text-3xl font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneCost, stoneMarkup, overheadCost, overheadType).retailB.toFixed(2)}</p>
+                      <p className="text-[9px] font-bold text-stone-400 uppercase tracking-widest mt-1">Wholesale: ${calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneCost, stoneMarkup, overheadCost, overheadType).wholesaleB.toFixed(2)}</p>
                     </div>
                     <div className="flex flex-col items-start sm:items-end">
                       <div className="flex items-center gap-1 text-[#a8a29e] italic font-black text-[10px] uppercase whitespace-nowrap">
@@ -1524,7 +1651,7 @@ export default function Home() {
           {/* VAULT COLUMN */}
           {/* FIXED: Removed max-h, added flex-1 min-h-0 to make list fill space on desktop */}
           {/* FIXED: Removed overflow-hidden from parent so dropdowns are not clipped */}
-          <div className={`lg:col-span-7 bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm flex flex-col h-full ${activeTab !== 'vault' ? 'hidden md:block' : ''}`}>
+          <div className={`lg:col-span-7 bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm flex flex-col h-[85vh] ${activeTab !== 'vault' ? 'hidden md:flex' : 'flex'}`}>
             <div className="p-6 border-b border-stone-100 bg-white space-y-4 rounded-t-[2.5rem]">
               <div className="flex justify-between items-center text-left">
                 <div>
@@ -1537,15 +1664,15 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-4">
-                <div className="relative flex-1 flex gap-2 w-full"> {/* Added w-full for mobile */}
+              <div className="flex flex-col sm:flex-row gap-4 h-12"> {/* FIXED HEIGHT FOR CONTAINER */}
+                <div className="relative flex-1 flex gap-2 w-full h-full"> 
                   {/* NEW: Filter Button (Fixed w-12 h-12) */}
-                  <div className="relative filter-menu-container shrink-0 h-12 w-12"> {/* Explicit w-12 h-full */}
+                  <div className="relative filter-menu-container shrink-0 h-full w-12"> {/* Explicit w-12 h-full */}
                       <button 
                          onClick={() => setShowFilterMenu(!showFilterMenu)}
                          className={`filter-menu-trigger w-full h-full flex items-center justify-center rounded-xl border transition-all ${showFilterMenu ? 'bg-slate-900 text-white border-slate-900' : 'bg-stone-50 border-stone-200 text-stone-400 hover:border-[#A5BEAC]'}`}
                       >
-                         <span className="text-lg">⚡</span>
+                          <span className="text-lg">⚡</span>
                       </button>
                       
                       {/* Filter Menu Dropdown */}
@@ -1610,12 +1737,12 @@ export default function Home() {
                       )}
                   </div>
 
-                  <div className="relative flex-1 min-w-0 h-12"> {/* h-full ensures consistent height */}
+                  <div className="relative flex-1 min-w-0 h-full"> {/* h-full ensures consistent height */}
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-300 text-xs">🔍</span>
                     <input
                       type="text"
                       placeholder="Search items..."
-                      className="w-full h-full pl-10 pr-4 bg-stone-50 border rounded-xl text-xs font-bold outline-none focus:border-[#A5BEAC] transition-all"
+                      className="w-full h-full pl-10 pr-4 bg-stone-50 border rounded-xl text-xs font-bold outline-none focus:border-[#A5BEAC] transition-all h-12"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                     />
@@ -1623,7 +1750,7 @@ export default function Home() {
                 </div>
                 
                 {/* NEW: Combined Vault Options Menu */}
-                <div className="relative vault-menu-container h-12">
+                <div className="relative vault-menu-container h-full">
                     <button 
                         onClick={() => { if (inventory.length > 0) setShowVaultMenu(!showVaultMenu); }} 
                         disabled={inventory.length === 0}
@@ -1674,15 +1801,17 @@ export default function Home() {
 
             {/* FIXED: Removed max-h, added flex-1 min-h-0 and min-h-[600px] to ensure list has height */}
             {/* Added pb-40 to allow scrolling past last item so dropdown is visible */}
-            <div className="p-4 md:p-6 space-y-4 overflow-y-auto flex-1 min-h-[600px] pb-40 custom-scrollbar overscroll-behavior-contain touch-pan-y bg-stone-50/20 rounded-b-[2.5rem]">
+            <div className="p-4 md:p-6 space-y-4 overflow-y-auto flex-1 pb-40 custom-scrollbar overscroll-behavior-contain touch-pan-y bg-stone-50/20 rounded-b-[2.5rem]">
               {loading ? (
                 <div className="p-20 text-center text-stone-400 font-bold uppercase text-xs tracking-widest animate-pulse">Opening Vault...</div>
               ) : (
                 filteredInventory.map(item => {
-                  const current = calculateFullBreakdown(item.metals || [], 0, 0, item.other_costs_at_making || 0, item.multiplier, item.markup_b);
+                  // FIX: Force overhead_type to 'flat' here to correctly calculate Live Retail using the stored Dollar value
+                  // FIX: Pass labor cost
+                  const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, item.stone_cost || 0, item.stone_markup || 1.5, item.overhead_cost || 0, 'flat', item.multiplier, item.markup_b);
                   const labor = item.labor_at_making || 0;
-                  const liveWholesale = item.strategy === 'A' ? current.wholesaleA + labor : current.wholesaleB;
-                  const liveRetail = item.strategy === 'A' ? (current.totalMaterials + labor) * (item.multiplier || 3) : ((current.totalMaterials * (item.markup_b || 1.8)) + labor) * 2;
+                  const liveWholesale = item.strategy === 'A' ? current.wholesaleA : current.wholesaleB;
+                  const liveRetail = item.strategy === 'A' ? current.retailA : current.retailB;
                   const priceDiff = liveRetail - item.retail;
                   const isUp = priceDiff >= 0;
 
@@ -1711,7 +1840,7 @@ export default function Home() {
                         key={item.id} 
                         // UPDATED: Dynamic z-index for stacking context
                         className={`bg-white rounded-[2rem] border border-stone-100 shadow-sm overflow-visible relative transition-all hover:shadow-md pl-12 ${isSold || isArchived ? 'opacity-70 bg-stone-50' : ''}`}
-                        style={{ zIndex: openMenuId === item.id ? 20 : 0 }} 
+                        style={{ zIndex: openMenuId === item.id ? 50 : 0 }} 
                     >
                       {/* Selection Checkbox */}
                       <div className="absolute left-4 top-6 flex items-center justify-center">
@@ -1972,18 +2101,36 @@ export default function Home() {
                                 <div key={idx} className="flex justify-between items-center text-[10px] font-bold border-b border-stone-100 pb-1.5 uppercase">
                                   <div>
                                     <span>{m.weight}{m.unit} {m.type}</span>
-                                    {spot > 0 && <span className="block text-[8px] text-stone-400 font-medium normal-case tracking-wide">Spot: ${spot.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>}
                                   </div>
                                   <div className="text-right">
-                                     <span className="text-stone-400">{m.isManual ? 'Manual' : (val > 0 ? `$${val.toFixed(2)}` : 'Spot')}</span>
+                                     <span>${(val > 0 ? val : 0).toFixed(2)}</span>
+                                     {spot > 0 && <span className="block text-[8px] text-stone-400 font-medium normal-case tracking-wide">Spot: ${spot.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>}
+                                     {m.isManual && <span className="block text-[8px] text-stone-400 font-medium normal-case tracking-wide">Manual</span>}
                                   </div>
                                 </div>
                                 );
                               })}
                               {item.other_costs_at_making > 0 && (
                                 <div className="flex justify-between text-[10px] font-bold border-b border-stone-100 pb-1.5 uppercase">
-                                  <span>Stones/Other</span>
+                                  <span>Findings/Other</span>
                                   <span>${Number(item.other_costs_at_making).toFixed(2)}</span>
+                                </div>
+                              )}
+                              {item.stone_cost > 0 && (
+                                <div className="flex justify-between items-center text-[10px] font-bold border-b border-stone-100 pb-1.5 uppercase">
+                                  <span>Stones ({item.stone_markup}x)</span>
+                                  <div className="text-right">
+                                    <span>${(Number(item.stone_cost) * Number(item.stone_markup || 1.5)).toFixed(2)}</span>
+                                    <span className="block text-[8px] text-stone-400 font-medium normal-case tracking-wide">Cost: ${Number(item.stone_cost).toFixed(2)}</span>
+                                  </div>
+                                </div>
+                              )}
+                              {item.overhead_cost > 0 && (
+                                <div className="flex justify-between text-[10px] font-bold border-b border-stone-100 pb-1.5 uppercase">
+                                  <span>Overhead {item.overhead_type === 'percent' && (Number(item.materials_at_making) + Number(item.labor_at_making) + Number(item.other_costs_at_making) + Number(item.stone_cost)) > 0 
+                                    ? `(${((Number(item.overhead_cost) / (Number(item.materials_at_making) + Number(item.labor_at_making) + Number(item.other_costs_at_making) + Number(item.stone_cost))) * 100).toFixed(1)}%)` 
+                                    : ''}</span>
+                                  <span>${Number(item.overhead_cost).toFixed(2)}</span>
                                 </div>
                               )}
                             </div>
@@ -2033,8 +2180,43 @@ export default function Home() {
             </div>
           </div>
 
+          {/* New Logic Explanation for Stones & Overhead */}
           <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC] min-h-[400px] md:min-h-0">
-            <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">2. PRICE STRATEGY DETAIL</h2>
+              <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">2. ADVANCED PRICING LOGIC</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
+                 <div className="p-6 md:p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all flex flex-col justify-between">
+                    <div>
+                       <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6">STONE PRICING</h3>
+                       <div className="space-y-4 mb-8">
+                          <div className="flex items-center gap-3">
+                             <div className="w-8 h-8 rounded-lg bg-white border border-stone-200 flex items-center justify-center font-black text-xs shrink-0">S</div>
+                             <span className="text-xs font-bold text-slate-900 break-words">Stone Retail = Stone Cost × Markup</span>
+                          </div>
+                          <p className="text-xs text-stone-500 leading-relaxed italic">Stones are calculated separately from the main piece markup to allow for competitive diamond pricing (often lower margin) vs findings.</p>
+                       </div>
+                    </div>
+                 </div>
+                 
+                 <div className="p-6 md:p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all flex flex-col justify-between">
+                    <div>
+                       <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6">OVERHEAD CALCULATION</h3>
+                       <div className="space-y-4 mb-8">
+                          <div className="flex items-center gap-3">
+                             <div className="w-8 h-8 rounded-lg bg-white border border-stone-200 flex items-center justify-center font-black text-xs shrink-0">$</div>
+                             <span className="text-xs font-bold text-slate-900 break-words">Flat: Added directly to total cost.</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                             <div className="w-8 h-8 rounded-lg bg-white border border-stone-200 flex items-center justify-center font-black text-xs shrink-0">%</div>
+                             <span className="text-xs font-bold text-slate-900 break-words">Percent: (Materials + Labor) × Percentage</span>
+                          </div>
+                       </div>
+                    </div>
+                 </div>
+              </div>
+          </div>
+
+          <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC] min-h-[400px] md:min-h-0">
+            <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">3. PRICE STRATEGY DETAIL</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
               <div className="p-6 md:p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all flex flex-col justify-between">
                 <div>
@@ -2043,19 +2225,14 @@ export default function Home() {
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-white border border-stone-200 flex items-center justify-center font-black text-xs shrink-0">W</div>
                       <span className="text-xs font-bold text-stone-400">=</span>
-                      <span className="text-xs font-bold text-slate-900 break-words">Materials (M) + Labor (L)</span>
+                      <span className="text-xs font-bold text-slate-900 break-words">Metals + Labor + Other + Stones</span>
                     </div>
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-black text-xs shrink-0">R</div>
+                      <div className="w-8 h-8 rounded-lg bg-white border border-stone-200 flex items-center justify-center font-black text-xs shrink-0">R</div>
                       <span className="text-xs font-bold text-stone-400">=</span>
-                      <span className="text-xs font-bold text-slate-900 break-words">Wholesale (W) × {retailMultA}</span>
+                      <span className="text-xs font-bold text-slate-900 break-words">((Base Cost) × {retailMultA}) + (Stones × Markup)</span>
                     </div>
                   </div>
-                </div>
-                <div className="pt-4 border-t border-stone-200/60">
-                  <p className="text-[11px] text-[#a8a29e] leading-relaxed italic uppercase font-bold tracking-tight">
-                    * The standard retail model. Best for production pieces where a 2-3x markup covers overhead, marketing, and business growth.
-                  </p>
                 </div>
               </div>
 
@@ -2066,7 +2243,7 @@ export default function Home() {
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-white border border-stone-200 flex items-center justify-center font-black text-xs shrink-0">W</div>
                       <span className="text-xs font-bold text-stone-400">=</span>
-                      <span className="text-xs font-bold text-slate-900 break-words">(Materials × {markupB}) + Labor</span>
+                      <span className="text-xs font-bold text-slate-900 break-words">((Materials) × {markupB}) + Labor + Stones</span>
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-black text-xs shrink-0">R</div>
@@ -2074,11 +2251,6 @@ export default function Home() {
                       <span className="text-xs font-bold text-slate-900 break-words">Wholesale (W) × 2</span>
                     </div>
                   </div>
-                </div>
-                <div className="pt-4 border-t border-stone-200/60">
-                  <p className="text-[11px] text-[#a8a29e] leading-relaxed italic uppercase font-bold tracking-tight">
-                    * The custom model. Best for high-material-cost work where you markup the metals first by 1.5-1.8X to protect against market volatility.
-                  </p>
                 </div>
               </div>
             </div>
