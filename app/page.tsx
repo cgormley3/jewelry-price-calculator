@@ -1672,86 +1672,133 @@ export default function Home() {
           </div>
         </div>
 
-        {/* MODIFIED: items-start to allow vault column to stretch to full height */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* On desktop (lg) items-stretch so calculator and vault columns match height; mobile unchanged */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start lg:items-stretch">
           {/* CALCULATOR COLUMN */}
-          <div className={`lg:col-span-5 space-y-6 lg:sticky lg:top-6 self-start ${activeTab !== 'calculator' ? 'hidden md:block' : ''}`}>
-            <div className="bg-white p-8 rounded-[2rem] shadow-xl border-2 border-[#A5BEAC] space-y-5">
+          <div className={`lg:col-span-5 space-y-6 lg:sticky lg:top-6 self-start lg:self-stretch ${activeTab !== 'calculator' ? 'hidden md:block' : ''}`}>
+            <div className="bg-white p-8 rounded-[2rem] shadow-xl border-2 border-[#A5BEAC] space-y-6 lg:h-full flex flex-col">
               <h2 className="text-2xl font-black uppercase italic tracking-tighter text-slate-900">Calculator</h2>
 
-              <div className="p-4 bg-stone-50 rounded-2xl border-2 border-dotted border-stone-300 space-y-3">
-                <select className="w-full p-3 border rounded-xl font-bold bg-white focus:border-[#2d4a22]" value={tempMetal} onChange={e => setTempMetal(e.target.value)}>
+              {/* Metal components */}
+              <div className="space-y-2">
+                <p className="text-[10px] font-black uppercase tracking-wider text-stone-400">Metal components</p>
+                <div className="p-4 bg-stone-50 rounded-2xl border-2 border-dotted border-stone-300 space-y-3">
+                <select className="w-full p-3 border border-stone-200 rounded-xl font-bold bg-white focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none transition-shadow" value={tempMetal} onChange={e => setTempMetal(e.target.value)}>
                   <option>Sterling Silver</option><option>10K Gold</option><option>14K Gold</option><option>18K Gold</option><option>22K Gold</option><option>24K Gold</option><option>Platinum 950</option><option>Palladium</option>
                 </select>
                 <div className="flex gap-2">
-                  <input type="number" placeholder="Weight" className="w-full p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22]" value={tempWeight || ''} onChange={e => setTempWeight(Number(e.target.value))} />
-                  <select className="p-3 border border-stone-200 rounded-xl text-[10px] font-bold focus:border-[#2d4a22]" value={tempUnit} onChange={e => setTempUnit(e.target.value)}>{Object.keys(UNIT_TO_GRAMS).map(u => <option key={u}>{u}</option>)}</select>
+                  <input type="number" min={0} placeholder="Weight" className="w-full p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none transition-shadow" value={tempWeight || ''} onChange={e => setTempWeight(Number(e.target.value))} />
+                  <select className="p-3 border border-stone-200 rounded-xl text-[10px] font-bold focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none" value={tempUnit} onChange={e => setTempUnit(e.target.value)}>{Object.keys(UNIT_TO_GRAMS).map(u => <option key={u}>{u}</option>)}</select>
                 </div>
                 <div className="space-y-2">
-                  <select className="w-full p-3 border border-stone-200 rounded-xl text-[10px] font-bold bg-white focus:border-[#2d4a22]" value={useManualPrice ? "manual" : "spot"} onChange={(e) => setUseManualPrice(e.target.value === "manual")}>
+                  <select className="w-full p-3 border border-stone-200 rounded-xl text-[10px] font-bold bg-white focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none" value={useManualPrice ? "manual" : "spot"} onChange={(e) => setUseManualPrice(e.target.value === "manual")}>
                     <option value="spot">Use Live Spot Price</option><option value="manual">Use Manual Input</option>
                   </select>
-                  {useManualPrice && <input type="number" placeholder={`Price per ${tempUnit}`} className="w-full p-3 border border-[#A5BEAC] rounded-xl text-sm outline-none animate-in fade-in" value={manualPriceInput} onChange={(e) => setManualPriceInput(e.target.value === '' ? '' : Number(e.target.value))} />}
+                  {useManualPrice && <input type="number" min={0} placeholder={`Price per ${tempUnit}`} className="w-full p-3 border border-[#A5BEAC] rounded-xl text-sm focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none animate-in fade-in" value={manualPriceInput} onChange={(e) => setManualPriceInput(e.target.value === '' ? '' : Number(e.target.value))} />}
                 </div>
-                <button onClick={addMetalToPiece} className="w-full bg-slate-900 text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#A5BEAC] transition-colors">+ Add Component</button>
+                <button onClick={addMetalToPiece} className="w-full bg-slate-900 text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#A5BEAC] transition-colors">+ Add metal</button>
                 {metalList.map((m, i) => (
                   <div key={i} className="text-[10px] font-bold bg-white p-2 rounded border border-stone-100 flex justify-between items-center">
                     <span className="text-slate-700">{m.weight}{m.unit} {m.type}</span>
                     <button onClick={() => setMetalList(metalList.filter((_, idx) => idx !== i))} className="text-red-500 text-lg hover:text-red-700 transition-colors">×</button>
                   </div>
                 ))}
+                </div>
               </div>
 
-              {/* Gemstones Section - Matches metal input UI, above labor */}
-              <div className="p-4 bg-stone-50 rounded-2xl border-2 border-dotted border-stone-300 space-y-3">
+              {/* Stones */}
+              <div className="space-y-2">
+                <p className="text-[10px] font-black uppercase tracking-wider text-stone-400">Stones</p>
+                <div className="p-4 bg-stone-50 rounded-2xl border-2 border-dotted border-stone-300 space-y-3">
                 <input
                   type="text"
                   placeholder="Stone name (e.g. Diamond, Ruby)"
-                  className="w-full p-3 border border-stone-200 rounded-xl font-bold bg-white focus:border-[#2d4a22] text-[10px]"
+                  className="w-full p-3 border border-stone-200 rounded-xl font-bold bg-white focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none text-[10px]"
                   value={tempStoneName}
                   onChange={e => setTempStoneName(e.target.value)}
                 />
-                <div className="flex gap-2">
-                  <input type="number" placeholder="Cost ($)" className="w-full p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22]" value={tempStoneCost} onChange={e => setTempStoneCost(e.target.value === '' ? '' : Number(e.target.value))} />
-                  <input type="number" step="0.1" placeholder="Markup" className="p-3 border border-stone-200 rounded-xl text-[10px] font-bold focus:border-[#2d4a22] w-24" value={tempStoneMarkup} onChange={e => setTempStoneMarkup(Number(e.target.value))} />
+                <div className="flex gap-2 items-end">
+                  <div className="flex-1">
+                    <label className="block text-[10px] font-bold text-stone-500 uppercase mb-1">Cost ($)</label>
+                    <input type="number" min={0} placeholder="0" className="w-full p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none" value={tempStoneCost} onChange={e => setTempStoneCost(e.target.value === '' ? '' : Number(e.target.value))} />
+                  </div>
+                  <div className="w-28">
+                    <label className="block text-[10px] font-bold text-stone-500 uppercase mb-1">Multiplier (×)</label>
+                    <div className="flex items-center border border-stone-200 rounded-xl focus-within:ring-2 focus-within:ring-[#A5BEAC]/30 focus-within:border-[#2d4a22] bg-white">
+                      <span className="pl-3 text-stone-400 font-black text-sm">×</span>
+                      <input type="number" min={0} step="0.1" placeholder="1.5" className="flex-1 p-3 pl-1 pr-3 text-[10px] font-bold focus:outline-none bg-transparent w-14" value={tempStoneMarkup} onChange={e => setTempStoneMarkup(Number(e.target.value))} />
+                    </div>
+                  </div>
                 </div>
-                <button onClick={addStoneToPiece} className="w-full bg-slate-900 text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#A5BEAC] transition-colors">+ Add Stone</button>
+                <button onClick={addStoneToPiece} className="w-full bg-slate-900 text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#A5BEAC] transition-colors">+ Add stone</button>
                 {stoneList.map((stone, i) => (
                   <div key={i} className="text-[10px] font-bold bg-white p-2 rounded border border-stone-100 flex justify-between items-center">
                     <span className="text-slate-700">{stone.name} ${stone.cost.toFixed(2)} ×{stone.markup.toFixed(1)}</span>
                     <button onClick={() => setStoneList(stoneList.filter((_, idx) => idx !== i))} className="text-red-500 text-lg hover:text-red-700 transition-colors">×</button>
                   </div>
                 ))}
+                <details className="group mt-2">
+                  <summary className="text-[10px] font-black uppercase tracking-wider text-stone-400 cursor-pointer list-none flex items-center gap-1.5 hover:text-stone-600 [&::-webkit-details-marker]:hidden">
+                    <span className="group-open:rotate-90 transition-transform inline-block">›</span> Typical markup guide
+                  </summary>
+                  <div className="mt-2 p-3 bg-white rounded-xl border border-stone-200 text-[10px] space-y-1.5">
+                    <div className="flex justify-between gap-4 font-bold text-slate-800 border-b border-stone-100 pb-1">
+                      <span>Item type</span>
+                      <span>Typical multiplier</span>
+                    </div>
+                    <div className="flex justify-between gap-4 text-stone-600"><span>Loose diamonds</span><span>1.6× – 1.9× (60–90% over cost)</span></div>
+                    <div className="flex justify-between gap-4 text-stone-600"><span>Common gemstones</span><span>2× – 3×</span></div>
+                  </div>
+                </details>
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <input type="number" placeholder="Labor $/hr" className="p-3 border rounded-xl focus:border-[#2d4a22]" value={rate} onChange={e => setRate(e.target.value === '' ? '' : Number(e.target.value))} />
-                <input type="number" placeholder="Hours" className="p-3 border rounded-xl focus:border-[#2d4a22]" value={hours} onChange={e => setHours(e.target.value === '' ? '' : Number(e.target.value))} />
+              {/* Labor & overhead */}
+              <div className="space-y-2">
+                <p className="text-[10px] font-black uppercase tracking-wider text-stone-400">Labor & overhead</p>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-bold text-stone-500 uppercase mb-1">Labor $/hr</label>
+                      <input type="number" min={0} placeholder="0" className="w-full p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none" value={rate} onChange={e => setRate(e.target.value === '' ? '' : Number(e.target.value))} />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-stone-500 uppercase mb-1">Hours</label>
+                      <input type="number" min={0} step="0.1" placeholder="0" className="w-full p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none" value={hours} onChange={e => setHours(e.target.value === '' ? '' : Number(e.target.value))} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-stone-500 uppercase mb-1">Overhead</label>
+                    <div className="flex gap-2 items-center">
+                      <input type="number" min={0} placeholder="0" className="flex-1 p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none pr-2" value={overheadCost} onChange={e => setOverheadCost(e.target.value === '' ? '' : Number(e.target.value))} />
+                      <div className="flex rounded-xl border border-stone-200 overflow-hidden bg-stone-50">
+                        <button type="button" onClick={() => setOverheadType('flat')} className={`px-3 py-2.5 text-[10px] font-black uppercase transition-colors ${overheadType === 'flat' ? 'bg-slate-900 text-white' : 'text-stone-400 hover:text-slate-700'}`}>$</button>
+                        <button type="button" onClick={() => setOverheadType('percent')} className={`px-3 py-2.5 text-[10px] font-black uppercase transition-colors ${overheadType === 'percent' ? 'bg-slate-900 text-white' : 'text-stone-400 hover:text-slate-700'}`}>%</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-stone-500 uppercase mb-1">Findings / other ($)</label>
+                    <input type="number" min={0} placeholder="0" className="w-full p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none" value={otherCosts} onChange={e => setOtherCosts(e.target.value === '' ? '' : Number(e.target.value))} />
+                  </div>
+                </div>
               </div>
 
-              {/* Overhead Input with Toggle */}
-              <div className="relative">
-                <input type="number" placeholder="Overhead" className="w-full p-3 border rounded-xl focus:border-[#2d4a22] pr-10" value={overheadCost} onChange={e => setOverheadCost(e.target.value === '' ? '' : Number(e.target.value))} />
-                <button
-                  onClick={() => setOverheadType(overheadType === 'flat' ? 'percent' : 'flat')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-black uppercase text-stone-400 hover:text-slate-900 bg-stone-100 p-1 rounded"
-                >
-                  {overheadType === 'flat' ? '$' : '%'}
-                </button>
-              </div>
-
-              <input type="number" placeholder="Findings/Other Costs ($)" className="w-full p-3 border rounded-xl focus:border-[#2d4a22]" value={otherCosts} onChange={e => setOtherCosts(e.target.value === '' ? '' : Number(e.target.value))} />
-
-              <div className="mt-4 flex flex-col items-center gap-4">
+              <div className="mt-2 flex flex-col items-center gap-4 flex-1 min-h-0">
+                <div className="w-full space-y-2">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-stone-400">Cost breakdown</p>
                 <div className="w-full p-4 rounded-xl bg-stone-100 border border-stone-200 space-y-3 text-left">
                   <div className="flex justify-between items-center py-2 border-b border-stone-200"><span className="text-stone-500 font-bold uppercase text-[10px]">Materials Total (Metal+Stone+Other)</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneList, overheadCost, overheadType).totalMaterials.toFixed(2)}</span></div>
                   <div className="flex justify-between items-center py-2 border-b border-stone-200"><span className="text-stone-500 font-bold uppercase text-[10px]">Labor Total ({hours || 0}h)</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneList, overheadCost, overheadType).labor.toFixed(2)}</span></div>
                   {/* NEW: Overhead Total Line Item */}
                   <div className="flex justify-between items-center py-2"><span className="text-stone-500 font-bold uppercase text-[10px]">Overhead Total ({overheadType === 'percent' ? `${overheadCost || 0}%` : 'Flat'})</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneList, overheadCost, overheadType).overhead.toFixed(2)}</span></div>
                 </div>
+                </div>
 
                 <hr className="w-full border-t border-stone-100 my-2" />
 
+                <div className="w-full space-y-2">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-stone-400">Retail price</p>
                 <div className="grid grid-cols-1 gap-4 w-full">
                   <button
                     onClick={() => setStrategy('A')}
@@ -1806,17 +1853,21 @@ export default function Home() {
                     </div>
                   </button>
                 </div>
+                </div>
 
                 <hr className="w-full border-t border-stone-100 my-2" />
 
+                <div className="w-full space-y-2">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-stone-400">Save to vault</p>
                 <div className="w-full space-y-4">
                   <input
-                    placeholder="Product Name"
-                    className="w-full p-4 bg-stone-50 border border-stone-200 rounded-2xl outline-none focus:border-[#A5BEAC] transition-all font-bold placeholder:font-normal"
+                    placeholder="Product name"
+                    className="w-full p-4 bg-stone-50 border border-stone-200 rounded-2xl outline-none focus:border-[#A5BEAC] focus:ring-2 focus:ring-[#A5BEAC]/30 transition-all font-bold placeholder:font-normal"
                     value={itemName}
                     onChange={e => setItemName(e.target.value)}
                   />
-                  <button onClick={addToInventory} disabled={isGuest && !token && hasTurnstile} className={`w-full py-5 rounded-[1.8rem] font-black uppercase tracking-[0.15em] text-sm transition-all ${(isGuest && !token && hasTurnstile) ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-[#A5BEAC] text-white shadow-xl hover:bg-slate-900 active:scale-[0.97]'}`}>{(isGuest && !token && hasTurnstile) ? "Verifying Human..." : "Save to Vault"}</button>
+                  <button onClick={addToInventory} disabled={isGuest && !token && hasTurnstile} className={`w-full py-5 rounded-[1.8rem] font-black uppercase tracking-[0.15em] text-sm transition-all ${(isGuest && !token && hasTurnstile) ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-[#A5BEAC] text-white shadow-xl hover:bg-slate-900 active:scale-[0.97]'}`}>{(isGuest && !token && hasTurnstile) ? "Verifying…" : "Save to vault"}</button>
+                </div>
                 </div>
 
                 {isGuest && !token && hasTurnstile && <div className="w-full flex justify-center mt-4 h-auto overflow-hidden animate-in fade-in slide-in-from-top-1"><Turnstile siteKey={turnstileSiteKey} onSuccess={(token) => setToken(token)} options={{ theme: 'light', appearance: 'interaction-only' }} /></div>}
@@ -1825,9 +1876,8 @@ export default function Home() {
           </div>
 
           {/* VAULT COLUMN */}
-          {/* FIXED: Removed max-h, added flex-1 min-h-0 to make list fill space on desktop */}
-          {/* FIXED: Removed overflow-hidden from parent so dropdowns are not clipped */}
-          <div className={`lg:col-span-7 bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm flex flex-col h-[85vh] ${activeTab !== 'vault' ? 'hidden md:flex' : 'flex'}`}>
+          {/* On desktop lg:h-full matches calculator column height; mobile keeps h-[85vh] */}
+          <div className={`lg:col-span-7 bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm flex flex-col h-[85vh] lg:h-full ${activeTab !== 'vault' ? 'hidden md:flex' : 'flex'}`}>
             <div className="p-6 border-b border-stone-100 bg-white space-y-4 rounded-t-[2.5rem]">
               <div className="flex justify-between items-center text-left">
                 <div>
