@@ -1060,18 +1060,6 @@ export default function Home() {
     let currentY = 26;
 
     if (includeLiveInPDF) {
-      const totalValStr = `$${totalVaultValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-      doc.setFillColor(248, 250, 248);
-      doc.rect(pdfMargin, currentY, pdfContentWidth, 12, 'F');
-      doc.setDrawColor(220, 228, 220);
-      doc.setLineWidth(0.2);
-      doc.rect(pdfMargin, currentY, pdfContentWidth, 12, 'S');
-      doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(brandGreen[0], brandGreen[1], brandGreen[2]);
-      doc.text('Total vault value (live market)', pdfMargin + 5, currentY + 6);
-      doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(dark[0], dark[1], dark[2]);
-      doc.text(totalValStr, pdfMargin + pdfContentWidth - 5 - doc.getTextWidth(totalValStr), currentY + 6);
-      currentY += 15;
-
       if (prices.gold > 0 || prices.silver > 0 || prices.platinum > 0 || prices.palladium > 0) {
         doc.setFillColor(245, 248, 245);
         doc.rect(pdfMargin, currentY, pdfContentWidth, 14, 'F');
@@ -1773,54 +1761,61 @@ export default function Home() {
               <h2 className="text-2xl font-black uppercase italic tracking-tighter text-slate-900">Calculator</h2>
 
               {/* Calculator section tabs: one visible at a time */}
-              <div className="flex border-b-2 border-stone-200 gap-0 min-w-0 overflow-x-auto">
-                <button
-                  type="button"
-                  onClick={() => setActiveCalculatorTab('metal')}
-                  className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-2.5 text-[10px] font-black uppercase tracking-wider border-b-2 -mb-0.5 transition-colors shrink-0 ${activeCalculatorTab === 'metal' ? 'border-[#A5BEAC] text-[#2d4a22]' : 'border-transparent text-stone-400 hover:text-stone-600'}`}
-                >
-                  Metal
-                  <span
-                    className="shrink-0 w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center text-[8px] sm:text-[9px] font-black bg-[#A5BEAC] text-white border border-[#A5BEAC] cursor-default"
-                    title="Metals are required to add this piece to the vault"
+              <div className="space-y-2">
+                <p className="text-[11px] sm:text-xs font-bold text-stone-500 leading-snug">
+                  <span className="block sm:inline">What&apos;s in this piece?</span>{' '}
+                  <span className="text-stone-400 font-normal">Tap a section to add metal, stones, or labor.</span>
+                </p>
+                <div className="grid grid-cols-3 gap-1.5 sm:flex sm:gap-2 p-2 rounded-xl bg-stone-100 border border-stone-200 min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => setActiveCalculatorTab('metal')}
+                    className={`flex items-center justify-center gap-1 sm:gap-1.5 px-2 py-2.5 sm:px-4 sm:py-3 rounded-lg min-h-[44px] text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all min-w-0 ${activeCalculatorTab === 'metal' ? 'bg-[#A5BEAC] text-white shadow-sm' : 'bg-white text-slate-700 border border-stone-200 hover:border-stone-300 hover:bg-stone-50 active:bg-stone-100'}`}
                   >
-                    ✓
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveCalculatorTab('stones')}
-                  className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-2.5 text-[10px] font-black uppercase tracking-wider border-b-2 -mb-0.5 transition-colors shrink-0 ${activeCalculatorTab === 'stones' ? 'border-[#A5BEAC] text-[#2d4a22]' : 'border-transparent text-stone-400 hover:text-stone-600'}`}
-                >
-                  Stones
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    onClick={(e) => { e.stopPropagation(); setActiveCalculatorTab('stones'); setIncludeStonesSection(!includeStonesSection); }}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveCalculatorTab('stones'); setIncludeStonesSection(!includeStonesSection); } }}
-                    className={`shrink-0 w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center text-[8px] sm:text-[9px] font-black border transition-colors ${includeStonesSection ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-stone-100 text-stone-400 border-stone-200'}`}
-                    title={includeStonesSection ? 'Included in price' : 'Excluded from price'}
+                    <span className="truncate">Metal</span>
+                    <span
+                      className={`shrink-0 w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center text-[8px] sm:text-[9px] font-black border cursor-default ${activeCalculatorTab === 'metal' ? 'bg-white/20 text-white border-white/40' : 'bg-[#A5BEAC] text-white border-[#A5BEAC]'}`}
+                      title="Metals are required to add this piece to the vault"
+                    >
+                      ✓
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveCalculatorTab('stones')}
+                    className={`flex items-center justify-center gap-1 sm:gap-1.5 px-2 py-2.5 sm:px-4 sm:py-3 rounded-lg min-h-[44px] text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all min-w-0 ${activeCalculatorTab === 'stones' ? 'bg-[#A5BEAC] text-white shadow-sm' : 'bg-white text-slate-700 border border-stone-200 hover:border-stone-300 hover:bg-stone-50 active:bg-stone-100'}`}
                   >
-                    {includeStonesSection ? '✓' : ''}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveCalculatorTab('labor')}
-                  className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-2.5 text-[10px] font-black uppercase tracking-wider border-b-2 -mb-0.5 transition-colors shrink-0 ${activeCalculatorTab === 'labor' ? 'border-[#A5BEAC] text-[#2d4a22]' : 'border-transparent text-stone-400 hover:text-stone-600'}`}
-                >
-                  Labor & other
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    onClick={(e) => { e.stopPropagation(); setActiveCalculatorTab('labor'); setIncludeLaborSection(!includeLaborSection); }}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveCalculatorTab('labor'); setIncludeLaborSection(!includeLaborSection); } }}
-                    className={`shrink-0 w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center text-[8px] sm:text-[9px] font-black border transition-colors ${includeLaborSection ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-stone-100 text-stone-400 border-stone-200'}`}
-                    title={includeLaborSection ? 'Included in price' : 'Excluded from price'}
+                    <span className="truncate">Stones</span>
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => { e.stopPropagation(); setActiveCalculatorTab('stones'); setIncludeStonesSection(!includeStonesSection); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveCalculatorTab('stones'); setIncludeStonesSection(!includeStonesSection); } }}
+                      className={`shrink-0 w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center text-[8px] sm:text-[9px] font-black border-2 transition-colors ${activeCalculatorTab === 'stones' && includeStonesSection ? 'bg-white/20 text-white border-white/40' : includeStonesSection ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white text-stone-400 border-stone-200'}`}
+                      title={includeStonesSection ? 'Included in price (click to exclude)' : 'Excluded from price (click to include)'}
+                    >
+                      {includeStonesSection ? '✓' : ''}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveCalculatorTab('labor')}
+                    className={`flex items-center justify-center gap-1 sm:gap-1.5 px-2 py-2.5 sm:px-4 sm:py-3 rounded-lg min-h-[44px] text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all min-w-0 ${activeCalculatorTab === 'labor' ? 'bg-[#A5BEAC] text-white shadow-sm' : 'bg-white text-slate-700 border border-stone-200 hover:border-stone-300 hover:bg-stone-50 active:bg-stone-100'}`}
                   >
-                    {includeLaborSection ? '✓' : ''}
-                  </span>
-                </button>
+                    <span className="truncate sm:hidden">Labor</span>
+                    <span className="truncate hidden sm:inline">Labor & other</span>
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => { e.stopPropagation(); setActiveCalculatorTab('labor'); setIncludeLaborSection(!includeLaborSection); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveCalculatorTab('labor'); setIncludeLaborSection(!includeLaborSection); } }}
+                      className={`shrink-0 w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center text-[8px] sm:text-[9px] font-black border-2 transition-colors ${activeCalculatorTab === 'labor' && includeLaborSection ? 'bg-white/20 text-white border-white/40' : includeLaborSection ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white text-stone-400 border-stone-200'}`}
+                      title={includeLaborSection ? 'Included in price (click to exclude)' : 'Excluded from price (click to include)'}
+                    >
+                      {includeLaborSection ? '✓' : ''}
+                    </span>
+                  </button>
+                </div>
               </div>
 
               {activeCalculatorTab === 'metal' && (
@@ -2709,7 +2704,7 @@ export default function Home() {
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-black text-xs shrink-0 mt-0.5">R</div>
+                      <div className="w-8 h-8 rounded-lg bg-white border border-stone-200 flex items-center justify-center font-black text-xs shrink-0 mt-0.5">R</div>
                       <div className="flex-1">
                         <span className="text-xs font-bold text-stone-400 block mb-1">Retail Price =</span>
                         <span className="text-xs font-bold text-slate-900 break-words">(Base Cost × 2) + (Stones × Stone Markup)</span>
