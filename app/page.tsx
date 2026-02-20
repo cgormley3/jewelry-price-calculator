@@ -82,6 +82,25 @@ export default function Home() {
   const [retailMultA, setRetailMultA] = useState(3);
   const [markupB, setMarkupB] = useState(1.8);
 
+  // Which calculator sections to show (build from bottom up: only show what you include)
+  const [includeStonesSection, setIncludeStonesSection] = useState(false);
+  const [includeLaborSection, setIncludeLaborSection] = useState(false);
+  // Tab for calculator: which section's form is visible (Metal | Stones | Labor)
+  const [activeCalculatorTab, setActiveCalculatorTab] = useState<'metal' | 'stones' | 'labor'>('metal');
+  // Cost breakdown section: collapsible, default collapsed
+  const [costBreakdownOpen, setCostBreakdownOpen] = useState(false);
+  // Formula dropdowns in retail strategy cards: closed by default
+  const [formulaAOpen, setFormulaAOpen] = useState(false);
+  const [formulaBOpen, setFormulaBOpen] = useState(false);
+
+  // When Labor section is off, use 0 for labor/overhead/other in display (save still uses real values)
+  const calcHours = includeLaborSection ? hours : 0;
+  const calcRate = includeLaborSection ? rate : 0;
+  const calcOtherCosts = includeLaborSection ? otherCosts : 0;
+  const calcOverheadCost = includeLaborSection ? overheadCost : 0;
+  // When Stones section is off, price ignores stones until user turns it on
+  const calcStoneList = includeStonesSection ? stoneList : [];
+
   // App State
   const [inventory, setInventory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -219,8 +238,7 @@ export default function Home() {
     const ovInput = Number(ovCost) || 0;
 
     if (ovType === 'percent') {
-      // Percent: (Metal + Labor + Other + Stones) × Percentage
-      // Stones are included in the burden base
+      // Percent: (Metal + Labor + Other + Stone cost) × Percentage — stones included in burden
       overhead = (rawMaterialCost + labor + other + totalStoneCost) * (ovInput / 100);
     } else {
       // Flat: Simple dollar addition
@@ -493,6 +511,7 @@ export default function Home() {
       cost: Number(tempStoneCost),
       markup: Number(tempStoneMarkup) || 2
     }]);
+    setIncludeStonesSection(true); // auto-include when user adds a stone
     setTempStoneName('');
     setTempStoneCost('');
     setTempStoneMarkup(2);
@@ -1753,8 +1772,59 @@ export default function Home() {
             <div className="bg-white p-8 rounded-[2rem] shadow-xl border-2 border-[#A5BEAC] space-y-6 lg:h-full flex flex-col">
               <h2 className="text-2xl font-black uppercase italic tracking-tighter text-slate-900">Calculator</h2>
 
-              {/* Metal components */}
-              <div className="space-y-2">
+              {/* Calculator section tabs: one visible at a time */}
+              <div className="flex border-b-2 border-stone-200 gap-0 min-w-0 overflow-x-auto">
+                <button
+                  type="button"
+                  onClick={() => setActiveCalculatorTab('metal')}
+                  className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-2.5 text-[10px] font-black uppercase tracking-wider border-b-2 -mb-0.5 transition-colors shrink-0 ${activeCalculatorTab === 'metal' ? 'border-[#A5BEAC] text-[#2d4a22]' : 'border-transparent text-stone-400 hover:text-stone-600'}`}
+                >
+                  Metal
+                  <span
+                    className="shrink-0 w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center text-[8px] sm:text-[9px] font-black bg-[#A5BEAC] text-white border border-[#A5BEAC] cursor-default"
+                    title="Metals are required to add this piece to the vault"
+                  >
+                    ✓
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveCalculatorTab('stones')}
+                  className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-2.5 text-[10px] font-black uppercase tracking-wider border-b-2 -mb-0.5 transition-colors shrink-0 ${activeCalculatorTab === 'stones' ? 'border-[#A5BEAC] text-[#2d4a22]' : 'border-transparent text-stone-400 hover:text-stone-600'}`}
+                >
+                  Stones
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => { e.stopPropagation(); setActiveCalculatorTab('stones'); setIncludeStonesSection(!includeStonesSection); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveCalculatorTab('stones'); setIncludeStonesSection(!includeStonesSection); } }}
+                    className={`shrink-0 w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center text-[8px] sm:text-[9px] font-black border transition-colors ${includeStonesSection ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-stone-100 text-stone-400 border-stone-200'}`}
+                    title={includeStonesSection ? 'Included in price' : 'Excluded from price'}
+                  >
+                    {includeStonesSection ? '✓' : ''}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveCalculatorTab('labor')}
+                  className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-2.5 text-[10px] font-black uppercase tracking-wider border-b-2 -mb-0.5 transition-colors shrink-0 ${activeCalculatorTab === 'labor' ? 'border-[#A5BEAC] text-[#2d4a22]' : 'border-transparent text-stone-400 hover:text-stone-600'}`}
+                >
+                  Labor & other
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => { e.stopPropagation(); setActiveCalculatorTab('labor'); setIncludeLaborSection(!includeLaborSection); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveCalculatorTab('labor'); setIncludeLaborSection(!includeLaborSection); } }}
+                    className={`shrink-0 w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center text-[8px] sm:text-[9px] font-black border transition-colors ${includeLaborSection ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-stone-100 text-stone-400 border-stone-200'}`}
+                    title={includeLaborSection ? 'Included in price' : 'Excluded from price'}
+                  >
+                    {includeLaborSection ? '✓' : ''}
+                  </span>
+                </button>
+              </div>
+
+              {activeCalculatorTab === 'metal' && (
+              <div className="space-y-2 pt-3">
                 <p className="text-[10px] font-black uppercase tracking-wider text-stone-400">Metal components</p>
                 <div className="p-4 bg-stone-50 rounded-2xl border-2 border-dotted border-stone-300 space-y-3">
                 <select className="w-full p-3 border border-stone-200 rounded-xl font-bold bg-white focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none transition-shadow" value={tempMetal} onChange={e => setTempMetal(e.target.value)}>
@@ -1779,9 +1849,10 @@ export default function Home() {
                 ))}
                 </div>
               </div>
+              )}
 
-              {/* Stones */}
-              <div className="space-y-2">
+              {activeCalculatorTab === 'stones' && (
+              <div className="space-y-2 pt-3">
                 <p className="text-[10px] font-black uppercase tracking-wider text-stone-400">Stones</p>
                 <div className="p-4 bg-stone-50 rounded-2xl border-2 border-dotted border-stone-300 space-y-3">
                 <input
@@ -1832,25 +1903,26 @@ export default function Home() {
                 </details>
                 </div>
               </div>
+              )}
 
-              {/* Labor & overhead */}
-              <div className="space-y-2">
+              {activeCalculatorTab === 'labor' && (
+              <div className="space-y-2 pt-3">
                 <p className="text-[10px] font-black uppercase tracking-wider text-stone-400">Labor & overhead</p>
                 <div className="space-y-3">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-[10px] font-bold text-stone-500 uppercase mb-1">Labor $/hr</label>
-                      <input type="number" min={0} placeholder="0" className="w-full p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none" value={rate} onChange={e => setRate(e.target.value === '' ? '' : Number(e.target.value))} />
+                      <input type="number" min={0} placeholder="0" className="w-full p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none" value={rate} onChange={e => { const v = e.target.value === '' ? '' : Number(e.target.value); setRate(v); if (Number(v) > 0) setIncludeLaborSection(true); }} />
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-stone-500 uppercase mb-1">Hours</label>
-                      <input type="number" min={0} step="0.1" placeholder="0" className="w-full p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none" value={hours} onChange={e => setHours(e.target.value === '' ? '' : Number(e.target.value))} />
+                      <input type="number" min={0} step="0.1" placeholder="0" className="w-full p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none" value={hours} onChange={e => { const v = e.target.value === '' ? '' : Number(e.target.value); setHours(v); if (Number(v) > 0) setIncludeLaborSection(true); }} />
                     </div>
                   </div>
                   <div>
                     <label className="block text-[10px] font-bold text-stone-500 uppercase mb-1">Overhead</label>
                     <div className="flex gap-2 items-center">
-                      <input type="number" min={0} placeholder="0" className="flex-1 p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none pr-2" value={overheadCost} onChange={e => setOverheadCost(e.target.value === '' ? '' : Number(e.target.value))} />
+                      <input type="number" min={0} placeholder="0" className="flex-1 p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none pr-2" value={overheadCost} onChange={e => { const v = e.target.value === '' ? '' : Number(e.target.value); setOverheadCost(v); if (Number(v) > 0) setIncludeLaborSection(true); }} />
                       <div className="flex rounded-xl border border-stone-200 overflow-hidden bg-stone-50">
                         <button type="button" onClick={() => setOverheadType('flat')} className={`px-3 py-2.5 text-[10px] font-black uppercase transition-colors ${overheadType === 'flat' ? 'bg-slate-900 text-white' : 'text-stone-400 hover:text-slate-700'}`}>$</button>
                         <button type="button" onClick={() => setOverheadType('percent')} className={`px-3 py-2.5 text-[10px] font-black uppercase transition-colors ${overheadType === 'percent' ? 'bg-slate-900 text-white' : 'text-stone-400 hover:text-slate-700'}`}>%</button>
@@ -1859,20 +1931,30 @@ export default function Home() {
                   </div>
                   <div>
                     <label className="block text-[10px] font-bold text-stone-500 uppercase mb-1">Findings / other ($)</label>
-                    <input type="number" min={0} placeholder="0" className="w-full p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none" value={otherCosts} onChange={e => setOtherCosts(e.target.value === '' ? '' : Number(e.target.value))} />
+                    <input type="number" min={0} placeholder="0" className="w-full p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none" value={otherCosts} onChange={e => { const v = e.target.value === '' ? '' : Number(e.target.value); setOtherCosts(v); if (Number(v) > 0) setIncludeLaborSection(true); }} />
                   </div>
                 </div>
               </div>
+              )}
 
               <div className="mt-2 flex flex-col items-center gap-4 flex-1 min-h-0">
                 <div className="w-full space-y-2">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-stone-400">Cost breakdown</p>
+                  <button
+                    type="button"
+                    onClick={() => setCostBreakdownOpen(!costBreakdownOpen)}
+                    className="w-full flex items-center justify-between text-left py-1.5 group"
+                    aria-expanded={costBreakdownOpen}
+                  >
+                    <p className="text-[10px] font-black uppercase tracking-wider text-stone-400 group-hover:text-stone-600">Cost breakdown</p>
+                    <span className={`text-stone-400 transition-transform ${costBreakdownOpen ? 'rotate-180' : ''}`}>▼</span>
+                  </button>
+                {costBreakdownOpen && (
                 <div className="w-full p-4 rounded-xl bg-stone-100 border border-stone-200 space-y-3 text-left">
-                  <div className="flex justify-between items-center py-2 border-b border-stone-200"><span className="text-stone-500 font-bold uppercase text-[10px]">Materials Total (Metal+Stone+Other)</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneList, overheadCost, overheadType).totalMaterials.toFixed(2)}</span></div>
-                  <div className="flex justify-between items-center py-2 border-b border-stone-200"><span className="text-stone-500 font-bold uppercase text-[10px]">Labor Total ({hours || 0}h)</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneList, overheadCost, overheadType).labor.toFixed(2)}</span></div>
-                  {/* NEW: Overhead Total Line Item */}
-                  <div className="flex justify-between items-center py-2"><span className="text-stone-500 font-bold uppercase text-[10px]">Overhead Total ({overheadType === 'percent' ? `${overheadCost || 0}%` : 'Flat'})</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneList, overheadCost, overheadType).overhead.toFixed(2)}</span></div>
+                  <div className="flex justify-between items-center py-2 border-b border-stone-200"><span className="text-stone-500 font-bold uppercase text-[10px]">Materials Total (Metal+Stone+Other)</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType).totalMaterials.toFixed(2)}</span></div>
+                  <div className="flex justify-between items-center py-2 border-b border-stone-200"><span className="text-stone-500 font-bold uppercase text-[10px]">Labor Total ({Number(calcHours) || 0}h)</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType).labor.toFixed(2)}</span></div>
+                  <div className="flex justify-between items-center py-2"><span className="text-stone-500 font-bold uppercase text-[10px]">Overhead Total ({overheadType === 'percent' ? `${Number(calcOverheadCost) || 0}%` : 'Flat'})</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType).overhead.toFixed(2)}</span></div>
                 </div>
+                )}
                 </div>
 
                 <hr className="w-full border-t border-stone-100 my-2" />
@@ -1880,58 +1962,95 @@ export default function Home() {
                 <div className="w-full space-y-2">
                   <p className="text-[10px] font-black uppercase tracking-wider text-stone-400">Retail price</p>
                 <div className="grid grid-cols-1 gap-4 w-full">
-                  <button
-                    onClick={() => setStrategy('A')}
-                    className={`group flex flex-col sm:flex-row sm:items-stretch sm:gap-4 p-5 rounded-2xl border-2 transition-all text-left ${strategy === 'A' ? 'border-[#A5BEAC] bg-stone-50 shadow-md' : 'border-stone-100 bg-white hover:border-stone-200'}`}
+                  <div
+                    className={`rounded-2xl border-2 transition-all overflow-hidden ${strategy === 'A' ? 'border-[#A5BEAC] bg-stone-50 shadow-md' : 'border-stone-100 bg-white'}`}
                   >
-                    <div className="flex-1 min-w-0 mb-4 sm:mb-0">
-                      <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter mb-1">Strategy A</p>
-                      <p className="text-3xl font-black text-slate-900 tabular-nums">${calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneList, overheadCost, overheadType).retailA.toFixed(2)}</p>
-                      <p className="text-[10px] font-semibold text-stone-500 mt-1">Wholesale ${calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneList, overheadCost, overheadType).wholesaleA.toFixed(2)}</p>
-                    </div>
-                    <div className="sm:w-36 flex flex-col justify-center gap-2 py-1 sm:py-0 sm:pl-4 sm:border-l border-stone-200">
-                      <p className="text-[9px] font-black text-stone-400 uppercase tracking-wider">Formula</p>
-                      <p className="text-[10px] text-stone-500 font-medium">Wholesale = M + L</p>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[10px] text-stone-500 font-medium">Retail = W ×</span>
-                        <input
-                          type="number"
-                          step="0.1"
-                          className="w-11 bg-white border border-stone-200 rounded-lg text-xs font-bold py-1 px-1.5 text-center outline-none text-slate-900 focus:border-[#A5BEAC]"
-                          value={retailMultA}
-                          onChange={(e) => setRetailMultA(Number(e.target.value))}
-                          onClick={(e) => e.stopPropagation()}
-                        />
+                    <button
+                      type="button"
+                      onClick={() => setStrategy('A')}
+                      className="w-full flex flex-col sm:flex-row sm:items-stretch sm:gap-4 p-5 text-left"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter mb-1">Strategy A</p>
+                        <p className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums">${calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType).retailA.toFixed(2)}</p>
+                        <p className="text-[10px] font-semibold text-stone-500 mt-1">Wholesale ${calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType).wholesaleA.toFixed(2)}</p>
                       </div>
+                    </button>
+                    <div className="border-t border-stone-200 sm:border-t-0 sm:border-l">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setFormulaAOpen(!formulaAOpen); }}
+                        className="w-full flex items-center justify-between gap-2 py-2.5 px-4 sm:px-5 text-left hover:bg-stone-100/80 transition-colors"
+                        aria-expanded={formulaAOpen}
+                      >
+                        <span className="text-[9px] font-black text-stone-400 uppercase tracking-wider">Formula</span>
+                        <span className={`text-stone-400 text-[10px] transition-transform shrink-0 ${formulaAOpen ? 'rotate-180' : ''}`}>▼</span>
+                      </button>
+                      {formulaAOpen && (
+                        <div className="px-4 pb-4 pt-0 sm:px-5 sm:pt-0 space-y-1.5">
+                          <p className="text-[9px] text-stone-500 font-medium leading-tight">Base = Metal + Labor + Other + Overhead</p>
+                          <p className="text-[9px] text-stone-500 font-medium leading-tight">Wholesale = Base + Stone cost</p>
+                          <div className="flex items-center gap-1 flex-wrap leading-tight">
+                            <span className="text-[9px] text-stone-500 font-medium">Retail = Base ×</span>
+                            <input
+                              type="number"
+                              step="0.1"
+                              className="w-10 bg-white border border-stone-200 rounded-lg text-xs font-bold py-1 px-1 text-center outline-none text-slate-900 focus:border-[#A5BEAC]"
+                              value={retailMultA}
+                              onChange={(e) => setRetailMultA(Number(e.target.value))}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                            <span className="text-[9px] text-stone-500 font-medium">+ Stone retail</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </button>
+                  </div>
 
-                  <button
-                    onClick={() => setStrategy('B')}
-                    className={`group flex flex-col sm:flex-row sm:items-stretch sm:gap-4 p-5 rounded-2xl border-2 transition-all text-left ${strategy === 'B' ? 'border-[#A5BEAC] bg-stone-50 shadow-md' : 'border-stone-100 bg-white hover:border-stone-200'}`}
+                  <div
+                    className={`rounded-2xl border-2 transition-all overflow-hidden ${strategy === 'B' ? 'border-[#A5BEAC] bg-stone-50 shadow-md' : 'border-stone-100 bg-white'}`}
                   >
-                    <div className="flex-1 min-w-0 mb-4 sm:mb-0">
-                      <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter mb-1">Strategy B</p>
-                      <p className="text-3xl font-black text-slate-900 tabular-nums">${calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneList, overheadCost, overheadType).retailB.toFixed(2)}</p>
-                      <p className="text-[10px] font-semibold text-stone-500 mt-1">Wholesale ${calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneList, overheadCost, overheadType).wholesaleB.toFixed(2)}</p>
-                    </div>
-                    <div className="sm:w-36 flex flex-col justify-center gap-2 py-1 sm:py-0 sm:pl-4 sm:border-l border-stone-200">
-                      <p className="text-[9px] font-black text-stone-400 uppercase tracking-wider">Formula</p>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[10px] text-stone-500 font-medium">Wholesale = (M ×</span>
-                        <input
-                          type="number"
-                          step="0.1"
-                          className="w-11 bg-white border border-stone-200 rounded-lg text-xs font-bold py-1 px-1.5 text-center outline-none text-slate-900 focus:border-[#A5BEAC]"
-                          value={markupB}
-                          onChange={(e) => setMarkupB(Number(e.target.value))}
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                        <span className="text-[10px] text-stone-500 font-medium">) + L</span>
+                    <button
+                      type="button"
+                      onClick={() => setStrategy('B')}
+                      className="w-full flex flex-col sm:flex-row sm:items-stretch sm:gap-4 p-5 text-left"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter mb-1">Strategy B</p>
+                        <p className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums">${calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType).retailB.toFixed(2)}</p>
+                        <p className="text-[10px] font-semibold text-stone-500 mt-1">Wholesale ${calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType).wholesaleB.toFixed(2)}</p>
                       </div>
-                      <p className="text-[10px] text-stone-500 font-medium">Retail = W × 2</p>
+                    </button>
+                    <div className="border-t border-stone-200 sm:border-t-0 sm:border-l">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setFormulaBOpen(!formulaBOpen); }}
+                        className="w-full flex items-center justify-between gap-2 py-2.5 px-4 sm:px-5 text-left hover:bg-stone-100/80 transition-colors"
+                        aria-expanded={formulaBOpen}
+                      >
+                        <span className="text-[9px] font-black text-stone-400 uppercase tracking-wider">Formula</span>
+                        <span className={`text-stone-400 text-[10px] transition-transform shrink-0 ${formulaBOpen ? 'rotate-180' : ''}`}>▼</span>
+                      </button>
+                      {formulaBOpen && (
+                        <div className="px-4 pb-4 pt-0 sm:px-5 sm:pt-0 space-y-1.5">
+                          <div className="flex items-center gap-1 flex-wrap leading-tight">
+                            <span className="text-[9px] text-stone-500 font-medium">Base = (Metal + Other) ×</span>
+                            <input
+                              type="number"
+                              step="0.1"
+                              className="w-10 bg-white border border-stone-200 rounded-lg text-xs font-bold py-1 px-1 text-center outline-none text-slate-900 focus:border-[#A5BEAC]"
+                              value={markupB}
+                              onChange={(e) => setMarkupB(Number(e.target.value))}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                            <span className="text-[9px] text-stone-500 font-medium">+ Labor + Overhead</span>
+                          </div>
+                          <p className="text-[9px] text-stone-500 font-medium leading-tight">Wholesale = Base + Stone cost</p>
+                          <p className="text-[9px] text-stone-500 font-medium leading-tight">Retail = Base × 2 + Stone retail</p>
+                        </div>
+                      )}
                     </div>
-                  </button>
+                  </div>
                 </div>
                 </div>
 
