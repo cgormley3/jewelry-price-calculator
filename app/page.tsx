@@ -872,16 +872,31 @@ export default function Home() {
       const { data, error } = await supabase.from('inventory').insert([newItem]).select();
       if (!error && data) {
         setInventory([data[0], ...inventory]);
+        // Reset calculator to original state
         setItemName('');
         setMetalList([]);
         setStoneList([]);
         setHours('');
         setRate('');
         setOtherCosts('');
+        setOverheadCost('');
         setTempStoneName('');
         setTempStoneCost('');
         setTempStoneMarkup(2);
-        setOverheadCost('');
+        setTempMetal('Sterling Silver');
+        setTempWeight(0);
+        setTempUnit('Ounces (std)');
+        setUseManualPrice(false);
+        setManualPriceInput('');
+        setIncludeStonesSection(false);
+        setIncludeLaborSection(false);
+        setActiveCalculatorTab('metal');
+        setStrategy('A');
+        setRetailMultA(3);
+        setMarkupB(1.8);
+        setCostBreakdownOpen(false);
+        setFormulaAOpen(false);
+        setFormulaBOpen(false);
         setToken(null);
         setNotification({ title: "Item Saved", message: `"${newItem.name}" is now stored in your Vault.`, type: 'success' });
         if (!user) setUser(currentUser);
