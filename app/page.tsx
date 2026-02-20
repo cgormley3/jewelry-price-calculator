@@ -1388,18 +1388,19 @@ export default function Home() {
             <div className="p-4 bg-slate-900 rounded-2xl text-white space-y-2">
               {(() => {
                 const laborHours = recalcItem.hours || 1;
-                const newLaborCost = recalcParams.laborRate
-                  ? Number(recalcParams.laborRate) * laborHours
-                  : Number(recalcItem.labor_at_making || 0);
+                const effectiveRate = recalcParams.laborRate
+                  ? Number(recalcParams.laborRate)
+                  : (Number(recalcItem.labor_at_making || 0) / laborHours);
+                const newLaborCost = effectiveRate * laborHours;
 
+                const stonesArray = convertStonesToArray(recalcItem);
                 const calc = calculateFullBreakdown(
                   recalcItem.metals,
-                  1,
-                  newLaborCost,
-                  recalcItem.other_costs_at_making,
-                  recalcItem.stone_cost,
-                  recalcItem.stone_markup,
-                  recalcItem.overhead_cost,
+                  laborHours,
+                  effectiveRate,
+                  recalcItem.other_costs_at_making ?? 0,
+                  stonesArray,
+                  recalcItem.overhead_cost ?? 0,
                   'flat', // Force flat for recalc to avoid % of old dollar value issue
                   recalcItem.multiplier,
                   recalcItem.markup_b,
