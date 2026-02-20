@@ -279,7 +279,7 @@ export default function Home() {
     let subscription: { unsubscribe: () => void } | null = null;
     if (hasValidSupabaseCredentials) {
       try {
-        const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
+        const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
           setUser(session?.user ?? null);
           if (session) fetchInventory();
 
@@ -287,14 +287,14 @@ export default function Home() {
             setShowResetModal(true);
           }
         });
-        subscription = data;
+        subscription = authSubscription;
       } catch (error) {
         console.warn('Supabase auth state change error:', error);
       }
     }
 
     return () => {
-      if (subscription) {
+      if (subscription && typeof subscription.unsubscribe === 'function') {
         subscription.unsubscribe();
       }
       window.removeEventListener('visibilitychange', handleWakeUp);
@@ -1749,13 +1749,13 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-4 h-12"> {/* FIXED HEIGHT FOR CONTAINER */}
-                <div className="relative flex-1 flex gap-2 w-full h-full">
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 min-h-[48px] sm:h-12"> {/* Responsive height for mobile */}
+                <div className="relative flex-1 flex gap-2 w-full min-h-[48px] sm:h-full">
                   {/* NEW: Filter Button (Fixed w-12 h-12) */}
-                  <div className="relative filter-menu-container shrink-0 h-full w-12"> {/* Explicit w-12 h-full */}
+                  <div className="relative filter-menu-container shrink-0 min-h-[48px] sm:h-full w-12"> {/* Explicit w-12 with min-height */}
                     <button
                       onClick={() => setShowFilterMenu(!showFilterMenu)}
-                      className={`filter-menu-trigger w-full h-full flex items-center justify-center rounded-xl border transition-all ${showFilterMenu ? 'bg-slate-900 text-white border-slate-900' : 'bg-stone-50 border-stone-200 text-stone-400 hover:border-[#A5BEAC]'}`}
+                      className={`filter-menu-trigger w-full h-full min-h-[48px] sm:min-h-0 flex items-center justify-center rounded-xl border transition-all ${showFilterMenu ? 'bg-slate-900 text-white border-slate-900' : 'bg-stone-50 border-stone-200 text-stone-400 hover:border-[#A5BEAC]'}`}
                     >
                       <span className="text-lg">⚡</span>
                     </button>
@@ -1822,12 +1822,12 @@ export default function Home() {
                     )}
                   </div>
 
-                  <div className="relative flex-1 min-w-0 h-full"> {/* h-full ensures consistent height */}
+                  <div className="relative flex-1 min-w-0 min-h-[48px] sm:h-full"> {/* min-height for mobile */}
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-300 text-xs">🔍</span>
                     <input
                       type="text"
                       placeholder="Search items..."
-                      className="w-full h-full pl-10 pr-4 bg-stone-50 border rounded-xl text-xs font-bold outline-none focus:border-[#A5BEAC] transition-all h-12"
+                      className="w-full h-full min-h-[48px] sm:min-h-0 pl-10 pr-4 bg-stone-50 border rounded-xl text-xs font-bold outline-none focus:border-[#A5BEAC] transition-all"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                     />
@@ -1835,11 +1835,11 @@ export default function Home() {
                 </div>
 
                 {/* NEW: Combined Vault Options Menu */}
-                <div className="relative vault-menu-container h-full">
+                <div className="relative vault-menu-container min-h-[48px] sm:h-full">
                   <button
                     onClick={() => { if (inventory.length > 0) setShowVaultMenu(!showVaultMenu); }}
                     disabled={inventory.length === 0}
-                    className={`vault-menu-trigger w-full h-full sm:w-auto px-6 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 transition shadow-sm ${inventory.length === 0
+                    className={`vault-menu-trigger w-full h-full min-h-[48px] sm:min-h-0 sm:w-auto px-6 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 transition shadow-sm ${inventory.length === 0
                         ? 'bg-stone-200 text-stone-400 cursor-not-allowed'
                         : 'bg-slate-900 text-white hover:bg-[#A5BEAC]'
                       }`}
@@ -2152,22 +2152,22 @@ export default function Home() {
                         <summary className="list-none cursor-pointer py-2 text-center text-[8px] font-black uppercase tracking-[0.3em] text-stone-300 hover:text-[#A5BEAC] transition-colors">View Breakdown & Notes</summary>
                         <div className="p-5 md:p-6 bg-stone-50/50 space-y-6">
 
-                          {/* MOVED & UPDATED: Compact Strategy Grid Box */}
-                          <div className="grid grid-cols-2 gap-3 text-center">
+                          {/* Compact Strategy, Materials, and Labor Boxes */}
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5 md:gap-3">
                             {/* Strategy Box */}
-                            <div className="bg-white p-3.5 rounded-xl border border-stone-100 shadow-sm flex flex-col justify-center">
-                              <p className="text-[8px] font-black text-stone-400 uppercase mb-1">Strategy</p>
-                              <p className="text-xs font-black text-slate-700 uppercase">{item.strategy}</p>
+                            <div className="bg-white p-3.5 md:p-3 rounded-xl border border-stone-100 shadow-sm flex flex-col justify-center items-center text-center min-h-[70px] md:min-h-0">
+                              <p className="text-[9px] md:text-[8px] font-black text-stone-400 uppercase mb-1.5 md:mb-1">Strategy</p>
+                              <p className="text-sm md:text-xs font-black text-slate-700 uppercase">{item.strategy}</p>
                             </div>
                             {/* Materials Box */}
-                            <div className="bg-white p-3.5 rounded-xl border border-stone-100 shadow-sm flex flex-col justify-center">
-                              <p className="text-[8px] font-black text-stone-400 uppercase mb-1">Materials</p>
-                              <p className="text-xs font-black text-slate-700">${(savedMetalCost + Number(item.other_costs_at_making || 0)).toFixed(2)}</p>
+                            <div className="bg-white p-3.5 md:p-3 rounded-xl border border-stone-100 shadow-sm flex flex-col justify-center items-center text-center min-h-[70px] md:min-h-0">
+                              <p className="text-[9px] md:text-[8px] font-black text-stone-400 uppercase mb-1.5 md:mb-1">Materials</p>
+                              <p className="text-sm md:text-xs font-black text-slate-700">${(savedMetalCost + Number(item.other_costs_at_making || 0)).toFixed(2)}</p>
                             </div>
-                            {/* Labor Box - Spans Full Width */}
-                            <div className="bg-white p-3.5 rounded-xl border border-stone-100 shadow-sm col-span-2 flex flex-col justify-center">
-                              <p className="text-[8px] font-black text-stone-400 uppercase mb-1">Labor ({Number(item.hours || 0)}h @ ${((Number(item.labor_at_making) || 0) / (Number(item.hours) || 1)).toFixed(2)}/hr)</p>
-                              <p className="text-xs font-black text-slate-700">${Number(item.labor_at_making || 0).toFixed(2)}</p>
+                            {/* Labor Box */}
+                            <div className="bg-white p-3.5 md:p-3 rounded-xl border border-stone-100 shadow-sm flex flex-col justify-center items-center text-center col-span-2 md:col-span-1 min-h-[70px] md:min-h-0">
+                              <p className="text-[9px] md:text-[8px] font-black text-stone-400 uppercase mb-1.5 md:mb-1 leading-tight">Labor ({Number(item.hours || 0)}h @ ${((Number(item.labor_at_making) || 0) / (Number(item.hours) || 1)).toFixed(2)}/hr)</p>
+                              <p className="text-sm md:text-xs font-black text-slate-700">${Number(item.labor_at_making || 0).toFixed(2)}</p>
                             </div>
                           </div>
 
