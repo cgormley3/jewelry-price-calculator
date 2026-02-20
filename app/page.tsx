@@ -73,7 +73,7 @@ export default function Home() {
   const [stoneList, setStoneList] = useState<{ name: string, cost: number, markup: number }[]>([]);
   const [tempStoneName, setTempStoneName] = useState('');
   const [tempStoneCost, setTempStoneCost] = useState<number | ''>('');
-  const [tempStoneMarkup, setTempStoneMarkup] = useState<number>(1.5);
+  const [tempStoneMarkup, setTempStoneMarkup] = useState<number>(2);
   const [overheadCost, setOverheadCost] = useState<number | ''>('');
   const [overheadType, setOverheadType] = useState<'flat' | 'percent'>('percent');
   const [otherCosts, setOtherCosts] = useState<number | ''>('');
@@ -491,11 +491,11 @@ export default function Home() {
     setStoneList([...stoneList, {
       name: tempStoneName.trim(),
       cost: Number(tempStoneCost),
-      markup: Number(tempStoneMarkup) || 1.5
+      markup: Number(tempStoneMarkup) || 2
     }]);
     setTempStoneName('');
     setTempStoneCost('');
-    setTempStoneMarkup(1.5);
+    setTempStoneMarkup(2);
   };
 
   const deleteInventoryItem = async (id: string, name: string) => {
@@ -861,7 +861,7 @@ export default function Home() {
         setOtherCosts('');
         setTempStoneName('');
         setTempStoneCost('');
-        setTempStoneMarkup(1.5);
+        setTempStoneMarkup(2);
         setOverheadCost('');
         setToken(null);
         setNotification({ title: "Item Saved", message: `"${newItem.name}" is now stored in your Vault.`, type: 'success' });
@@ -1800,7 +1800,7 @@ export default function Home() {
                     <label className="block text-[10px] font-bold text-stone-500 uppercase mb-1">Multiplier (×)</label>
                     <div className="flex items-center border border-stone-200 rounded-xl focus-within:ring-2 focus-within:ring-[#A5BEAC]/30 focus-within:border-[#2d4a22] bg-white">
                       <span className="pl-3 text-stone-400 font-black text-sm">×</span>
-                      <input type="number" min={0} step="0.1" placeholder="1.5" className="flex-1 p-3 pl-1 pr-3 text-[10px] font-bold focus:outline-none bg-transparent w-14" value={tempStoneMarkup} onChange={e => setTempStoneMarkup(Number(e.target.value))} />
+                      <input type="number" min={0} step="0.1" placeholder="2" className="flex-1 p-3 pl-1 pr-3 text-[10px] font-bold focus:outline-none bg-transparent w-14" value={tempStoneMarkup} onChange={e => setTempStoneMarkup(Number(e.target.value))} />
                     </div>
                   </div>
                 </div>
@@ -1882,23 +1882,22 @@ export default function Home() {
                 <div className="grid grid-cols-1 gap-4 w-full">
                   <button
                     onClick={() => setStrategy('A')}
-                    className={`group flex flex-col sm:flex-row sm:items-center sm:justify-between p-5 rounded-[2rem] border-2 transition-all ${strategy === 'A' ? 'border-[#A5BEAC] bg-stone-50 shadow-md' : 'border-stone-100 bg-white hover:border-stone-200'}`}
+                    className={`group flex flex-col sm:flex-row sm:items-stretch sm:gap-4 p-5 rounded-2xl border-2 transition-all text-left ${strategy === 'A' ? 'border-[#A5BEAC] bg-stone-50 shadow-md' : 'border-stone-100 bg-white hover:border-stone-200'}`}
                   >
-                    <div className="text-left mb-4 sm:mb-0">
-                      <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter mb-1">Retail A</p>
-                      <p className="text-3xl font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneList, overheadCost, overheadType).retailA.toFixed(2)}</p>
-                      <p className="text-[9px] font-bold text-stone-400 uppercase tracking-widest mt-1">Wholesale: ${calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneList, overheadCost, overheadType).wholesaleA.toFixed(2)}</p>
+                    <div className="flex-1 min-w-0 mb-4 sm:mb-0">
+                      <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter mb-1">Strategy A</p>
+                      <p className="text-3xl font-black text-slate-900 tabular-nums">${calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneList, overheadCost, overheadType).retailA.toFixed(2)}</p>
+                      <p className="text-[10px] font-semibold text-stone-500 mt-1">Wholesale ${calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneList, overheadCost, overheadType).wholesaleA.toFixed(2)}</p>
                     </div>
-                    <div className="flex flex-col items-start sm:items-end">
-                      <div className="flex items-center gap-1 text-[#a8a29e] italic font-black text-[10px] uppercase whitespace-nowrap">
-                        <span>Wholesale: M + L</span>
-                      </div>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[10px] font-black text-[#a8a29e] uppercase italic whitespace-nowrap">Retail: W ×</span>
+                    <div className="sm:w-36 flex flex-col justify-center gap-2 py-1 sm:py-0 sm:pl-4 sm:border-l border-stone-200">
+                      <p className="text-[9px] font-black text-stone-400 uppercase tracking-wider">Formula</p>
+                      <p className="text-[10px] text-stone-500 font-medium">Wholesale = M + L</p>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[10px] text-stone-500 font-medium">Retail = W ×</span>
                         <input
                           type="number"
                           step="0.1"
-                          className="w-12 bg-white border-2 border-[#A5BEAC] rounded-xl text-xs font-black py-1.5 text-center outline-none text-slate-900"
+                          className="w-11 bg-white border border-stone-200 rounded-lg text-xs font-bold py-1 px-1.5 text-center outline-none text-slate-900 focus:border-[#A5BEAC]"
                           value={retailMultA}
                           onChange={(e) => setRetailMultA(Number(e.target.value))}
                           onClick={(e) => e.stopPropagation()}
@@ -1909,27 +1908,28 @@ export default function Home() {
 
                   <button
                     onClick={() => setStrategy('B')}
-                    className={`group relative flex flex-col sm:flex-row sm:items-center sm:justify-between p-5 rounded-[2rem] border-2 transition-all ${strategy === 'B' ? 'border-[#A5BEAC] bg-stone-50 shadow-md' : 'border-stone-100 bg-white hover:border-stone-200'}`}
+                    className={`group flex flex-col sm:flex-row sm:items-stretch sm:gap-4 p-5 rounded-2xl border-2 transition-all text-left ${strategy === 'B' ? 'border-[#A5BEAC] bg-stone-50 shadow-md' : 'border-stone-100 bg-white hover:border-stone-200'}`}
                   >
-                    <div className="text-left mb-4 sm:mb-0">
-                      <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter mb-1">Retail B</p>
-                      <p className="text-3xl font-black text-slate-900">${calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneList, overheadCost, overheadType).retailB.toFixed(2)}</p>
-                      <p className="text-[9px] font-bold text-stone-400 uppercase tracking-widest mt-1">Wholesale: ${calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneList, overheadCost, overheadType).wholesaleB.toFixed(2)}</p>
+                    <div className="flex-1 min-w-0 mb-4 sm:mb-0">
+                      <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter mb-1">Strategy B</p>
+                      <p className="text-3xl font-black text-slate-900 tabular-nums">${calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneList, overheadCost, overheadType).retailB.toFixed(2)}</p>
+                      <p className="text-[10px] font-semibold text-stone-500 mt-1">Wholesale ${calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneList, overheadCost, overheadType).wholesaleB.toFixed(2)}</p>
                     </div>
-                    <div className="flex flex-col items-start sm:items-end">
-                      <div className="flex items-center gap-1 text-[#a8a29e] italic font-black text-[10px] uppercase whitespace-nowrap">
-                        <span>Wholesale: (M ×</span>
+                    <div className="sm:w-36 flex flex-col justify-center gap-2 py-1 sm:py-0 sm:pl-4 sm:border-l border-stone-200">
+                      <p className="text-[9px] font-black text-stone-400 uppercase tracking-wider">Formula</p>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[10px] text-stone-500 font-medium">Wholesale = (M ×</span>
                         <input
                           type="number"
                           step="0.1"
-                          className="w-12 bg-white border-2 border-[#A5BEAC] rounded-xl text-xs font-black py-1.5 text-center outline-none text-slate-900"
+                          className="w-11 bg-white border border-stone-200 rounded-lg text-xs font-bold py-1 px-1.5 text-center outline-none text-slate-900 focus:border-[#A5BEAC]"
                           value={markupB}
                           onChange={(e) => setMarkupB(Number(e.target.value))}
                           onClick={(e) => e.stopPropagation()}
                         />
-                        <span>) + L</span>
+                        <span className="text-[10px] text-stone-500 font-medium">) + L</span>
                       </div>
-                      <p className="text-[10px] font-black text-[#a8a29e] italic uppercase whitespace-nowrap mt-1">Retail: W × 2</p>
+                      <p className="text-[10px] text-stone-500 font-medium">Retail = W × 2</p>
                     </div>
                   </button>
                 </div>
