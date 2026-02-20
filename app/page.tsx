@@ -15,6 +15,10 @@ const UNIT_TO_GRAMS: { [key: string]: number } = {
 };
 
 export default function Home() {
+  // Check if Turnstile is configured (for human verification)
+  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '';
+  const hasTurnstile = !!turnstileSiteKey;
+
   const [prices, setPrices] = useState<any>({ gold: 0, silver: 0, platinum: 0, palladium: 0, updated_at: null });
   const [itemName, setItemName] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -742,17 +746,38 @@ export default function Home() {
   };
 
   const addToInventory = async () => {
+    // Check if Supabase is configured
+    if (!hasValidSupabaseCredentials) {
+      setNotification({ 
+        title: "Database Not Configured", 
+        message: "Please configure Supabase credentials in .env.local to save items to the vault. The calculator still works for pricing!", 
+        type: 'error' 
+      });
+      return;
+    }
+
     let currentUser = user;
     if (!currentUser) {
-      const { data: { session } } = await supabase.auth.getSession();
-      currentUser = session?.user;
-      if (!currentUser) {
-        const { data: anonData } = await supabase.auth.signInAnonymously();
-        currentUser = anonData?.user;
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        currentUser = session?.user;
+        if (!currentUser) {
+          const { data: anonData } = await supabase.auth.signInAnonymously();
+          currentUser = anonData?.user;
+        }
+      } catch (error) {
+        console.error('Supabase auth error:', error);
+        setNotification({ 
+          title: "Authentication Error", 
+          message: "Could not authenticate. Please check your Supabase configuration.", 
+          type: 'error' 
+        });
+        return;
       }
     }
     if (!currentUser) { setShowAuth(true); return; }
-    if (isGuest && !token) {
+    // Only require Turnstile verification if site key is configured (production)
+    if (isGuest && !token && hasTurnstile) {
       setNotification({ title: "Verification Required", message: "Please complete the human verification to save items as a guest.", type: 'info' });
       return;
     }
@@ -788,23 +813,32 @@ export default function Home() {
       status: 'active'
     };
 
-    const { data, error } = await supabase.from('inventory').insert([newItem]).select();
-    if (!error && data) {
-      setInventory([data[0], ...inventory]);
-      setItemName('');
-      setMetalList([]);
-      setHours('');
-      setRate('');
-      setOtherCosts('');
-      setStoneCost('');
-      setOverheadCost('');
-      setStoneMarkup(1.5); // Reset to default
-      setToken(null);
-      setNotification({ title: "Item Saved", message: `"${newItem.name}" is now stored in your Vault.`, type: 'success' });
-      if (!user) setUser(currentUser);
-    } else {
-      console.error(error);
-      setNotification({ title: "Save Failed", message: error?.message || "Could not save item.", type: 'error' });
+    try {
+      const { data, error } = await supabase.from('inventory').insert([newItem]).select();
+      if (!error && data) {
+        setInventory([data[0], ...inventory]);
+        setItemName('');
+        setMetalList([]);
+        setHours('');
+        setRate('');
+        setOtherCosts('');
+        setStoneCost('');
+        setOverheadCost('');
+        setStoneMarkup(1.5); // Reset to default
+        setToken(null);
+        setNotification({ title: "Item Saved", message: `"${newItem.name}" is now stored in your Vault.`, type: 'success' });
+        if (!user) setUser(currentUser);
+      } else {
+        console.error(error);
+        setNotification({ title: "Save Failed", message: error?.message || "Could not save item.", type: 'error' });
+      }
+    } catch (error: any) {
+      console.error('Database save error:', error);
+      setNotification({ 
+        title: "Save Failed", 
+        message: error?.message || "Could not save item to database. Please check your Supabase configuration.", 
+        type: 'error' 
+      });
     }
   };
 
@@ -1691,10 +1725,10 @@ export default function Home() {
                     value={itemName}
                     onChange={e => setItemName(e.target.value)}
                   />
-                  <button onClick={addToInventory} disabled={isGuest && !token} className={`w-full py-5 rounded-[1.8rem] font-black uppercase tracking-[0.15em] text-sm transition-all ${(isGuest && !token) ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-[#A5BEAC] text-white shadow-xl hover:bg-slate-900 active:scale-[0.97]'}`}>{(isGuest && !token) ? "Verifying Human..." : "Save to Vault"}</button>
+                  <button onClick={addToInventory} disabled={isGuest && !token && hasTurnstile} className={`w-full py-5 rounded-[1.8rem] font-black uppercase tracking-[0.15em] text-sm transition-all ${(isGuest && !token && hasTurnstile) ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-[#A5BEAC] text-white shadow-xl hover:bg-slate-900 active:scale-[0.97]'}`}>{(isGuest && !token && hasTurnstile) ? "Verifying Human..." : "Save to Vault"}</button>
                 </div>
 
-                {isGuest && !token && <div className="w-full flex justify-center mt-4 h-auto overflow-hidden animate-in fade-in slide-in-from-top-1"><Turnstile siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!} onSuccess={(token) => setToken(token)} options={{ theme: 'light', appearance: 'interaction-only' }} /></div>}
+                {isGuest && !token && hasTurnstile && <div className="w-full flex justify-center mt-4 h-auto overflow-hidden animate-in fade-in slide-in-from-top-1"><Turnstile siteKey={turnstileSiteKey} onSuccess={(token) => setToken(token)} options={{ theme: 'light', appearance: 'interaction-only' }} /></div>}
               </div>
             </div>
           </div>
