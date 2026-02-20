@@ -1005,6 +1005,24 @@ export default function Home() {
     }
   };
 
+  const pdfPageHeight = 297;
+  const pdfPageWidth = 210;
+  const pdfMargin = 16;
+  const pdfContentWidth = pdfPageWidth - pdfMargin * 2;
+
+  const drawPDFPageHeader = (doc: jsPDF) => {
+    doc.setFillColor(45, 74, 34);
+    doc.rect(0, 0, pdfPageWidth, 20, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(14);
+    const vaultWidth = doc.getTextWidth('THE VAULT');
+    doc.text('THE VAULT', pdfMargin, 13);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+    doc.text('Inventory Report', pdfMargin + vaultWidth + 4, 13);
+    doc.setFontSize(7); doc.setTextColor(200, 220, 200);
+    doc.text(`Generated ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`, pdfMargin, 18);
+  };
+
   const exportDetailedPDF = async () => {
     setLoading(true);
     setShowPDFOptions(false);
@@ -1014,67 +1032,110 @@ export default function Home() {
       : filteredInventory;
 
     const doc = new jsPDF();
-    doc.setFontSize(22); doc.setTextColor(45, 74, 34); doc.text('THE VAULT INVENTORY REPORT', 14, 20);
-    doc.setFontSize(9); doc.setTextColor(100, 100, 100); doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 26);
+    const brandGreen = [45, 74, 34] as [number, number, number];
+    const sage = [165, 190, 172] as [number, number, number];
+    const muted = [100, 100, 100];
+    const dark = [40, 40, 40];
+
+    drawPDFPageHeader(doc);
+    let currentY = 26;
 
     if (includeLiveInPDF) {
-      doc.text(`Total Vault live Market Value: $${totalVaultValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, 14, 31);
-    }
+      const totalValStr = `$${totalVaultValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      doc.setFillColor(248, 250, 248);
+      doc.rect(pdfMargin, currentY, pdfContentWidth, 12, 'F');
+      doc.setDrawColor(220, 228, 220);
+      doc.setLineWidth(0.2);
+      doc.rect(pdfMargin, currentY, pdfContentWidth, 12, 'S');
+      doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(brandGreen[0], brandGreen[1], brandGreen[2]);
+      doc.text('Total vault value (live market)', pdfMargin + 5, currentY + 6);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(dark[0], dark[1], dark[2]);
+      doc.text(totalValStr, pdfMargin + pdfContentWidth - 5 - doc.getTextWidth(totalValStr), currentY + 6);
+      currentY += 15;
 
-    let currentY = 40;
+      if (prices.gold > 0 || prices.silver > 0 || prices.platinum > 0 || prices.palladium > 0) {
+        doc.setFillColor(245, 248, 245);
+        doc.rect(pdfMargin, currentY, pdfContentWidth, 14, 'F');
+        doc.setDrawColor(220, 228, 220);
+        doc.rect(pdfMargin, currentY, pdfContentWidth, 14, 'S');
+        doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.setTextColor(brandGreen[0], brandGreen[1], brandGreen[2]);
+        doc.text('Live spot prices ($/oz troy)', pdfMargin + 5, currentY + 5.5);
+        doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(55, 55, 55);
+        const liveParts: string[] = [];
+        if (prices.gold > 0) liveParts.push(`Gold $${Number(prices.gold).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+        if (prices.silver > 0) liveParts.push(`Silver $${Number(prices.silver).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+        if (prices.platinum > 0) liveParts.push(`Platinum $${Number(prices.platinum).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+        if (prices.palladium > 0) liveParts.push(`Palladium $${Number(prices.palladium).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+        doc.text(liveParts.join('  ·  '), pdfMargin + 5, currentY + 11);
+        currentY += 17;
+      }
+    }
+    currentY += 8;
 
     for (const item of targetItems) {
-      if (currentY + 60 > 280) { doc.addPage(); currentY = 20; }
+      if (currentY + 58 > pdfPageHeight - 18) {
+        doc.addPage();
+        currentY = 24;
+        drawPDFPageHeader(doc);
+      }
 
-      // FIX: Force overhead_type to 'flat' here to correctly calculate Live Retail using the stored Dollar value
-      // FIX: Pass labor cost
       const stonesArray = convertStonesToArray(item);
       const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, stonesArray, item.overhead_cost || 0, 'flat', item.multiplier, item.markup_b);
-      const labor = item.labor_at_making || 0;
       const liveWholesale = item.strategy === 'A' ? current.wholesaleA : current.wholesaleB;
       const liveRetail = item.strategy === 'A' ? current.retailA : current.retailB;
 
-      let titleX = 14;
+      const pdfThumbSize = 18;
+      const pdfThumbGap = 4;
+      const pdfThumbPaddingBelow = 4;
+      let titleX = pdfMargin;
+      let itemHeaderHeight = 14;
+
       if (item.image_url) {
         const imgData = await getImageData(item.image_url);
         if (imgData) {
-          doc.addImage(imgData, 'PNG', 14, currentY, 20, 20);
-          titleX = 42;
+          doc.addImage(imgData, 'PNG', pdfMargin, currentY, pdfThumbSize, pdfThumbSize);
+          titleX = pdfMargin + pdfThumbSize + pdfThumbGap;
+          itemHeaderHeight = pdfThumbSize + pdfThumbPaddingBelow;
         }
       }
 
-      doc.setFont("helvetica", "bold"); doc.setFontSize(14); doc.setTextColor(0, 0, 0); doc.text(`${item.name.toUpperCase()}`, titleX, currentY + 6);
-      doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(150, 150, 150);
-      doc.text(`Status: ${item.status === 'archived' || item.status === 'sold' ? 'Archived' : 'Active'} | Loc: ${item.location || 'Main Vault'}`, titleX, currentY + 11);
-      doc.text(`Saved: ${new Date(item.created_at).toLocaleDateString()}`, titleX, currentY + 15);
+      doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(dark[0], dark[1], dark[2]);
+      doc.text(item.name, titleX, currentY + (itemHeaderHeight > 14 ? 4 : 5));
+      doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(muted[0], muted[1], muted[2]);
+      const meta = `${item.status === 'archived' || item.status === 'sold' ? 'Archived' : 'Active'}  ·  ${item.location || 'Main Vault'}  ·  Saved ${new Date(item.created_at).toLocaleDateString()}`;
+      doc.text(meta, titleX, currentY + (itemHeaderHeight > 14 ? 11 : 10));
+      currentY += itemHeaderHeight;
 
-      const tableHead = includeLiveInPDF
-        ? [['Financial Metric', 'Saved (Original)', 'Live (Current Market)']]
-        : [['Financial Metric', 'Saved (Original)']];
-
-      const tableBody = [];
-      const retailRow: any[] = ['Retail Price', `$${Number(item.retail).toFixed(2)}`];
-      if (includeLiveInPDF) retailRow.push({ content: `$${liveRetail.toFixed(2)}`, styles: { fontStyle: 'bold', textColor: [0, 0, 0] } });
-      tableBody.push(retailRow);
-
-      const wholesaleRow: any[] = ['Wholesale Cost', `$${Number(item.wholesale).toFixed(2)}`];
-      if (includeLiveInPDF) wholesaleRow.push({ content: `$${liveWholesale.toFixed(2)}`, styles: { textColor: [0, 0, 0] } });
-      tableBody.push(wholesaleRow);
+      const tableStartY = currentY;
+      const tableHead = includeLiveInPDF ? [['', 'Saved', 'Live (market)']] : [['', 'Saved']];
+      const retailRow: any[] = ['Retail', `$${Number(item.retail).toFixed(2)}`];
+      if (includeLiveInPDF) retailRow.push(`$${liveRetail.toFixed(2)}`);
+      const wholesaleRow: any[] = ['Wholesale', `$${Number(item.wholesale).toFixed(2)}`];
+      if (includeLiveInPDF) wholesaleRow.push(`$${liveWholesale.toFixed(2)}`);
 
       autoTable(doc, {
-        startY: currentY + 22,
+        startY: tableStartY,
         head: tableHead,
-        body: tableBody,
-        theme: 'grid', headStyles: { fillColor: [165, 190, 172], textColor: 255, fontSize: 8 },
-        styles: { fontSize: 8, cellPadding: 2 }, margin: { left: 14 }, tableWidth: includeLiveInPDF ? 120 : 80
+        body: [retailRow, wholesaleRow],
+        theme: 'grid',
+        headStyles: { fillColor: sage as any, textColor: 255, fontSize: 8, cellPadding: 1.5 },
+        columnStyles: includeLiveInPDF ? { 0: { cellWidth: 32 }, 1: { cellWidth: 32 }, 2: { cellWidth: 32 } } : { 0: { cellWidth: 40 }, 1: { cellWidth: 50 } },
+        styles: { fontSize: 8, cellPadding: 1.5 },
+        margin: { left: pdfMargin },
+        tableWidth: includeLiveInPDF ? 96 : 90
       });
 
-      let nextY = (doc as any).lastAutoTable.finalY + 4;
+      const pdfTableEndX = pdfMargin + (includeLiveInPDF ? 96 : 90);
+      const pdfBreakdownGap = 10;
+      const pdfBreakdownX = pdfTableEndX + pdfBreakdownGap;
+      const pdfBreakdownMaxWidth = pdfPageWidth - pdfMargin - pdfBreakdownX;
+
+      const tableFinalY = (doc as any).lastAutoTable.finalY;
+      const notesAnchorY = tableFinalY + 5;
+      let breakdownBottomY = tableFinalY + 3;
 
       if (includeBreakdownInPDF) {
-        const breakdownLines = item.metals.map((m: any) => `${m.weight}${m.unit} ${m.type}`);
-
-        // Spot prices: saved (from item metals) and live (current market)
+        const metalLines: string[] = item.metals.map((m: any) => `${m.weight}${m.unit} ${m.type}`);
         const savedSpotByMetal: Record<string, number> = {};
         (item.metals || []).forEach((m: any) => {
           const t = m.type?.toLowerCase() || '';
@@ -1088,60 +1149,72 @@ export default function Home() {
         const savedSpotParts = Object.entries(savedSpotByMetal)
           .map(([name, val]) => `${name} $${Number(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
           .filter(Boolean);
-        if (savedSpotParts.length > 0) {
-          breakdownLines.push(`Saved spot ($/oz): ${savedSpotParts.join(' | ')}`);
-        }
-        if (includeLiveInPDF && (prices.gold > 0 || prices.silver > 0 || prices.platinum > 0 || prices.palladium > 0)) {
-          const liveParts: string[] = [];
-          if (prices.gold > 0) liveParts.push(`Gold $${Number(prices.gold).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-          if (prices.silver > 0) liveParts.push(`Silver $${Number(prices.silver).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-          if (prices.platinum > 0) liveParts.push(`Platinum $${Number(prices.platinum).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-          if (prices.palladium > 0) liveParts.push(`Palladium $${Number(prices.palladium).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-          if (liveParts.length > 0) {
-            breakdownLines.push(`Live spot ($/oz): ${liveParts.join(' | ')}`);
-          }
-        }
+        if (savedSpotParts.length > 0) metalLines.push(`Saved spot ($/oz): ${savedSpotParts.join(' | ')}`);
 
-        if (item.other_costs_at_making > 0) breakdownLines.push(`Findings/Other: $${Number(item.other_costs_at_making).toFixed(2)}`);
-
-        // PDF Stone Breakdown Logic - Support multiple stones
-        const stonesArray = convertStonesToArray(item);
+        const stoneLines: string[] = [];
         if (stonesArray.length > 0) {
           stonesArray.forEach((stone: any) => {
             const stoneRetail = Number(stone.cost) * Number(stone.markup || 1.5);
-            breakdownLines.push(`${stone.name}: $${stoneRetail.toFixed(2)} (${stone.markup.toFixed(1)}x | Cost: $${Number(stone.cost).toFixed(2)})`);
+            stoneLines.push(`${stone.name}: $${stoneRetail.toFixed(2)} (${stone.markup.toFixed(1)}× | Cost: $${Number(stone.cost).toFixed(2)})`);
           });
         }
 
-        // PDF Overhead Percentage Calculation - UPDATED DENOMINATOR (Metal + Labor + Other + Stones)
+        const otherLines: string[] = [];
+        if (item.other_costs_at_making > 0) otherLines.push(`Findings/Other: $${Number(item.other_costs_at_making).toFixed(2)}`);
         if (item.overhead_cost > 0) {
           const totalStoneCost = stonesArray.reduce((sum: number, s: any) => sum + (Number(s.cost) || 0), 0);
           const denominator = Number(item.materials_at_making) + Number(item.labor_at_making) + Number(item.other_costs_at_making) + totalStoneCost;
-          const ovPct = item.overhead_type === 'percent' && denominator > 0
-            ? ((Number(item.overhead_cost) / denominator) * 100).toFixed(1)
-            : null;
-          breakdownLines.push(`Overhead: $${Number(item.overhead_cost).toFixed(2)} ${ovPct ? `(${ovPct}%)` : ''}`);
+          const ovPct = item.overhead_type === 'percent' && denominator > 0 ? ((Number(item.overhead_cost) / denominator) * 100).toFixed(1) : null;
+          otherLines.push(`Overhead: $${Number(item.overhead_cost).toFixed(2)} ${ovPct ? `(${ovPct}%)` : ''}`);
         }
+        if (current.labor > 0) otherLines.push(`Labor (${item.hours || 0}h): $${Number(current.labor).toFixed(2)}`);
 
-        if (current.labor > 0) breakdownLines.push(`Labor Cost (${item.hours || 0}h): $${Number(current.labor).toFixed(2)}`);
+        const lineHeight = 3;
+        const sectionGap = 2;
+        let lineY = tableStartY + 2;
 
-        doc.setFontSize(8); doc.setTextColor(80, 80, 80); doc.setFont("helvetica", "bold"); doc.text("BREAKDOWN:", 140, currentY + 26);
-        doc.setFont("helvetica", "normal");
-        breakdownLines.forEach((line: string, i: number) => doc.text(line, 140, currentY + 31 + (i * 3.5)));
+        const drawSection = (header: string, lines: string[]) => {
+          if (lines.length === 0) return;
+          doc.setFont("helvetica", "bold"); doc.setFontSize(6); doc.setTextColor(brandGreen[0], brandGreen[1], brandGreen[2]);
+          doc.text(header, pdfBreakdownX, lineY);
+          lineY += lineHeight;
+          doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(70, 70, 70);
+          for (const line of lines) {
+            const wrapped = doc.splitTextToSize(line, pdfBreakdownMaxWidth);
+            for (const part of wrapped) {
+              doc.text(part, pdfBreakdownX, lineY);
+              lineY += lineHeight;
+            }
+            lineY += 0.4;
+          }
+          lineY += sectionGap;
+        };
 
-        nextY = Math.max(nextY, currentY + 31 + (breakdownLines.length * 3.5) + 2);
+        drawSection('Metals', metalLines);
+        drawSection('Stones', stoneLines);
+        drawSection('Other', otherLines);
+        breakdownBottomY = lineY + 1;
       }
 
+      let notesBottomY = notesAnchorY;
       if (item.notes) {
-        if (nextY > 270) { doc.addPage(); nextY = 20; }
-        doc.setFont("helvetica", "bold"); doc.text("NOTES:", 14, nextY);
-        doc.setFont("helvetica", "italic"); doc.setTextColor(100, 100, 100);
-        doc.text(item.notes, 14, nextY + 4, { maxWidth: 120 });
-        nextY += 12;
+        let drawNotesY = notesAnchorY;
+        if (notesAnchorY > pdfPageHeight - 26) { doc.addPage(); drawPDFPageHeader(doc); drawNotesY = 24; }
+        doc.setDrawColor(230, 230, 230);
+        doc.setLineWidth(0.2);
+        doc.line(pdfMargin, drawNotesY - 0.5, pdfMargin + 80, drawNotesY - 0.5);
+        doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.setTextColor(muted[0], muted[1], muted[2]); doc.text('Notes', pdfMargin, drawNotesY + 2);
+        doc.setFont("helvetica", "italic"); doc.setFontSize(6); doc.setTextColor(90, 90, 90);
+        const noteWrapped = doc.splitTextToSize(item.notes, pdfContentWidth - 4);
+        noteWrapped.forEach((part: string, i: number) => doc.text(part, pdfMargin, drawNotesY + 4.5 + i * 3));
+        notesBottomY = drawNotesY + 4.5 + (noteWrapped.length * 3) + 3;
       }
 
-      currentY = nextY + 6;
-      doc.setDrawColor(220); doc.line(14, currentY - 3, 196, currentY - 3);
+      const nextY = Math.max(breakdownBottomY, notesBottomY);
+      currentY = nextY + 4;
+      doc.setDrawColor(232, 232, 232);
+      doc.setLineWidth(0.3);
+      doc.line(pdfMargin, currentY - 2, pdfPageWidth - pdfMargin, currentY - 2);
     }
 
     doc.save(`Vault_Report.pdf`);
@@ -1742,13 +1815,19 @@ export default function Home() {
                   <summary className="text-[10px] font-black uppercase tracking-wider text-stone-400 cursor-pointer list-none flex items-center gap-1.5 hover:text-stone-600 [&::-webkit-details-marker]:hidden">
                     <span className="group-open:rotate-90 transition-transform inline-block">›</span> Typical markup guide
                   </summary>
-                  <div className="mt-2 p-3 bg-white rounded-xl border border-stone-200 text-[10px] space-y-1.5">
-                    <div className="flex justify-between gap-4 font-bold text-slate-800 border-b border-stone-100 pb-1">
+                  <div className="mt-2 p-3 bg-white rounded-xl border border-stone-200 text-[10px] space-y-3">
+                    <div className="flex justify-between gap-4 font-bold text-slate-800 border-b border-stone-100 pb-1.5 hidden sm:flex">
                       <span>Item type</span>
-                      <span>Typical multiplier</span>
+                      <span className="text-right shrink-0">Typical multiplier</span>
                     </div>
-                    <div className="flex justify-between gap-4 text-stone-600"><span>Loose diamonds</span><span>1.6× – 1.9× (60–90% over cost)</span></div>
-                    <div className="flex justify-between gap-4 text-stone-600"><span>Common gemstones</span><span>2× – 3×</span></div>
+                    <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between sm:items-center sm:gap-4 text-stone-600">
+                      <span className="font-medium text-slate-700">Loose diamonds</span>
+                      <span className="sm:text-right sm:shrink-0">1.6× – 1.9× (60–90% over cost)</span>
+                    </div>
+                    <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between sm:items-center sm:gap-4 text-stone-600">
+                      <span className="font-medium text-slate-700">Common gemstones</span>
+                      <span className="sm:text-right sm:shrink-0">2× – 3×</span>
+                    </div>
                   </div>
                 </details>
                 </div>
@@ -2121,23 +2200,25 @@ export default function Home() {
                                     </button>
 
                                     {openMenuId === item.id && (
-                                      <div className="item-menu-dropdown absolute top-full left-auto right-0 mt-2 w-48 bg-white border border-[#A5BEAC] rounded-2xl shadow-xl z-[150] overflow-hidden animate-in fade-in slide-in-from-top-1">
-                                        {/* GRID LAYOUT FOR ACTIONS */}
-                                        <div className="grid grid-cols-2 border-b border-stone-100">
+                                      <div className="item-menu-dropdown absolute top-full left-auto right-0 mt-2 w-56 bg-white border border-stone-200 rounded-2xl shadow-xl z-[150] overflow-hidden animate-in fade-in slide-in-from-top-1">
+                                        <div className="px-3 py-1.5 border-b border-stone-100">
+                                          <p className="text-[9px] font-black uppercase tracking-wider text-stone-400">Item actions</p>
+                                        </div>
+                                        <div className="py-0.5">
                                           <button
                                             onClick={() => {
                                               setEditingNameId(item.id);
                                               setNewNameValue(item.name);
                                               setOpenMenuId(null);
                                             }}
-                                            className="px-2 py-3 text-center text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-r border-stone-100 transition-colors flex flex-col items-center gap-1"
+                                            className="w-full px-4 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-stone-50 transition-colors flex items-center gap-3"
                                           >
-                                            <span className="text-lg leading-none">✎</span>
-                                            <span>Name</span>
+                                            <span className="text-stone-400 w-5 text-center">✎</span>
+                                            Edit name
                                           </button>
-                                          <label className="px-2 py-3 text-center text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 transition-colors flex flex-col items-center gap-1 cursor-pointer">
-                                            <span className="text-lg leading-none">📷</span>
-                                            <span>Image</span>
+                                          <label className="w-full px-4 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-stone-50 transition-colors flex items-center gap-3 cursor-pointer block">
+                                            <span className="text-stone-400 w-5 text-center">📷</span>
+                                            Change image
                                             <input
                                               type="file"
                                               accept="image/*"
@@ -2147,14 +2228,14 @@ export default function Home() {
                                             />
                                           </label>
                                         </div>
-
-                                        <div className="grid grid-cols-2 border-b border-stone-100">
+                                        <div className="border-t border-stone-100 py-0.5">
+                                          <p className="px-4 pt-1 pb-0.5 text-[9px] font-black uppercase tracking-wider text-stone-400">Pricing</p>
                                           <button
                                             onClick={() => syncToMarket(item)}
-                                            className="px-2 py-3 text-center text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-r border-stone-100 transition-colors flex flex-col items-center gap-1"
+                                            className="w-full px-4 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-stone-50 transition-colors flex items-center gap-3"
                                           >
-                                            <span className="text-lg leading-none">🔄</span>
-                                            <span>Sync</span>
+                                            <span className="text-stone-400 w-5 text-center">🔄</span>
+                                            Sync to market
                                           </button>
                                           <button
                                             onClick={() => {
@@ -2162,43 +2243,45 @@ export default function Home() {
                                               setRecalcParams({ gold: '', silver: '', platinum: '', palladium: '', laborRate: '' });
                                               setOpenMenuId(null);
                                             }}
-                                            className="px-2 py-3 text-center text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 transition-colors flex flex-col items-center gap-1"
+                                            className="w-full px-4 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-stone-50 transition-colors flex items-center gap-3"
                                           >
-                                            <span className="text-lg leading-none">🧮</span>
-                                            <span>Recalc</span>
+                                            <span className="text-stone-400 w-5 text-center">🧮</span>
+                                            Recalculate prices
+                                          </button>
+                                          <button
+                                            onClick={() => {
+                                              setEditingItem(item);
+                                              setManualRetail(item.retail.toFixed(2));
+                                              setManualWholesale(item.wholesale.toFixed(2));
+                                              setOpenMenuId(null);
+                                            }}
+                                            className="w-full px-4 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-stone-50 transition-colors flex items-center gap-3"
+                                          >
+                                            <span className="text-stone-400 w-5 text-center">⚙️</span>
+                                            Manual price edit
                                           </button>
                                         </div>
-
-                                        <button
-                                          onClick={() => {
-                                            setEditingItem(item);
-                                            setManualRetail(item.retail.toFixed(2));
-                                            setManualWholesale(item.wholesale.toFixed(2));
-                                            setOpenMenuId(null);
-                                          }}
-                                          className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b transition-colors flex items-center gap-2"
-                                        >
-                                          <span>⚙️</span> Manual Price Edit
-                                        </button>
-
-                                        {/* MODIFIED: Consolidated Status Button */}
-                                        <button
-                                          onClick={() => updateStatus(item.id, item.status === 'archived' ? 'active' : 'archived')}
-                                          className={`w-full px-4 py-3 text-left text-[10px] font-black uppercase hover:bg-stone-50 border-b transition-colors flex items-center gap-2 ${item.status === 'archived' ? 'text-green-600' : 'text-stone-500'}`}
-                                        >
-                                          <span>{item.status === 'archived' ? '♻️' : '📦'}</span>
-                                          <span>{item.status === 'archived' ? 'Restore to Active' : 'Mark Sold / Archive'}</span>
-                                        </button>
-
-                                        <button
-                                          onClick={() => {
-                                            deleteInventoryItem(item.id, item.name);
-                                            setOpenMenuId(null);
-                                          }}
-                                          className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-red-500 hover:bg-red-50 transition-colors flex items-center gap-2"
-                                        >
-                                          <span>🗑️</span> Remove from Vault
-                                        </button>
+                                        <div className="border-t border-stone-100 py-0.5">
+                                          <button
+                                            onClick={() => updateStatus(item.id, item.status === 'archived' ? 'active' : 'archived')}
+                                            className={`w-full px-4 py-2 text-left text-sm font-semibold hover:bg-stone-50 transition-colors flex items-center gap-3 ${item.status === 'archived' ? 'text-[#2d4a22]' : 'text-slate-700'}`}
+                                          >
+                                            <span className="w-5 text-center">{item.status === 'archived' ? '↩' : '📦'}</span>
+                                            {item.status === 'archived' ? 'Restore to active' : 'Mark sold / Archive'}
+                                          </button>
+                                        </div>
+                                        <div className="border-t border-stone-100 py-0.5">
+                                          <button
+                                            onClick={() => {
+                                              deleteInventoryItem(item.id, item.name);
+                                              setOpenMenuId(null);
+                                            }}
+                                            className="w-full px-4 py-2 text-left text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors flex items-center gap-3"
+                                          >
+                                            <span className="w-5 text-center">🗑</span>
+                                            Remove from vault
+                                          </button>
+                                        </div>
                                       </div>
                                     )}
                                   </div>
