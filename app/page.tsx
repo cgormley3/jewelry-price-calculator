@@ -135,6 +135,10 @@ export default function Home() {
   const [newLocationInput, setNewLocationInput] = useState('');
   const [itemTag, setItemTag] = useState<'necklace' | 'ring' | 'bracelet' | 'other'>('other');
 
+  const fetchInProgressRef = useRef(false);
+  const fetchVersionRef = useRef(0);
+  const wakeUpTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [notification, setNotification] = useState<{
     title: string;
     message: string;
@@ -160,27 +164,32 @@ export default function Home() {
   }, [showFilterMenu, showVaultMenu, openMenuId, showLocationMenuId, showTagMenuId, showAuth]);
 
   const fetchPrices = useCallback(async (force = false) => {
+    const cachedData = sessionStorage.getItem('vault_prices');
+    const cacheTimestamp = sessionStorage.getItem('vault_prices_time');
+    const now = Date.now();
+    const oneMinute = 60 * 1000;
+
+    if (!force && cachedData && cacheTimestamp && (now - Number(cacheTimestamp) < oneMinute)) {
+      setPrices(JSON.parse(cachedData));
+      setPricesLoaded(true);
+      return;
+    }
+
+    if (fetchInProgressRef.current) return;
+    fetchInProgressRef.current = true;
+    const myVersion = ++fetchVersionRef.current;
+
     try {
-      const cachedData = sessionStorage.getItem('vault_prices');
-      const cacheTimestamp = sessionStorage.getItem('vault_prices_time');
-      const now = Date.now();
-      const oneMinute = 60 * 1000;
-
-      if (!force && cachedData && cacheTimestamp && (now - Number(cacheTimestamp) < oneMinute)) {
-        setPrices(JSON.parse(cachedData));
-        setPricesLoaded(true);
-        return;
-      }
-
       const res = await fetch(`/api/gold-price?cb=${now}`);
-      
+      if (myVersion !== fetchVersionRef.current) return;
+
       if (!res.ok) {
         throw new Error(`API returned ${res.status}: ${res.statusText}`);
       }
 
       const priceData = await res.json();
-      
-      // Check if response contains an error
+      if (myVersion !== fetchVersionRef.current) return;
+
       if (priceData.error) {
         throw new Error(priceData.error);
       }
@@ -203,26 +212,29 @@ export default function Home() {
         setPricesLoaded(true);
       } else {
         console.warn('No price data received from API');
-        useCachedPrices();
+        tryUseCacheOnlyWhenEmpty();
       }
     } catch (e) {
       console.error("Price fetch failed", e);
-      useCachedPrices();
+      tryUseCacheOnlyWhenEmpty();
+    } finally {
+      if (myVersion === fetchVersionRef.current) {
+        fetchInProgressRef.current = false;
+      }
     }
 
-    function useCachedPrices() {
-      const cachedData = sessionStorage.getItem('vault_prices');
-      if (cachedData) {
+    function tryUseCacheOnlyWhenEmpty() {
+      if (!pricesLoaded && cachedData) {
         try {
           const parsed = JSON.parse(cachedData);
-          if (parsed.gold > 0 || parsed.silver > 0 || parsed.platinum > 0 || parsed.palladium > 0) {
+          if (parsed.gold > 0 || parsed.silver > 0) {
             setPrices(parsed);
             setPricesLoaded(true);
           }
         } catch (_) { /* ignore */ }
       }
     }
-  }, []);
+  }, [pricesLoaded]);
 
   const calculateFullBreakdown = useCallback((metals: any[], h: any, r: any, o: any, stones: any[], ovCost: any, ovType: 'flat' | 'percent', customMult?: number, customMarkup?: number, priceOverride?: any) => {
     let rawMaterialCost = 0;
@@ -331,9 +343,12 @@ export default function Home() {
     initSession();
 
     const handleWakeUp = () => {
-      if (document.visibilityState === 'visible') {
+      if (document.visibilityState !== 'visible') return;
+      if (wakeUpTimeoutRef.current) clearTimeout(wakeUpTimeoutRef.current);
+      wakeUpTimeoutRef.current = setTimeout(() => {
+        wakeUpTimeoutRef.current = null;
         fetchPrices(true);
-      }
+      }, 100);
     };
 
     window.addEventListener('visibilitychange', handleWakeUp);
@@ -361,6 +376,7 @@ export default function Home() {
       if (subscription && typeof subscription.unsubscribe === 'function') {
         subscription.unsubscribe();
       }
+      if (wakeUpTimeoutRef.current) clearTimeout(wakeUpTimeoutRef.current);
       window.removeEventListener('visibilitychange', handleWakeUp);
       window.removeEventListener('focus', handleWakeUp);
     };

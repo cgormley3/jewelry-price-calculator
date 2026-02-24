@@ -14,7 +14,10 @@ export async function GET() {
   try {
     const res = await fetch(CSV_URL, { 
       method: 'GET',
-      headers: { 'Cache-Control': 'no-cache' },
+      headers: { 
+        'Cache-Control': 'no-cache',
+        'User-Agent': 'Mozilla/5.0 (compatible; JewelryPriceCalc/1.0)'
+      },
       cache: 'no-store'
     });
 
@@ -22,42 +25,59 @@ export async function GET() {
       throw new Error(`Failed to fetch prices: ${res.status} ${res.statusText}`);
     }
 
-    const text = await res.text();
-    console.log("RAW CSV TEXT FROM GOOGLE:", text); // Check this in your terminal!
+    let text = await res.text();
+    text = text.replace(/^\uFEFF/, ''); // Strip UTF-8 BOM if present
+    console.log("RAW CSV TEXT FROM GOOGLE:", text.substring(0, 500)); // Log first 500 chars for debugging
 
-    const lines = text.split(/\r?\n/);
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
 
-    const findPrice = (metalName: string) => {
-      const line = lines.find(l => l.toLowerCase().includes(metalName.toLowerCase()));
-      if (!line) return 0;
-      const match = line.match(/[\d,.]+/g);
-      if (match && match.length > 0) {
-        // First numeric column is price (second is % change if present)
-        const cleanValue = match[0].replace(/,/g, '');
-        return parseFloat(cleanValue) || 0;
+    /** Extract first price-like number from a line. Handles: 2650.50, 2,650.50, 2 650.50, $2,650.50 */
+    const extractPrice = (line: string): number => {
+      const match = line.match(/(\d[\d\s,]*\.?\d*)/g);
+      if (!match || match.length === 0) return 0;
+      const cleanValue = match[0].replace(/[\s,]/g, '');
+      return parseFloat(cleanValue) || 0;
+    };
+
+    /** Extract second number as % change (allows negative) */
+    const extractChangePct = (line: string): number | null => {
+      const match = line.match(/-?\d[\d\s,]*\.?\d*/g);
+      if (!match || match.length < 2) return null;
+      const pct = parseFloat(match[1].replace(/[\s,]/g, ''));
+      return isNaN(pct) ? null : pct;
+    };
+
+    const findPrice = (metalName: string, altNames?: string[]) => {
+      const names = [metalName, ...(altNames || [])];
+      for (const name of names) {
+        const line = lines.find(l => l.toLowerCase().includes(name.toLowerCase()));
+        if (line) {
+          const price = extractPrice(line);
+          if (price > 0) return price;
+        }
       }
       return 0;
     };
 
-    const findChangePct = (metalName: string): number | null => {
-      const line = lines.find(l => l.toLowerCase().includes(metalName.toLowerCase()));
-      if (!line) return null;
-      // Allow negative numbers for % change
-      const match = line.match(/[-]?[\d,.]+/g);
-      if (match && match.length >= 2) {
-        const pct = parseFloat(match[1].replace(/,/g, ''));
-        return isNaN(pct) ? null : pct;
+    const findChangePct = (metalName: string, altNames?: string[]) => {
+      const names = [metalName, ...(altNames || [])];
+      for (const name of names) {
+        const line = lines.find(l => l.toLowerCase().includes(name.toLowerCase()));
+        if (line) {
+          const pct = extractChangePct(line);
+          if (pct !== null) return pct;
+        }
       }
       return null;
     };
 
     const priceData = {
-      gold: findPrice('Gold'),
-      silver: findPrice('Silver'),
-      platinum: findPrice('Platinum'),
-      palladium: findPrice('Palladium'),
-      gold_pct: findChangePct('Gold'),
-      silver_pct: findChangePct('Silver'),
+      gold: findPrice('Gold', ['XAU', 'gold spot']),
+      silver: findPrice('Silver', ['XAG', 'silver spot']),
+      platinum: findPrice('Platinum', ['platinum spot', 'plat']),
+      palladium: findPrice('Palladium', ['palladium spot', 'pall']),
+      gold_pct: findChangePct('Gold', ['XAU']),
+      silver_pct: findChangePct('Silver', ['XAG']),
       platinum_pct: findChangePct('Platinum'),
       palladium_pct: findChangePct('Palladium'),
       updated_at: new Date().toISOString()
