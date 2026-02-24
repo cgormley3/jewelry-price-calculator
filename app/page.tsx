@@ -29,6 +29,7 @@ export default function Home() {
 
   // Filter States
   const [filterLocation, setFilterLocation] = useState('All');
+  const [filterTag, setFilterTag] = useState('All');
   const [filterStrategy, setFilterStrategy] = useState('All');
   const [filterMetal, setFilterMetal] = useState('All');
   const [filterStatus, setFilterStatus] = useState('Active');
@@ -130,7 +131,9 @@ export default function Home() {
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [locations, setLocations] = useState<string[]>(['Main Vault']);
   const [showLocationMenuId, setShowLocationMenuId] = useState<string | null>(null);
+  const [showTagMenuId, setShowTagMenuId] = useState<string | null>(null);
   const [newLocationInput, setNewLocationInput] = useState('');
+  const [itemTag, setItemTag] = useState<'necklace' | 'ring' | 'bracelet' | 'other'>('other');
 
   const [notification, setNotification] = useState<{
     title: string;
@@ -149,11 +152,12 @@ export default function Home() {
       if (showVaultMenu && !target.closest('.vault-menu-container')) setShowVaultMenu(false);
       if (openMenuId && !target.closest('.item-menu-container')) setOpenMenuId(null);
       if (showLocationMenuId && !target.closest('.location-menu-container')) setShowLocationMenuId(null);
+      if (showTagMenuId && !target.closest('.tag-menu-container')) setShowTagMenuId(null);
       if (showAuth && !target.closest('.auth-menu-container')) setShowAuth(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showFilterMenu, showVaultMenu, openMenuId, showLocationMenuId, showAuth]);
+  }, [showFilterMenu, showVaultMenu, openMenuId, showLocationMenuId, showTagMenuId, showAuth]);
 
   const fetchPrices = useCallback(async (force = false) => {
     try {
@@ -187,6 +191,10 @@ export default function Home() {
           silver: priceData.silver || 0,
           platinum: priceData.platinum || 0,
           palladium: priceData.palladium || 0,
+          gold_pct: priceData.gold_pct ?? null,
+          silver_pct: priceData.silver_pct ?? null,
+          platinum_pct: priceData.platinum_pct ?? null,
+          palladium_pct: priceData.palladium_pct ?? null,
           updated_at: priceData.updated_at
         };
         setPrices(freshPrices);
@@ -195,9 +203,24 @@ export default function Home() {
         setPricesLoaded(true);
       } else {
         console.warn('No price data received from API');
+        useCachedPrices();
       }
     } catch (e) {
       console.error("Price fetch failed", e);
+      useCachedPrices();
+    }
+
+    function useCachedPrices() {
+      const cachedData = sessionStorage.getItem('vault_prices');
+      if (cachedData) {
+        try {
+          const parsed = JSON.parse(cachedData);
+          if (parsed.gold > 0 || parsed.silver > 0 || parsed.platinum > 0 || parsed.palladium > 0) {
+            setPrices(parsed);
+            setPricesLoaded(true);
+          }
+        } catch (_) { /* ignore */ }
+      }
     }
   }, []);
 
@@ -395,6 +418,14 @@ export default function Home() {
       setInventory(inventory.map(i => i.id === id ? { ...i, status: status } : i));
       setOpenMenuId(null);
       setNotification({ title: "Status Updated", message: `Item marked as ${status === 'active' ? 'Active' : 'Archived/Sold'}.`, type: 'success' });
+    }
+  };
+
+  const updateTag = async (id: string, newTag: string) => {
+    const { error } = await supabase.from('inventory').update({ tag: newTag }).eq('id', id);
+    if (!error) {
+      setInventory(inventory.map(i => i.id === id ? { ...i, tag: newTag } : i));
+      setShowTagMenuId(null);
     }
   };
 
@@ -865,6 +896,7 @@ export default function Home() {
       notes: '',
       hours: Number(hours) || 0,
       location: 'Main Vault',
+      tag: itemTag,
       status: 'active'
     };
 
@@ -898,6 +930,7 @@ export default function Home() {
         setFormulaAOpen(false);
         setFormulaBOpen(false);
         setToken(null);
+        setItemTag('other');
         setNotification({ title: "Item Saved", message: `"${newItem.name}" is now stored in your Vault.`, type: 'success' });
         if (!user) setUser(currentUser);
       } else {
@@ -922,11 +955,13 @@ export default function Home() {
         const matchMetal = item.metals.some((m: any) => m.type.toLowerCase().includes(lowerTerm));
         const matchNotes = item.notes && item.notes.toLowerCase().includes(lowerTerm);
         const matchLocation = item.location && item.location.toLowerCase().includes(lowerTerm);
+        const matchTag = (item.tag || 'other').toLowerCase().includes(lowerTerm);
         const matchDate = new Date(item.created_at).toLocaleDateString().includes(searchTerm);
-        if (!matchName && !matchMetal && !matchNotes && !matchLocation && !matchDate) return false;
+        if (!matchName && !matchMetal && !matchNotes && !matchLocation && !matchTag && !matchDate) return false;
       }
 
       if (filterLocation !== 'All' && (item.location || 'Main Vault') !== filterLocation) return false;
+      if (filterTag !== 'All' && (item.tag || 'other') !== filterTag) return false;
       if (filterStrategy !== 'All' && item.strategy !== filterStrategy) return false;
       if (filterMetal !== 'All') {
         if (!item.metals.some((m: any) => m.type.toLowerCase().includes(filterMetal.toLowerCase()))) return false;
@@ -959,7 +994,7 @@ export default function Home() {
 
       return true;
     });
-  }, [inventory, searchTerm, filterLocation, filterStrategy, filterMetal, filterStatus, filterMinPrice, filterMaxPrice, filterStartDate, filterEndDate, prices]);
+  }, [inventory, searchTerm, filterLocation, filterTag, filterStrategy, filterMetal, filterStatus, filterMinPrice, filterMaxPrice, filterStartDate, filterEndDate, prices]);
 
   const totalVaultValue = useMemo(() => {
     return inventory.reduce((acc, item) => {
@@ -978,7 +1013,7 @@ export default function Home() {
       ? filteredInventory.filter(i => selectedItems.has(i.id))
       : filteredInventory;
 
-    const headers = ["Item Name", "Status", "Location", "Live Retail", "Live Wholesale", "Saved Retail", "Saved Wholesale", "Labor Hours", "Labor Cost", "Materials Cost", "Other Costs", "Stone Retail", "Stone Cost", "Stone Markup", "Overhead Cost", "Overhead Type", "Notes", "Date Created", "Strategy", "Metals", "Image URL"];
+    const headers = ["Item Name", "Status", "Tag", "Location", "Live Retail", "Live Wholesale", "Saved Retail", "Saved Wholesale", "Labor Hours", "Labor Cost", "Materials Cost", "Other Costs", "Stone Retail", "Stone Cost", "Stone Markup", "Overhead Cost", "Overhead Type", "Notes", "Date Created", "Strategy", "Metals", "Image URL"];
     const rows = targetItems.map(item => {
       // FIX: Force overhead_type to 'flat' for live calc
       // FIX: Pass labor cost
@@ -995,6 +1030,7 @@ export default function Home() {
       return [
         `"${item.name}"`,
         `"${item.status || 'active'}"`,
+        `"${item.tag || 'other'}"`,
         `"${item.location || 'Main Vault'}"`,
         liveRetail.toFixed(2),
         liveWholesale.toFixed(2),
@@ -1043,18 +1079,52 @@ export default function Home() {
   const pdfPageWidth = 210;
   const pdfMargin = 16;
   const pdfContentWidth = pdfPageWidth - pdfMargin * 2;
+  const PDF_FOOTER_HEIGHT = 28;
 
-  const drawPDFPageHeader = (doc: jsPDF) => {
-    doc.setFillColor(45, 74, 34);
-    doc.rect(0, 0, pdfPageWidth, 20, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFont("helvetica", "bold"); doc.setFontSize(14);
-    const vaultWidth = doc.getTextWidth('THE VAULT');
-    doc.text('THE VAULT', pdfMargin, 13);
-    doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-    doc.text('Inventory Report', pdfMargin + vaultWidth + 4, 13);
-    doc.setFontSize(7); doc.setTextColor(200, 220, 200);
-    doc.text(`Generated ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`, pdfMargin, 18);
+  const drawPDFPageHeader = (doc: jsPDF, currentUser?: { email?: string; user_metadata?: { full_name?: string }; is_anonymous?: boolean } | null) => {
+    doc.setDrawColor(220, 220, 220);
+    doc.setLineWidth(0.3);
+    doc.line(0, 22, pdfPageWidth, 22);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(14); doc.setTextColor(40, 40, 40);
+    doc.text('Inventory Report', pdfMargin, 12);
+    let y = 16;
+    if (currentUser && !currentUser.is_anonymous) {
+      const name = currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || currentUser.email;
+      if (name) {
+        doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(100, 100, 100);
+        doc.text(`Prepared for: ${name}`, pdfMargin, y);
+        y += 4;
+      }
+    }
+    doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(120, 120, 120);
+    doc.text(`Generated ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`, pdfMargin, y);
+  };
+
+  const drawPDFPageFooter = (doc: jsPDF, iconData: string | null, pageNum?: number) => {
+    const footerY = pdfPageHeight - 10;
+    doc.setDrawColor(230, 230, 230);
+    doc.setLineWidth(0.2);
+    doc.line(pdfMargin, footerY - 8, pdfPageWidth - pdfMargin, footerY - 8);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(6); doc.setTextColor(130, 130, 130);
+    doc.text('Powered by', pdfMargin, footerY - 2);
+    const logoSize = 5;
+    if (iconData) {
+      try {
+        doc.addImage(iconData, 'PNG', pdfMargin + 20, footerY - 6, logoSize, logoSize);
+        doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.setTextColor(60, 60, 60);
+        doc.text('Bear Silver and Stone', pdfMargin + 26, footerY - 2);
+      } catch {
+        doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(80, 80, 80);
+        doc.text('Bear Silver and Stone', pdfMargin + 20, footerY - 2);
+      }
+    } else {
+      doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(80, 80, 80);
+      doc.text('Bear Silver and Stone', pdfMargin + 20, footerY - 2);
+    }
+    if (pageNum != null) {
+      doc.setFont("helvetica", "normal"); doc.setFontSize(6); doc.setTextColor(130, 130, 130);
+      doc.text(`Page ${pageNum}`, pdfPageWidth - pdfMargin - doc.getTextWidth(`Page ${pageNum}`), footerY - 2);
+    }
   };
 
   const exportDetailedPDF = async () => {
@@ -1065,22 +1135,24 @@ export default function Home() {
       ? filteredInventory.filter(i => selectedItems.has(i.id))
       : filteredInventory;
 
+    const iconData = await getImageData(typeof window !== 'undefined' ? `${window.location.origin}/icon.png?v=2` : '/icon.png?v=2');
+
     const doc = new jsPDF();
-    const brandGreen = [45, 74, 34] as [number, number, number];
-    const sage = [165, 190, 172] as [number, number, number];
+    const neutralDark = [80, 80, 80] as [number, number, number];
     const muted = [100, 100, 100];
     const dark = [40, 40, 40];
+    let pageNum = 1;
 
-    drawPDFPageHeader(doc);
-    let currentY = 26;
+    drawPDFPageHeader(doc, user);
+    let currentY = 28;
 
     if (includeLiveInPDF) {
       if (prices.gold > 0 || prices.silver > 0 || prices.platinum > 0 || prices.palladium > 0) {
-        doc.setFillColor(245, 248, 245);
+        doc.setFillColor(248, 248, 248);
         doc.rect(pdfMargin, currentY, pdfContentWidth, 14, 'F');
-        doc.setDrawColor(220, 228, 220);
+        doc.setDrawColor(220, 220, 220);
         doc.rect(pdfMargin, currentY, pdfContentWidth, 14, 'S');
-        doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.setTextColor(brandGreen[0], brandGreen[1], brandGreen[2]);
+        doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.setTextColor(neutralDark[0], neutralDark[1], neutralDark[2]);
         doc.text('Live spot prices ($/oz troy)', pdfMargin + 5, currentY + 5.5);
         doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(55, 55, 55);
         const liveParts: string[] = [];
@@ -1095,10 +1167,12 @@ export default function Home() {
     currentY += 8;
 
     for (const item of targetItems) {
-      if (currentY + 58 > pdfPageHeight - 18) {
+      if (currentY + 58 > pdfPageHeight - PDF_FOOTER_HEIGHT) {
+        drawPDFPageFooter(doc, iconData, pageNum);
         doc.addPage();
-        currentY = 24;
-        drawPDFPageHeader(doc);
+        pageNum += 1;
+        currentY = 28;
+        drawPDFPageHeader(doc, user);
       }
 
       const stonesArray = convertStonesToArray(item);
@@ -1140,7 +1214,7 @@ export default function Home() {
         head: tableHead,
         body: [retailRow, wholesaleRow],
         theme: 'grid',
-        headStyles: { fillColor: sage as any, textColor: 255, fontSize: 8, cellPadding: 1.5 },
+        headStyles: { fillColor: [235, 235, 235] as any, textColor: [60, 60, 60], fontSize: 8, cellPadding: 1.5 },
         columnStyles: includeLiveInPDF ? { 0: { cellWidth: 32 }, 1: { cellWidth: 32 }, 2: { cellWidth: 32 } } : { 0: { cellWidth: 40 }, 1: { cellWidth: 50 } },
         styles: { fontSize: 8, cellPadding: 1.5 },
         margin: { left: pdfMargin },
@@ -1197,7 +1271,7 @@ export default function Home() {
 
         const drawSection = (header: string, lines: string[]) => {
           if (lines.length === 0) return;
-          doc.setFont("helvetica", "bold"); doc.setFontSize(6); doc.setTextColor(brandGreen[0], brandGreen[1], brandGreen[2]);
+          doc.setFont("helvetica", "bold"); doc.setFontSize(6); doc.setTextColor(neutralDark[0], neutralDark[1], neutralDark[2]);
           doc.text(header, pdfBreakdownX, lineY);
           lineY += lineHeight;
           doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(70, 70, 70);
@@ -1221,7 +1295,13 @@ export default function Home() {
       let notesBottomY = notesAnchorY;
       if (item.notes) {
         let drawNotesY = notesAnchorY;
-        if (notesAnchorY > pdfPageHeight - 26) { doc.addPage(); drawPDFPageHeader(doc); drawNotesY = 24; }
+        if (notesAnchorY > pdfPageHeight - PDF_FOOTER_HEIGHT - 10) {
+          drawPDFPageFooter(doc, iconData, pageNum);
+          doc.addPage();
+          pageNum += 1;
+          drawPDFPageHeader(doc, user);
+          drawNotesY = 28;
+        }
         doc.setDrawColor(230, 230, 230);
         doc.setLineWidth(0.2);
         doc.line(pdfMargin, drawNotesY - 0.5, pdfMargin + 80, drawNotesY - 0.5);
@@ -1239,6 +1319,7 @@ export default function Home() {
       doc.line(pdfMargin, currentY - 2, pdfPageWidth - pdfMargin, currentY - 2);
     }
 
+    drawPDFPageFooter(doc, iconData, pageNum);
     doc.save(`Vault_Report.pdf`);
     setLoading(false);
     setShowVaultMenu(false);
@@ -1740,6 +1821,11 @@ export default function Home() {
             <div key={name} className="bg-white p-4 rounded-xl border-l-4 border-[#A5BEAC] shadow-sm text-center lg:text-left">
               <p className="text-[10px] font-black uppercase text-stone-400">{name}</p>
               <p className="text-xl font-bold">{prices[name] > 0 ? `$${prices[name].toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "--.--"}</p>
+              {prices[`${name}_pct`] != null && (
+                <p className={`text-xs font-semibold mt-0.5 ${prices[`${name}_pct`] >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {prices[`${name}_pct`] >= 0 ? '+' : ''}{prices[`${name}_pct`].toFixed(2)}% today
+                </p>
+              )}
             </div>
           ))}
         </div>
@@ -1938,6 +2024,26 @@ export default function Home() {
                         <button type="button" onClick={() => setOverheadType('percent')} className={`px-3 py-2.5 text-[10px] font-black uppercase transition-colors ${overheadType === 'percent' ? 'bg-slate-900 text-white' : 'text-stone-400 hover:text-slate-700'}`}>%</button>
                       </div>
                     </div>
+                    <details className="group mt-2">
+                      <summary className="text-[10px] font-black uppercase tracking-wider text-stone-400 cursor-pointer list-none flex items-center gap-1.5 hover:text-stone-600 [&::-webkit-details-marker]:hidden">
+                        <span className="group-open:rotate-90 transition-transform inline-block">›</span> How overhead pricing works
+                      </summary>
+                      <div className="mt-2 p-3 bg-white rounded-xl border border-stone-200 text-[10px] space-y-3">
+                        <p className="text-stone-600 leading-relaxed">
+                          Overhead covers shop costs — rent, utilities, tools, packaging, insurance, etc. — that get spread across each piece.
+                        </p>
+                        <div className="space-y-2">
+                          <p className="font-bold text-slate-700">Percent (%)</p>
+                          <p className="text-stone-600">
+                            Applied to your total job cost (Metal + Labor + Other + Stone cost). Example: 15% on $200 of costs = $30 overhead.
+                          </p>
+                          <p className="font-bold text-slate-700">Flat ($)</p>
+                          <p className="text-stone-600">
+                            A fixed amount added per piece — e.g. $5 for packaging/shipping, or a set shop fee.
+                          </p>
+                        </div>
+                      </div>
+                    </details>
                   </div>
                   <div>
                     <label className="block text-[10px] font-bold text-stone-500 uppercase mb-1">Findings / other ($)</label>
@@ -1986,7 +2092,7 @@ export default function Home() {
                         <p className="text-[10px] font-semibold text-stone-500 mt-1">Wholesale ${calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType).wholesaleA.toFixed(2)}</p>
                       </div>
                     </button>
-                    <div className="border-t border-stone-200 sm:border-t-0 sm:border-l">
+                    <div className="border-t border-stone-200 sm:border-t-0 sm:border-l min-w-0 sm:min-w-[180px]">
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); setFormulaAOpen(!formulaAOpen); }}
@@ -1997,20 +2103,20 @@ export default function Home() {
                         <span className={`text-stone-400 text-[10px] transition-transform shrink-0 ${formulaAOpen ? 'rotate-180' : ''}`}>▼</span>
                       </button>
                       {formulaAOpen && (
-                        <div className="px-4 pb-4 pt-0 sm:px-5 sm:pt-0 space-y-1.5">
+                        <div className="px-4 pb-4 pt-0 sm:px-5 sm:pt-0 space-y-1.5 overflow-x-auto">
                           <p className="text-[9px] text-stone-500 font-medium leading-tight">Base = Metal + Labor + Other + Overhead</p>
                           <p className="text-[9px] text-stone-500 font-medium leading-tight">Wholesale = Base + Stone cost</p>
                           <div className="flex items-center gap-1 flex-wrap leading-tight">
-                            <span className="text-[9px] text-stone-500 font-medium">Retail = Base ×</span>
+                            <span className="text-[9px] text-stone-500 font-medium">Retail = (Base ×</span>
                             <input
                               type="number"
                               step="0.1"
-                              className="w-10 bg-white border border-stone-200 rounded-lg text-xs font-bold py-1 px-1 text-center outline-none text-slate-900 focus:border-[#A5BEAC]"
+                              className="min-w-12 w-14 bg-white border border-stone-200 rounded-lg text-xs font-bold py-1.5 px-2 text-center outline-none text-slate-900 focus:border-[#A5BEAC]"
                               value={retailMultA}
                               onChange={(e) => setRetailMultA(Number(e.target.value))}
                               onClick={(e) => e.stopPropagation()}
                             />
-                            <span className="text-[9px] text-stone-500 font-medium">+ Stone retail</span>
+                            <span className="text-[9px] text-stone-500 font-medium">) + Stone retail</span>
                           </div>
                         </div>
                       )}
@@ -2031,7 +2137,7 @@ export default function Home() {
                         <p className="text-[10px] font-semibold text-stone-500 mt-1">Wholesale ${calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType).wholesaleB.toFixed(2)}</p>
                       </div>
                     </button>
-                    <div className="border-t border-stone-200 sm:border-t-0 sm:border-l">
+                    <div className="border-t border-stone-200 sm:border-t-0 sm:border-l min-w-0 sm:min-w-[220px]">
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); setFormulaBOpen(!formulaBOpen); }}
@@ -2042,21 +2148,21 @@ export default function Home() {
                         <span className={`text-stone-400 text-[10px] transition-transform shrink-0 ${formulaBOpen ? 'rotate-180' : ''}`}>▼</span>
                       </button>
                       {formulaBOpen && (
-                        <div className="px-4 pb-4 pt-0 sm:px-5 sm:pt-0 space-y-1.5">
+                        <div className="px-4 pb-4 pt-0 sm:px-5 sm:pt-0 space-y-1.5 overflow-x-auto">
                           <div className="flex items-center gap-1 flex-wrap leading-tight">
-                            <span className="text-[9px] text-stone-500 font-medium">Base = (Metal + Other) ×</span>
+                            <span className="text-[9px] text-stone-500 font-medium">Base = ((Metal + Other) ×</span>
                             <input
                               type="number"
                               step="0.1"
-                              className="w-10 bg-white border border-stone-200 rounded-lg text-xs font-bold py-1 px-1 text-center outline-none text-slate-900 focus:border-[#A5BEAC]"
+                              className="min-w-12 w-14 bg-white border border-stone-200 rounded-lg text-xs font-bold py-1.5 px-2 text-center outline-none text-slate-900 focus:border-[#A5BEAC]"
                               value={markupB}
                               onChange={(e) => setMarkupB(Number(e.target.value))}
                               onClick={(e) => e.stopPropagation()}
                             />
-                            <span className="text-[9px] text-stone-500 font-medium">+ Labor + Overhead</span>
+                            <span className="text-[9px] text-stone-500 font-medium">) + Labor + Overhead</span>
                           </div>
                           <p className="text-[9px] text-stone-500 font-medium leading-tight">Wholesale = Base + Stone cost</p>
-                          <p className="text-[9px] text-stone-500 font-medium leading-tight">Retail = Base × 2 + Stone retail</p>
+                          <p className="text-[9px] text-stone-500 font-medium leading-tight">Retail = (Base × 2) + Stone retail</p>
                         </div>
                       )}
                     </div>
@@ -2075,6 +2181,12 @@ export default function Home() {
                     value={itemName}
                     onChange={e => setItemName(e.target.value)}
                   />
+                  <p className="text-[9px] font-bold text-stone-400 uppercase">Tag</p>
+                  <div className="flex flex-wrap gap-2">
+                    {(['necklace', 'ring', 'bracelet', 'other'] as const).map(t => (
+                      <button key={t} type="button" onClick={() => setItemTag(t)} className={`py-1.5 px-3 rounded-xl text-[9px] font-black uppercase border transition-all ${itemTag === t ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-400 hover:border-stone-300'}`}>{t}</button>
+                    ))}
+                  </div>
                   <button onClick={addToInventory} disabled={isGuest && !token && hasTurnstile} className={`w-full py-5 rounded-[1.8rem] font-black uppercase tracking-[0.15em] text-sm transition-all ${(isGuest && !token && hasTurnstile) ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-[#A5BEAC] text-white shadow-xl hover:bg-slate-900 active:scale-[0.97]'}`}>{(isGuest && !token && hasTurnstile) ? "Verifying…" : "Save to vault"}</button>
                 </div>
                 </div>
@@ -2116,7 +2228,7 @@ export default function Home() {
                         <div className="flex justify-between items-center">
                           <h4 className="text-xs font-black uppercase text-slate-900">Filters</h4>
                           <button onClick={() => {
-                            setFilterLocation('All'); setFilterStrategy('All'); setFilterMetal('All'); setFilterStatus('Active');
+                            setFilterLocation('All'); setFilterTag('All'); setFilterStrategy('All'); setFilterMetal('All'); setFilterStatus('Active');
                             setFilterMinPrice(''); setFilterMaxPrice(''); setFilterStartDate(''); setFilterEndDate('');
                           }} className="text-[9px] font-bold text-[#A5BEAC] uppercase hover:text-slate-900">Reset</button>
                         </div>
@@ -2128,6 +2240,16 @@ export default function Home() {
                             <option>All</option>
                             {locations.map(l => <option key={l}>{l}</option>)}
                           </select>
+                        </div>
+
+                        {/* Tag */}
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-bold text-stone-400 uppercase">Tag</label>
+                          <div className="flex flex-wrap gap-2">
+                            {['All', 'necklace', 'ring', 'bracelet', 'other'].map(t => (
+                              <button key={t} onClick={() => setFilterTag(t)} className={`py-1.5 px-2 rounded-lg text-[9px] font-black uppercase border ${filterTag === t ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-400'}`}>{t}</button>
+                            ))}
+                          </div>
                         </div>
 
                         {/* Status */}
@@ -2420,7 +2542,30 @@ export default function Home() {
                               <div className="flex flex-wrap items-center gap-2 mt-2">
                                 {(isSold || isArchived) && <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-stone-200 text-stone-600 uppercase">SOLD / ARCHIVED</span>}
 
-                                {/* NEW: Location Badge & Dropdown */}
+                                {/* Tag Badge & Dropdown */}
+                                <div className="relative tag-menu-container">
+                                  <button
+                                    onClick={() => setShowTagMenuId(showTagMenuId === item.id ? null : item.id)}
+                                    className="text-[8px] font-black px-1.5 py-0.5 rounded-md border bg-amber-50 text-amber-700 border-amber-100 uppercase hover:bg-amber-100 transition-colors leading-none flex items-center h-[18px]"
+                                  >
+                                    {item.tag || 'other'}
+                                  </button>
+                                  {showTagMenuId === item.id && (
+                                    <div className="tag-menu-dropdown absolute top-full left-0 mt-1 w-28 bg-white border border-stone-200 rounded-xl shadow-lg z-[60] overflow-hidden animate-in fade-in">
+                                      {(['necklace', 'ring', 'bracelet', 'other'] as const).map(t => (
+                                        <button
+                                          key={t}
+                                          onClick={() => updateTag(item.id, t)}
+                                          className="w-full px-3 py-2 text-left text-[9px] font-bold uppercase text-slate-600 hover:bg-stone-50 border-b border-stone-50 last:border-0"
+                                        >
+                                          {t}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Location Badge & Dropdown */}
                                 <div className="relative location-menu-container">
                                   <button
                                     onClick={() => setShowLocationMenuId(showLocationMenuId === item.id ? null : item.id)}
