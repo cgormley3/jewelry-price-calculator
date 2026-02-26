@@ -9,23 +9,40 @@ export async function GET() {
   const hasSupabaseConfig = supabaseUrl && supabaseServiceKey && supabaseUrl.startsWith('http');
 
   const uniqueId = Math.random().toString(36).substring(7);
-  const CSV_URL = `https://docs.google.com/spreadsheets/d/e/2PACX-1vRCIKyw7uQpytVE7GayB_rMY8qqMwSjat28AwLj9rSSD64OrZRqDSIuIcDIdAob_BK81rrempUgTO-H/pub?gid=1610736361&single=true&output=csv&cachebuster=${uniqueId}`;
+  const defaultSheetUrl = `https://docs.google.com/spreadsheets/d/e/2PACX-1vRCIKyw7uQpytVE7GayB_rMY8qqMwSjat28AwLj9rSSD64OrZRqDSIuIcDIdAob_BK81rrempUgTO-H/pub?gid=1610736361&single=true&output=csv`;
+  const envSheetUrl = process.env.GOOGLE_SHEETS_CSV_URL?.trim() || '';
+  const csvUrls = [
+    ...(envSheetUrl ? [envSheetUrl + (envSheetUrl.includes('?') ? '&' : '?') + `cachebuster=${uniqueId}`] : []),
+    defaultSheetUrl + `&cachebuster=${uniqueId}`
+  ].filter(Boolean);
+  if (csvUrls.length === 0) csvUrls.push(defaultSheetUrl + `&cachebuster=${uniqueId}`);
+
+  const fetchOptions = {
+    method: 'GET' as const,
+    headers: { 'Cache-Control': 'no-cache', 'User-Agent': 'Mozilla/5.0 (compatible; JewelryPriceCalc/1.0)' },
+    cache: 'no-store' as RequestCache
+  };
+
+  let text = '';
+  let lastError = '';
+
+  for (const CSV_URL of csvUrls) {
+    try {
+      const res = await fetch(CSV_URL, fetchOptions);
+      if (res.ok) {
+        text = await res.text();
+        break;
+      }
+      lastError = `Failed to fetch: ${res.status} ${res.statusText}`;
+    } catch (e: any) {
+      lastError = e?.message || 'Fetch failed';
+    }
+  }
 
   try {
-    const res = await fetch(CSV_URL, { 
-      method: 'GET',
-      headers: { 
-        'Cache-Control': 'no-cache',
-        'User-Agent': 'Mozilla/5.0 (compatible; JewelryPriceCalc/1.0)'
-      },
-      cache: 'no-store'
-    });
-
-    if (!res.ok) {
-      throw new Error(`Failed to fetch prices: ${res.status} ${res.statusText}`);
+    if (!text) {
+      throw new Error(lastError || 'No CSV data received');
     }
-
-    let text = await res.text();
     text = text.replace(/^\uFEFF/, ''); // Strip UTF-8 BOM if present
     console.log("RAW CSV TEXT FROM GOOGLE:", text.substring(0, 500)); // Log first 500 chars for debugging
 
@@ -156,6 +173,15 @@ export async function GET() {
         console.warn("Supabase fallback failed:", fbErr.message);
       }
     }
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    // Return 200 with zeros so frontend can fall back to sessionStorage instead of throwing
+    return NextResponse.json({
+      success: true,
+      gold: 0,
+      silver: 0,
+      platinum: 0,
+      palladium: 0,
+      updated_at: new Date().toISOString(),
+      _error: true
+    }, { status: 200 });
   }
 }

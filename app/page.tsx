@@ -211,7 +211,7 @@ export default function Home() {
         sessionStorage.setItem('vault_prices_time', now.toString());
         setPricesLoaded(true);
       } else {
-        console.warn('No price data received from API');
+        console.warn('No price data received from API' + (priceData._error ? ' (server error)' : ''));
         tryUseCacheOnlyWhenEmpty();
       }
     } catch (e) {
