@@ -12,7 +12,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { accessToken } = await request.json();
+    const body = await request.json();
+    const { accessToken, userId } = body;
     if (!accessToken) {
       return NextResponse.json({ error: 'Missing access token' }, { status: 400 });
     }
@@ -20,14 +21,18 @@ export async function POST(request: Request) {
     const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey);
     const { data: { user }, error: userError } = await supabaseAuth.auth.getUser(accessToken);
     if (userError || !user?.id) {
-      return NextResponse.json({ error: 'Invalid or expired session' }, { status: 401 });
+      return NextResponse.json({ error: userError?.message || 'Invalid or expired session' }, { status: 401 });
+    }
+    const resolvedUserId = user.id;
+    if (userId && userId !== resolvedUserId) {
+      return NextResponse.json({ error: 'Session mismatch' }, { status: 403 });
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const { data, error } = await supabase
       .from('inventory')
       .select('*')
-      .eq('user_id', user.id)
+      .eq('user_id', resolvedUserId)
       .order('created_at', { ascending: false });
 
     if (error) {

@@ -120,6 +120,7 @@ export default function Home() {
   // Image Upload & Crop State
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [savingToVault, setSavingToVault] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const [cropImage, setCropImage] = useState<string | null>(null);
   const [cropItemId, setCropItemId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
@@ -376,33 +377,45 @@ export default function Home() {
       }
     } catch (_) { /* ignore */ }
 
+    let subscription: { unsubscribe: () => void } | null = null;
     async function initSession() {
       try {
-        // Run auth and price fetch in parallel (prices don't depend on auth)
-        const authPromise = hasValidSupabaseCredentials ? (async () => {
-          try {
-            let { data: { session } } = await supabase.auth.getSession();
-            if (!session) {
-              await new Promise(r => setTimeout(r, 300));
-              ({ data: { session } } = await supabase.auth.getSession());
+        let authReadyResolve: (session: any) => void;
+        const authReady = new Promise<any>(r => { authReadyResolve = r; });
+
+        if (hasValidSupabaseCredentials) {
+          let firstEvent = true;
+          const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange((event, session) => {
+            if (firstEvent) {
+              firstEvent = false;
+              authReadyResolve(session);
             }
-            if (!session) {
+            setUser(session?.user ?? null);
+            if (session) fetchInventory();
+            if (event === "PASSWORD_RECOVERY") setShowResetModal(true);
+          });
+          subscription = authSub;
+          const initialSession = await Promise.race([
+            authReady,
+            new Promise<any>(r => setTimeout(() => r(null), 2000))
+          ]);
+          if (!initialSession) {
+            try {
               const { data } = await supabase.auth.signInAnonymously();
               setUser(data.user);
-            } else {
-              setUser(session.user);
-            }
-          } catch (error: any) {
-            console.warn('Supabase auth error:', error);
-            if (error?.message?.includes('Cannot reach') || error?.message?.includes('timed out') || error?.message === 'Failed to fetch') {
-              setNotification({ title: 'Connection Issue', message: 'Unable to reach the vault service. The calculator works offline—try again when you\'re back online.', type: 'info' });
+              await fetchInventory();
+            } catch (error: any) {
+              console.warn('Supabase auth error:', error);
+              if (error?.message?.includes('Cannot reach') || error?.message?.includes('timed out') || error?.message === 'Failed to fetch') {
+                setNotification({ title: 'Connection Issue', message: 'Unable to reach the vault service. The calculator works offline—try again when you\'re back online.', type: 'info' });
+              }
             }
           }
-        })() : Promise.resolve();
-        if (!hasValidSupabaseCredentials) console.log('Skipping Supabase auth - credentials not configured');
+        } else {
+          console.log('Skipping Supabase auth - credentials not configured');
+        }
 
-        await Promise.all([authPromise, fetchPrices()]);
-        await fetchInventory();
+        await fetchPrices();
       } catch (e) {
         console.warn('initSession error:', e);
       } finally {
@@ -425,25 +438,6 @@ export default function Home() {
 
     window.addEventListener('visibilitychange', handleWakeUp);
     window.addEventListener('focus', handleWakeUp);
-
-    // Only set up auth state listener if Supabase is configured
-    let subscription: { unsubscribe: () => void } | null = null;
-    if (hasValidSupabaseCredentials) {
-      try {
-        const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-          try {
-            setUser(session?.user ?? null);
-            if (session) await fetchInventory();
-            if (event === "PASSWORD_RECOVERY") setShowResetModal(true);
-          } catch (e) {
-            console.warn('Auth state change handler error:', e);
-          }
-        });
-        subscription = authSubscription;
-      } catch (error) {
-        console.warn('Supabase auth state change error:', error);
-      }
-    }
 
     return () => {
       mounted = false;
@@ -484,7 +478,7 @@ export default function Home() {
       const res = await fetch('/api/fetch-inventory', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accessToken }),
+        body: JSON.stringify({ accessToken, userId: session.user.id }),
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
@@ -1917,7 +1911,24 @@ export default function Home() {
               {(!user || user.is_anonymous) ? (
                 <button onClick={() => { setShowAuth(!showAuth); setShowPassword(false); }} className="text-[10px] font-black uppercase bg-slate-900 text-white px-8 py-3 rounded-xl hover:bg-[#A5BEAC] transition shadow-sm">Login / Sign Up</button>
               ) : (
-                <button onClick={async () => { await supabase.auth.signOut(); window.location.reload(); }} className="text-[10px] font-black uppercase bg-stone-100 text-slate-900 px-8 py-3 rounded-xl hover:bg-stone-200 transition">Logout</button>
+                <button
+                  type="button"
+                  disabled={loggingOut}
+                  onClick={async () => {
+                    if (loggingOut) return;
+                    setLoggingOut(true);
+                    try {
+                      await Promise.race([
+                        supabase.auth.signOut(),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
+                      ]);
+                    } catch (_) { /* ignore - we still reload */ }
+                    window.location.reload();
+                  }}
+                  className={`text-[10px] font-black uppercase px-8 py-3 rounded-xl transition ${loggingOut ? 'bg-stone-200 text-stone-400 cursor-wait' : 'bg-stone-100 text-slate-900 hover:bg-stone-200'}`}
+                >
+                  {loggingOut ? 'Logging out…' : 'Logout'}
+                </button>
               )}
               {showAuth && (
                 <div className="absolute right-0 mt-12 w-full md:w-80 bg-white p-6 rounded-3xl border-2 border-[#A5BEAC] shadow-2xl z-[100] animate-in fade-in slide-in-from-top-2 mx-auto auth-menu-container">
@@ -2527,28 +2538,8 @@ export default function Home() {
               {loading ? (
                 <div className="p-20 text-center text-stone-400 font-bold uppercase text-xs tracking-widest animate-pulse">Opening Vault...</div>
               ) : inventory.length === 0 && hasValidSupabaseCredentials ? (
-                <div className="p-12 text-center space-y-4">
+                <div className="p-12 text-center">
                   <p className="text-stone-500 font-bold uppercase text-xs tracking-wider">No items yet</p>
-                  <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                    <button onClick={() => { setLoading(true); fetchInventory(); }} className="py-3 px-6 bg-[#A5BEAC] text-white rounded-xl font-black text-[10px] uppercase hover:bg-slate-900 transition">Reload Vault</button>
-                    <button onClick={async () => {
-                      try {
-                        const res = await fetch('/api/db-health');
-                        const h = await res.json();
-                        let msg = '';
-                        if (!h.configured) msg = 'Supabase URL and anon key not set in .env.local';
-                        else if (!h.urlValid) msg = 'Supabase URL invalid';
-                        else if (!h.serviceKeyPresent) msg = 'SUPABASE_SERVICE_ROLE_KEY missing (needed for prices)';
-                        else if (h.inventoryTableTest === 'fail') msg = 'inventory table missing or inaccessible. Run migrations in Supabase SQL Editor.';
-                        else if (h.connectionTest === 'fail') msg = h.error || 'Cannot reach Supabase';
-                        else if (h.inventoryTableTest === 'ok') msg = 'Database OK. Vault may be empty or RLS blocking access. Check Supabase RLS policies for inventory table.';
-                        else msg = JSON.stringify(h, null, 2);
-                        setNotification({ title: 'Database Check', message: msg, type: 'info' });
-                      } catch (e: any) {
-                        setNotification({ title: 'Check Failed', message: e?.message || 'Could not reach health API', type: 'error' });
-                      }
-                    }} className="py-3 px-6 bg-stone-200 text-stone-700 rounded-xl font-black text-[10px] uppercase hover:bg-stone-300 transition">Check connection</button>
-                  </div>
                 </div>
               ) : (
                 filteredInventory.map(item => {
