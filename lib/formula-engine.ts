@@ -111,7 +111,7 @@ export function formulaToReadableString(node: FormulaNode | null | undefined): s
   }
 }
 
-/** Preset: Strategy A formulas (Base = Metal + Labor + Other + Overhead) */
+/** Preset: Formula A (Base = Metal + Labor + Other + Overhead) */
 export const PRESET_A = {
   base: {
     type: 'op' as const,
@@ -148,7 +148,7 @@ export const PRESET_A = {
   } as FormulaNode,
 };
 
-/** Preset: Strategy B formulas */
+/** Preset: Formula B */
 export const PRESET_B = {
   base: {
     type: 'op' as const,

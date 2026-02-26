@@ -104,7 +104,7 @@ export default function Home() {
   const [activeCalculatorTab, setActiveCalculatorTab] = useState<'metal' | 'stones' | 'labor'>('metal');
   // Cost breakdown section: collapsible, default collapsed
   const [costBreakdownOpen, setCostBreakdownOpen] = useState(false);
-  // Formula dropdowns in retail strategy cards: closed by default
+  // Formula dropdowns in retail formula cards: closed by default
   const [formulaAOpen, setFormulaAOpen] = useState(false);
   const [formulaBOpen, setFormulaBOpen] = useState(false);
   const [customStrategyExpanded, setCustomStrategyExpanded] = useState(false);
@@ -348,7 +348,7 @@ export default function Home() {
     const metalCost = rawMaterialCost;
     const totalMaterials = rawMaterialCost + other + totalStoneCost;
 
-    // --- STRATEGY A (STANDARD MULTIPLIER) ---
+    // --- FORMULA A (STANDARD MULTIPLIER) ---
     // Base Cost: Metal + Labor + Other + Overhead (Stones excluded from base)
     const baseCostA = metalCost + labor + other + overhead;
     // Retail Price: (Base Cost × Retail Multiplier) + (Stones × Stone Markup)
@@ -356,7 +356,7 @@ export default function Home() {
     // Displayed Wholesale: Base Cost + Stone Cost
     const wholesaleA = baseCostA + totalStoneCost;
 
-    // --- STRATEGY B (MATERIALS MARKUP) ---
+    // --- FORMULA B (MATERIALS MARKUP) ---
     // Base Cost: ((Metal + Other) × Markup B) + Labor + Overhead
     const baseCostB = ((metalCost + other) * (customMarkup ?? markupB)) + labor + overhead;
     // Retail Price: (Base Cost × 2) + (Stones × Stone Markup)
@@ -367,7 +367,7 @@ export default function Home() {
     return { wholesaleA, retailA, wholesaleB, retailB, totalMaterials, labor, metalCost, stones: totalStoneCost, stoneRetail: totalStoneRetail, overhead, other };
   }, [prices, retailMultA, markupB]);
 
-  // Compute wholesale/retail for current strategy (including custom)
+  // Compute wholesale/retail for current formula (including custom)
   const getStrategyPrices = useCallback((breakdown: { wholesaleA: number; retailA: number; wholesaleB: number; retailB: number; metalCost: number; labor: number; other: number; stones: number; stoneRetail: number; overhead: number }) => {
     if (strategy === 'A') return { wholesale: breakdown.wholesaleA, retail: breakdown.retailA };
     if (strategy === 'B') return { wholesale: breakdown.wholesaleB, retail: breakdown.retailB };
@@ -1052,8 +1052,9 @@ export default function Home() {
           recalcParams
         );
 
-        const newWholesale = recalcItem.strategy === 'A' ? calc.wholesaleA : calc.wholesaleB;
-        const newRetail = recalcItem.strategy === 'A' ? calc.retailA : calc.retailB;
+        const itemPrices = getItemPrices(recalcItem, calc);
+        const newWholesale = itemPrices.wholesale;
+        const newRetail = itemPrices.retail;
 
         const updatedMetals = recalcItem.metals.map((m: any) => {
           const type = m.type.toLowerCase();
@@ -1299,7 +1300,7 @@ export default function Home() {
       ? filteredInventory.filter(i => selectedItems.has(i.id))
       : filteredInventory;
 
-    const headers = ["Item Name", "Status", "Tag", "Location", "Live Retail", "Live Wholesale", "Saved Retail", "Saved Wholesale", "Labor Hours", "Labor Cost", "Materials Cost", "Other Costs", "Stone Retail", "Stone Cost", "Stone Markup", "Overhead Cost", "Overhead Type", "Notes", "Date Created", "Strategy", "Metals", "Image URL"];
+    const headers = ["Item Name", "Status", "Tag", "Location", "Live Retail", "Live Wholesale", "Saved Retail", "Saved Wholesale", "Labor Hours", "Labor Cost", "Materials Cost", "Other Costs", "Stone Retail", "Stone Cost", "Stone Markup", "Overhead Cost", "Overhead Type", "Notes", "Date Created", "Formula", "Metals", "Image URL"];
     const rows = targetItems.map(item => {
       // FIX: Force overhead_type to 'flat' for live calc
       // FIX: Pass labor cost
@@ -1801,6 +1802,21 @@ export default function Home() {
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-6">
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Manual Price Edit</h3>
+            {/* Rounding options */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[9px] font-bold text-stone-400 uppercase">Round display to</span>
+              {(['none', 1, 5, 10, 25] as const).map(opt => (
+                <button key={opt} type="button" onClick={() => {
+                  setPriceRoundingWithPersist(opt);
+                  const r = (n: number) => opt === 'none' || n === 0 ? n : Math.round(n / opt) * opt;
+                  setManualRetail(r(Number(editingItem.retail)).toFixed(2));
+                  setManualWholesale(r(Number(editingItem.wholesale)).toFixed(2));
+                }}
+                  className={`py-1.5 px-2.5 rounded-lg text-[9px] font-black uppercase border transition-all ${priceRounding === opt ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-stone-50 border-stone-200 text-stone-500'}`}>
+                  {opt === 'none' ? 'None' : `$${opt}`}
+                </button>
+              ))}
+            </div>
             <div className="space-y-4">
               <div><label className="text-[10px] font-black uppercase text-stone-400 mb-1 block">New Retail Price ($)</label>
                 <input type="number" className="w-full p-4 bg-stone-50 border rounded-2xl outline-none focus:border-[#A5BEAC] font-bold" value={manualRetail} onChange={(e) => setManualRetail(e.target.value)} /></div>
@@ -1818,7 +1834,7 @@ export default function Home() {
       {/* RECALCULATE MODAL (Individual) */}
       {recalcItem && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-5 max-h-[90vh] overflow-y-auto custom-scrollbar">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-5 max-h-[95vh] overflow-y-auto custom-scrollbar">
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Scenario Calculator</h3>
             <p className="text-[10px] text-stone-400 font-bold uppercase">Temporarily recalculate logic with custom inputs</p>
 
@@ -1848,6 +1864,17 @@ export default function Home() {
               </div>
             </div>
 
+            {/* Rounding options */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[9px] font-bold text-stone-400 uppercase">Round to</span>
+              {(['none', 1, 5, 10, 25] as const).map(opt => (
+                <button key={opt} type="button" onClick={() => setPriceRoundingWithPersist(opt)}
+                  className={`py-1.5 px-2.5 rounded-lg text-[9px] font-black uppercase border transition-all ${priceRounding === opt ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-stone-50 border-stone-200 text-stone-500'}`}>
+                  {opt === 'none' ? 'None' : `$${opt}`}
+                </button>
+              ))}
+            </div>
+
             {/* LIVE CALCULATION DISPLAY */}
             <div className="p-4 bg-slate-900 rounded-2xl text-white space-y-2">
               {(() => {
@@ -1873,10 +1900,12 @@ export default function Home() {
 
                 const itemPrices = getItemPrices(recalcItem, calc);
                 const liveRetail = itemPrices.retail;
+                const liveWholesale = itemPrices.wholesale;
 
                 return (
                   <>
                     <div className="flex justify-between items-center"><span className="text-[10px] font-bold text-stone-400 uppercase">Recalculated Retail</span><span className="text-xl font-black">${roundForDisplay(liveRetail).toFixed(2)}</span></div>
+                    <div className="flex justify-between items-center"><span className="text-[10px] font-bold text-stone-400 uppercase">Recalculated Wholesale</span><span className="text-lg font-black">${roundForDisplay(liveWholesale).toFixed(2)}</span></div>
                     <div className="flex justify-between items-center"><span className="text-[10px] font-bold text-stone-400 uppercase">Material Cost</span><span className="text-sm font-bold text-stone-300">${calc.totalMaterials.toFixed(2)}</span></div>
 
                     <div className="pl-2 space-y-1 my-1 border-l-2 border-stone-600">
@@ -1929,9 +1958,20 @@ export default function Home() {
       {/* NEW: GLOBAL RECALCULATE MODAL */}
       {showGlobalRecalc && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-5 max-h-[90vh] overflow-y-auto custom-scrollbar">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-5 max-h-[95vh] overflow-y-auto custom-scrollbar">
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Global Recalculate</h3>
             <p className="text-[10px] text-stone-400 font-bold uppercase">Recalculate ENTIRE inventory with new inputs</p>
+
+            {/* Rounding options */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[9px] font-bold text-stone-400 uppercase">Round prices to</span>
+              {(['none', 1, 5, 10, 25] as const).map(opt => (
+                <button key={opt} type="button" onClick={() => setPriceRoundingWithPersist(opt)}
+                  className={`py-1.5 px-2.5 rounded-lg text-[9px] font-black uppercase border transition-all ${priceRounding === opt ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-stone-50 border-stone-200 text-stone-500'}`}>
+                  {opt === 'none' ? 'None' : `$${opt}`}
+                </button>
+              ))}
+            </div>
 
             <div className="space-y-4 bg-stone-50 p-4 rounded-2xl border border-stone-100">
               <div><label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Gold Spot Price ($/oz)</label>
@@ -2141,9 +2181,9 @@ export default function Home() {
           ))}
         </div>
 
-        {/* 3-Tab Navigation - visible on all breakpoints */}
+        {/* Tab Navigation - same width as panels below */}
         <div className="w-full px-2 mt-0 mb-4">
-          <div className="flex bg-white rounded-2xl border border-[#A5BEAC] shadow-sm overflow-hidden p-1 max-w-2xl mx-auto">
+          <div className="flex bg-white rounded-2xl border border-[#A5BEAC] shadow-sm overflow-hidden p-1 w-full max-w-7xl mx-auto">
             <button
               onClick={() => setActiveTab('calculator')}
               className={`flex-1 py-3 text-xs font-black uppercase tracking-tighter transition-all rounded-xl ${activeTab === 'calculator' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400'}`}
@@ -2172,7 +2212,7 @@ export default function Home() {
         </div>
 
         {/* Single full-width panel per tab - one visible at a time */}
-        <div className="w-full max-w-7xl mx-auto max-h-[calc(100vh-7rem)] overflow-hidden flex flex-col">
+        <div className="w-full max-w-7xl mx-auto max-h-[calc(100vh-5rem)] overflow-hidden flex flex-col">
           {/* CALCULATOR PANEL */}
           <div className={`flex flex-col flex-1 min-h-0 ${activeTab !== 'calculator' ? 'hidden' : ''}`}>
             <div className="bg-white p-8 rounded-[2rem] shadow-xl border-2 border-[#A5BEAC] space-y-4 lg:space-y-4 overflow-y-auto lg:overflow-hidden lg:h-full lg:min-h-0 lg:flex lg:flex-col custom-scrollbar">
@@ -2180,8 +2220,8 @@ export default function Home() {
 
               {/* Desktop: side-by-side layout with independent scrolling per column */}
               <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_1fr] lg:gap-10 xl:gap-12 lg:min-h-0 lg:flex-1 lg:overflow-hidden">
-              {/* LEFT: Components - metal, stones, labor */}
-              <div className="space-y-4 lg:p-5 lg:pr-6 lg:rounded-2xl lg:bg-stone-50/50 lg:border lg:border-stone-100 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:custom-scrollbar">
+              {/* LEFT: Components - metal, stones, labor (overscroll-behavior not contained so scroll chains to page at boundaries) */}
+              <div className="space-y-4 lg:p-5 lg:pr-6 lg:rounded-2xl lg:bg-stone-50/50 lg:border lg:border-stone-100 lg:min-h-0 lg:overflow-y-auto lg:custom-scrollbar">
               <p className="text-[10px] font-black uppercase tracking-widest text-[#A5BEAC] lg:mb-1 hidden lg:block">Components</p>
               {/* Calculator section tabs: one visible at a time */}
               <div className="space-y-2">
@@ -2376,8 +2416,8 @@ export default function Home() {
               )}
 
               </div>
-              {/* RIGHT: Prices - cost breakdown, strategy cards, save */}
-              <div className="mt-6 lg:mt-0 flex flex-col gap-5 min-h-0 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:custom-scrollbar lg:p-6 lg:rounded-2xl lg:bg-white lg:border-2 lg:border-[#A5BEAC]/20 lg:shadow-sm">
+              {/* RIGHT: Prices - cost breakdown, formula cards, save */}
+              <div className="mt-6 lg:mt-0 flex flex-col gap-5 min-h-0 lg:min-h-0 lg:overflow-y-auto lg:custom-scrollbar lg:p-6 lg:rounded-2xl lg:bg-white lg:border-2 lg:border-[#A5BEAC]/20 lg:shadow-sm">
                 <p className="text-[10px] font-black uppercase tracking-widest text-[#A5BEAC] hidden lg:block">Your price</p>
                 <div className="w-full space-y-2">
                   <button
@@ -2427,7 +2467,7 @@ export default function Home() {
                       className="w-full flex flex-col sm:flex-row sm:items-stretch sm:gap-4 p-5 text-left"
                     >
                       <div className="flex-1 min-w-0">
-                        <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter mb-1">Strategy A</p>
+                        <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter mb-1">Formula A</p>
                         <p className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums">${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType).retailA).toFixed(2)}</p>
                         <p className="text-[10px] font-semibold text-stone-500 mt-1">Wholesale ${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType).wholesaleA).toFixed(2)}</p>
                       </div>
@@ -2472,7 +2512,7 @@ export default function Home() {
                       className="w-full flex flex-col sm:flex-row sm:items-stretch sm:gap-4 p-5 text-left"
                     >
                       <div className="flex-1 min-w-0">
-                        <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter mb-1">Strategy B</p>
+                        <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter mb-1">Formula B</p>
                         <p className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums">${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType).retailB).toFixed(2)}</p>
                         <p className="text-[10px] font-semibold text-stone-500 mt-1">Wholesale ${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType).wholesaleB).toFixed(2)}</p>
                       </div>
@@ -2623,7 +2663,7 @@ export default function Home() {
           </div>
 
           {/* VAULT PANEL */}
-          <div className={`bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm flex flex-col flex-1 min-h-0 h-[85vh] lg:max-h-[calc(100vh-7rem)] overflow-hidden ${activeTab !== 'vault' ? 'hidden' : ''}`}>
+          <div className={`bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm flex flex-col flex-1 min-h-0 h-[90vh] lg:max-h-[calc(100vh-5rem)] overflow-hidden ${activeTab !== 'vault' ? 'hidden' : ''}`}>
             <div className="p-6 border-b border-stone-100 bg-white space-y-4 rounded-t-[2.5rem] shrink-0">
               <div className="flex justify-between items-center text-left">
                 <div>
@@ -2688,9 +2728,9 @@ export default function Home() {
                           </div>
                         </div>
 
-                        {/* Strategy */}
+                        {/* Formula */}
                         <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-stone-400 uppercase">Strategy</label>
+                          <label className="text-[9px] font-bold text-stone-400 uppercase">Formula</label>
                           <div className="flex gap-2">
                             {['All', 'A', 'B', 'custom'].map(s => (
                               <button key={s} onClick={() => setFilterStrategy(s)} className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase border ${filterStrategy === s ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-400'}`}>{s === 'custom' ? 'Custom' : s}</button>
@@ -3115,11 +3155,11 @@ export default function Home() {
                         <summary className="list-none cursor-pointer py-2 text-center text-[8px] font-black uppercase tracking-[0.3em] text-stone-300 hover:text-[#A5BEAC] transition-colors">View Breakdown & Notes</summary>
                         <div className="p-5 md:p-6 bg-stone-50/50 space-y-6">
 
-                          {/* Compact Strategy, Materials, and Labor Boxes */}
+                          {/* Compact Formula, Materials, and Labor Boxes */}
                           <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5 md:gap-3">
-                            {/* Strategy Box */}
+                            {/* Formula Box */}
                             <div className="bg-white p-3.5 md:p-3 rounded-xl border border-stone-100 shadow-sm flex flex-col justify-center items-center text-center min-h-[70px] md:min-h-0">
-                              <p className="text-[9px] md:text-[8px] font-black text-stone-400 uppercase mb-1.5 md:mb-1">Strategy</p>
+                              <p className="text-[9px] md:text-[8px] font-black text-stone-400 uppercase mb-1.5 md:mb-1">Formula</p>
                               <p className="text-sm md:text-xs font-black text-slate-700 uppercase">{item.strategy === 'custom' ? (item.custom_formula?.formula_name || 'Custom') : item.strategy}</p>
                             </div>
                             {/* Materials Box */}
@@ -3230,7 +3270,7 @@ export default function Home() {
           </div>
 
           {/* FORMULAS PANEL */}
-          <div className={`bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm flex flex-col flex-1 min-h-0 h-[85vh] lg:max-h-[calc(100vh-7rem)] overflow-hidden ${activeTab !== 'formulas' ? 'hidden' : ''}`}>
+          <div className={`bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm flex flex-col flex-1 min-h-0 h-[90vh] lg:max-h-[calc(100vh-5rem)] overflow-hidden ${activeTab !== 'formulas' ? 'hidden' : ''}`}>
             <div className="p-6 border-b border-stone-100 bg-white space-y-4 rounded-t-[2.5rem] shrink-0">
               <div className="flex justify-between items-center">
                 <h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Saved Formulas</h2>
@@ -3272,6 +3312,15 @@ export default function Home() {
                 </div>
               ) : formulaEditorOpen ? (
                 <div className="bg-stone-50 rounded-2xl border border-stone-200 p-6 space-y-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[9px] font-bold text-stone-400 uppercase">Round preview to</span>
+                    {(['none', 1, 5, 10, 25] as const).map(opt => (
+                      <button key={opt} type="button" onClick={() => setPriceRoundingWithPersist(opt)}
+                        className={`py-1.5 px-2.5 rounded-lg text-[9px] font-black uppercase border transition-all ${priceRounding === opt ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-500'}`}>
+                        {opt === 'none' ? 'None' : `$${opt}`}
+                      </button>
+                    ))}
+                  </div>
                   <div>
                     <label className="block text-[10px] font-black uppercase text-stone-500 mb-1">Formula name</label>
                     <input
@@ -3285,6 +3334,7 @@ export default function Home() {
                   <FormulaBuilder
                     model={formulaDraft}
                     onChange={setFormulaDraft}
+                    roundForDisplay={roundForDisplay}
                     previewContext={(() => {
                       const a = calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType);
                       return {
@@ -3412,8 +3462,8 @@ export default function Home() {
           </div>
 
           {/* LOGIC PANEL */}
-          <div className={`flex flex-col flex-1 min-h-0 overflow-y-auto ${activeTab !== 'logic' ? 'hidden' : ''}`}>
-            <div className="grid grid-cols-1 gap-8 pt-0 mt-[-1rem] md:mt-0 md:pt-10 lg:max-h-[calc(100vh-7rem)]">
+          <div className={`flex flex-col flex-1 min-h-0 h-[90vh] lg:max-h-[calc(100vh-5rem)] overflow-y-auto ${activeTab !== 'logic' ? 'hidden' : ''}`}>
+            <div className="grid grid-cols-1 gap-8 pt-0 mt-[-1rem] md:mt-0 md:pt-4 lg:max-h-[calc(100vh-5rem)]">
           <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC] min-h-[400px] md:min-h-0">
             <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">1. MATERIAL CALCULATION DETAIL</h2>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 text-left">
@@ -3479,11 +3529,11 @@ export default function Home() {
           </div>
 
           <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC] min-h-[400px] md:min-h-0">
-            <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">3. PRICE STRATEGY DETAIL</h2>
+            <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">3. PRICE FORMULA DETAIL</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 text-left">
               <div className="p-6 md:p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all flex flex-col justify-between">
                 <div>
-                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-2">STRATEGY A (STANDARD MULTIPLIER)</h3>
+                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-2">FORMULA A (STANDARD MULTIPLIER)</h3>
                   <p className="text-[10px] text-stone-500 leading-relaxed mb-4">Uses a basic markup of 2–3× on your total cost (metal, labor, overhead). Industry standard for straightforward pricing.</p>
                   <div className="space-y-4 mb-8">
                     <div className="flex items-start gap-3">
@@ -3514,7 +3564,7 @@ export default function Home() {
 
               <div className="p-6 md:p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all flex flex-col justify-between">
                 <div>
-                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-2">STRATEGY B (MATERIALS MARKUP)</h3>
+                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-2">FORMULA B (MATERIALS MARKUP)</h3>
                   <p className="text-[10px] text-stone-500 leading-relaxed mb-4">Prioritizes materials: metal + other costs get a markup (typically 1.5–2×), then labor and overhead are added. Industry standard for material-focused pieces.</p>
                   <div className="space-y-4 mb-8">
                     <div className="flex items-start gap-3">

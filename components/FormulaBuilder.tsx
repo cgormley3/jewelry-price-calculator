@@ -37,6 +37,8 @@ interface FormulaBuilderProps {
     formula_retail: FormulaNode;
   };
   onChange: (model: { formula_base: FormulaNode; formula_wholesale: FormulaNode; formula_retail: FormulaNode }) => void;
+  /** Optional: round prices for preview display (e.g. to nearest $1, $5) */
+  roundForDisplay?: (num: number) => number;
   /** Optional: computed context for live preview */
   previewContext?: {
     metalCost: number;
@@ -169,6 +171,7 @@ function TokenChip({
 export default function FormulaBuilder({
   model,
   onChange,
+  roundForDisplay,
   previewContext,
 }: FormulaBuilderProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -306,9 +309,9 @@ export default function FormulaBuilder({
           {preview && (
             <div className="p-3 rounded-xl bg-white border border-stone-200 text-[10px] space-y-1">
               <p className="font-black text-stone-500 uppercase">Preview</p>
-              <p>Base: ${preview.base.toFixed(2)}</p>
-              <p>Wholesale: ${preview.wholesale.toFixed(2)}</p>
-              <p>Retail: ${preview.retail.toFixed(2)}</p>
+              <p>Base: ${(roundForDisplay ? roundForDisplay(preview.base) : preview.base).toFixed(2)}</p>
+              <p>Wholesale: ${(roundForDisplay ? roundForDisplay(preview.wholesale) : preview.wholesale).toFixed(2)}</p>
+              <p>Retail: ${(roundForDisplay ? roundForDisplay(preview.retail) : preview.retail).toFixed(2)}</p>
             </div>
           )}
         </div>
