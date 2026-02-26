@@ -85,7 +85,7 @@ export default function Home() {
   const [otherCosts, setOtherCosts] = useState<number | ''>('');
 
   const [strategy, setStrategy] = useState<'A' | 'B' | 'custom'>('A');
-  const [retailMultA, setRetailMultA] = useState(3);
+  const [retailMultA, setRetailMultA] = useState(2.5);
   const [markupB, setMarkupB] = useState(1.8);
   const [customFormulaModel, setCustomFormulaModel] = useState<{
     formula_base: FormulaNode;
@@ -107,7 +107,6 @@ export default function Home() {
   // Formula dropdowns in retail strategy cards: closed by default
   const [formulaAOpen, setFormulaAOpen] = useState(false);
   const [formulaBOpen, setFormulaBOpen] = useState(false);
-  const [customFormulaOpen, setCustomFormulaOpen] = useState(false);
   const [customStrategyExpanded, setCustomStrategyExpanded] = useState(false);
 
   // When Labor section is off, use 0 for labor/overhead/other in display (save still uses real values)
@@ -128,7 +127,18 @@ export default function Home() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [activeTab, setActiveTab] = useState<'calculator' | 'vault' | 'logic'>('calculator');
+  const [activeTab, setActiveTab] = useState<'calculator' | 'vault' | 'logic' | 'formulas'>('calculator');
+
+  // Saved formulas (fetched when logged in)
+  const [formulas, setFormulas] = useState<any[]>([]);
+  const [formulasLoading, setFormulasLoading] = useState(false);
+  const [formulaEditorOpen, setFormulaEditorOpen] = useState(false);
+  const [editingFormulaId, setEditingFormulaId] = useState<string | null>(null);
+  const [formulaDraft, setFormulaDraft] = useState<{ formula_base: FormulaNode; formula_wholesale: FormulaNode; formula_retail: FormulaNode }>({ formula_base: PRESET_A.base, formula_wholesale: PRESET_A.wholesale, formula_retail: PRESET_A.retail });
+  const [formulaDraftName, setFormulaDraftName] = useState('');
+  const [savingFormula, setSavingFormula] = useState(false);
+  const [selectedFormulaId, setSelectedFormulaId] = useState<string | null>(null);
+  const [savedUserTags, setSavedUserTags] = useState<string[]>([]);
 
   // Image Upload & Crop State
   const [uploadingId, setUploadingId] = useState<string | null>(null);
@@ -151,7 +161,7 @@ export default function Home() {
   const [showLocationMenuId, setShowLocationMenuId] = useState<string | null>(null);
   const [showTagMenuId, setShowTagMenuId] = useState<string | null>(null);
   const [newLocationInput, setNewLocationInput] = useState('');
-  const [itemTag, setItemTag] = useState<'necklace' | 'ring' | 'bracelet' | 'other'>('other');
+  const [newTagInput, setNewTagInput] = useState('');
 
   type PriceRoundingOption = 'none' | 1 | 5 | 10 | 25;
   const [priceRounding, setPriceRounding] = useState<PriceRoundingOption>(1);
@@ -193,7 +203,7 @@ export default function Home() {
       if (showVaultMenu && !target.closest('.vault-menu-container')) setShowVaultMenu(false);
       if (openMenuId && !target.closest('.item-menu-container')) setOpenMenuId(null);
       if (showLocationMenuId && !target.closest('.location-menu-container')) setShowLocationMenuId(null);
-      if (showTagMenuId && !target.closest('.tag-menu-container')) setShowTagMenuId(null);
+      if (showTagMenuId && !target.closest('.tag-menu-container')) { setShowTagMenuId(null); setNewTagInput(''); }
       if (showAuth && !target.closest('.auth-menu-container')) setShowAuth(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -361,18 +371,22 @@ export default function Home() {
   const getStrategyPrices = useCallback((breakdown: { wholesaleA: number; retailA: number; wholesaleB: number; retailB: number; metalCost: number; labor: number; other: number; stones: number; stoneRetail: number; overhead: number }) => {
     if (strategy === 'A') return { wholesale: breakdown.wholesaleA, retail: breakdown.retailA };
     if (strategy === 'B') return { wholesale: breakdown.wholesaleB, retail: breakdown.retailB };
-    const ctx = {
-      metalCost: breakdown.metalCost,
-      labor: breakdown.labor,
-      other: breakdown.other,
-      stoneCost: breakdown.stones,
-      stoneRetail: breakdown.stoneRetail,
-      overhead: breakdown.overhead,
-      totalMaterials: breakdown.metalCost + breakdown.other + breakdown.stones,
-    };
-    const r = evaluateCustomModel(customFormulaModel, ctx);
-    return { wholesale: r.wholesale, retail: r.retail };
-  }, [strategy, customFormulaModel]);
+    if (strategy === 'custom') {
+      if (!selectedFormulaId) return { wholesale: 0, retail: 0 };
+      const ctx = {
+        metalCost: breakdown.metalCost,
+        labor: breakdown.labor,
+        other: breakdown.other,
+        stoneCost: breakdown.stones,
+        stoneRetail: breakdown.stoneRetail,
+        overhead: breakdown.overhead,
+        totalMaterials: breakdown.metalCost + breakdown.other + breakdown.stones,
+      };
+      const r = evaluateCustomModel(customFormulaModel, ctx);
+      return { wholesale: r.wholesale, retail: r.retail };
+    }
+    return { wholesale: 0, retail: 0 };
+  }, [strategy, customFormulaModel, selectedFormulaId]);
 
   // Compute wholesale/retail for a vault ITEM (may have custom formula)
   const getItemPrices = useCallback((item: any, breakdown: { wholesaleA: number; retailA: number; wholesaleB: number; retailB: number; metalCost: number; labor: number; other: number; stones: number; stoneRetail: number; overhead: number }) => {
@@ -538,6 +552,26 @@ export default function Home() {
         const items = Array.isArray(data) ? data : [];
         const uniqueLocs = Array.from(new Set(items.map((i: any) => i.location).filter(Boolean)));
         setLocations(prev => Array.from(new Set([...prev, ...uniqueLocs])));
+        // Fetch formulas for same user
+        const resFormulas = await fetch('/api/fetch-formulas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessToken, userId: session.user.id }),
+        });
+        if (resFormulas.ok) {
+          const formulasData = await resFormulas.json();
+          setFormulas(Array.isArray(formulasData) ? formulasData : []);
+        }
+        // Fetch user's saved tags for filter and dropdown
+        const resTags = await fetch('/api/fetch-user-tags', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessToken, userId: session.user.id }),
+        });
+        if (resTags.ok) {
+          const tagsData = await resTags.json();
+          setSavedUserTags(Array.isArray(tagsData) ? tagsData : []);
+        }
       } else {
         const err = await res.json().catch(() => ({}));
         setNotification({ title: 'Vault Load Failed', message: err?.error || 'Could not load vault.', type: 'info', onConfirm: () => { setLoading(true); fetchInventory(); } });
@@ -588,10 +622,59 @@ export default function Home() {
     }
   };
 
+  const addCustomTag = async (id: string) => {
+    const tag = newTagInput.trim();
+    if (!tag) return;
+    const { error } = await supabase.from('inventory').update({ tag }).eq('id', id);
+    if (error) {
+      setNotification({ title: "Failed to add tag", message: error.message, type: 'error' });
+    } else {
+      setInventory(inventory.map(i => i.id === id ? { ...i, tag } : i));
+      setShowTagMenuId(null);
+      setNewTagInput('');
+      // Persist tag to user's library for reuse on other items
+      const session = (await supabase.auth.getSession()).data.session;
+      const accessToken = (session as any)?.access_token;
+      if (accessToken && user?.id) {
+        try {
+          await fetch('/api/add-user-tag', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accessToken, userId: user.id, tag }),
+          });
+          setSavedUserTags(prev => prev.includes(tag) ? prev : [...prev, tag].sort());
+        } catch (_) { /* ignore - tag still works on item */ }
+      }
+    }
+  };
+
   const updateTag = async (id: string, newTag: string) => {
     const { error } = await supabase.from('inventory').update({ tag: newTag }).eq('id', id);
-    if (!error) {
+    if (error) {
+      setNotification({ title: "Failed to update tag", message: error.message, type: 'error' });
+    } else {
       setInventory(inventory.map(i => i.id === id ? { ...i, tag: newTag } : i));
+      setShowTagMenuId(null);
+      setSavedUserTags(prev => prev.includes(newTag) ? prev : [...prev, newTag].sort());
+      // Persist to user's tag library
+      const session = (await supabase.auth.getSession()).data.session;
+      const accessToken = (session as any)?.access_token;
+      if (accessToken && user?.id) {
+        fetch('/api/add-user-tag', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessToken, userId: user.id, tag: newTag }),
+        }).catch(() => {});
+      }
+    }
+  };
+
+  const clearTag = async (id: string) => {
+    const { error } = await supabase.from('inventory').update({ tag: null }).eq('id', id);
+    if (error) {
+      setNotification({ title: "Failed to remove tag", message: error.message, type: 'error' });
+    } else {
+      setInventory(inventory.map(i => i.id === id ? { ...i, tag: null } : i));
       setShowTagMenuId(null);
     }
   };
@@ -1071,12 +1154,12 @@ export default function Home() {
       strategy: strategy,
       multiplier: retailMultA,
       markup_b: markupB,
-      custom_formula: strategy === 'custom' ? customFormulaModel : null,
+      custom_formula: strategy === 'custom' ? (selectedFormulaId ? { ...customFormulaModel, formula_name: formulas.find(f => f.id === selectedFormulaId)?.name || null } : customFormulaModel) : null,
       user_id: currentUser.id,
       notes: '',
       hours: Number(hours) || 0,
       location: 'Main Vault',
-      tag: itemTag,
+      tag: null,
       status: 'active'
     };
 
@@ -1121,13 +1204,12 @@ export default function Home() {
         setIncludeLaborSection(false);
         setActiveCalculatorTab('metal');
         setStrategy('A');
-        setRetailMultA(3);
+        setRetailMultA(2.5);
         setMarkupB(1.8);
         setCostBreakdownOpen(false);
         setFormulaAOpen(false);
         setFormulaBOpen(false);
         setToken(null);
-        setItemTag('other');
         setNotification({ title: "Item Saved", message: `"${newItem.name}" is now stored in your Vault.`, type: 'success' });
         if (!user) setUser(currentUser);
       } else {
@@ -1152,13 +1234,13 @@ export default function Home() {
         const matchMetal = (item.metals || []).some((m: any) => m?.type?.toLowerCase().includes(lowerTerm));
         const matchNotes = item.notes && item.notes.toLowerCase().includes(lowerTerm);
         const matchLocation = item.location && item.location.toLowerCase().includes(lowerTerm);
-        const matchTag = (item.tag || 'other').toLowerCase().includes(lowerTerm);
+        const matchTag = item.tag && item.tag.toLowerCase().includes(lowerTerm);
         const matchDate = new Date(item.created_at).toLocaleDateString().includes(searchTerm);
         if (!matchName && !matchMetal && !matchNotes && !matchLocation && !matchTag && !matchDate) return false;
       }
 
       if (filterLocation !== 'All' && (item.location || 'Main Vault') !== filterLocation) return false;
-      if (filterTag !== 'All' && (item.tag || 'other') !== filterTag) return false;
+      if (filterTag !== 'All' && item.tag !== filterTag) return false;
       if (filterStrategy !== 'All' && item.strategy !== filterStrategy) return false;
       if (filterMetal !== 'All') {
         if (!(item.metals || []).some((m: any) => m?.type?.toLowerCase().includes(filterMetal.toLowerCase()))) return false;
@@ -1193,6 +1275,12 @@ export default function Home() {
       return true;
     });
   }, [inventory, searchTerm, filterLocation, filterTag, filterStrategy, filterMetal, filterStatus, filterMinPrice, filterMaxPrice, filterStartDate, filterEndDate, prices]);
+
+  const uniqueTags = useMemo(() => {
+    const fromItems = inventory.map((i: any) => i.tag).filter(Boolean);
+    const merged = [...new Set([...savedUserTags, ...fromItems])];
+    return merged.sort() as string[];
+  }, [inventory, savedUserTags]);
 
   const totalVaultValue = useMemo(() => {
     return inventory.reduce((acc, item) => {
@@ -1229,7 +1317,7 @@ export default function Home() {
       return [
         `"${item.name}"`,
         `"${item.status || 'active'}"`,
-        `"${item.tag || 'other'}"`,
+        `"${item.tag || ''}"`,
         `"${item.location || 'Main Vault'}"`,
         roundForDisplay(liveRetail).toFixed(2),
         roundForDisplay(liveWholesale).toFixed(2),
@@ -2069,6 +2157,12 @@ export default function Home() {
               The Vault
             </button>
             <button
+              onClick={() => setActiveTab('formulas')}
+              className={`flex-1 py-3 text-xs font-black uppercase tracking-tighter transition-all rounded-xl ${activeTab === 'formulas' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400'}`}
+            >
+              Formulas
+            </button>
+            <button
               onClick={() => setActiveTab('logic')}
               className={`flex-1 py-3 text-xs font-black uppercase tracking-tighter transition-all rounded-xl ${activeTab === 'logic' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400'}`}
             >
@@ -2417,7 +2511,7 @@ export default function Home() {
                   {!customStrategyExpanded ? (
                     <button
                       type="button"
-                      onClick={() => { setCustomStrategyExpanded(true); setStrategy('custom'); setCustomFormulaOpen(true); }}
+                      onClick={() => { setCustomStrategyExpanded(true); setStrategy('custom'); }}
                       className="w-full flex items-center justify-between gap-2 py-3 px-4 rounded-xl border-2 border-dashed border-stone-200 bg-stone-50/50 hover:border-[#A5BEAC]/50 hover:bg-stone-50 text-left transition-colors group"
                     >
                       <span className="text-[10px] font-black uppercase tracking-wider text-stone-500 group-hover:text-[#A5BEAC]">Add Custom Price Formula</span>
@@ -2460,36 +2554,48 @@ export default function Home() {
                           })()}
                         </p>
                       </button>
-                      <button
-                        type="button"
-                        onClick={(e) => setCustomFormulaOpen(!customFormulaOpen)}
-                        className="w-full flex items-center justify-between gap-2 py-2.5 px-0 text-left hover:bg-stone-100/80 transition-colors border-t border-stone-200 mt-3 pt-3"
-                        aria-expanded={customFormulaOpen}
-                      >
-                        <span className="text-[9px] font-black text-stone-400 uppercase tracking-wider">Build formula</span>
-                        <span className={`text-stone-400 text-[10px] transition-transform shrink-0 ${customFormulaOpen ? 'rotate-180' : ''}`}>▼</span>
-                      </button>
-                    </div>
-                    {strategy === 'custom' && customFormulaOpen && (
-                      <div className="border-t border-stone-200 p-4">
-                        <FormulaBuilder
-                          model={customFormulaModel}
-                          onChange={setCustomFormulaModel}
-                          previewContext={(() => {
-                            const a = calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType);
-                            return {
-                              metalCost: a.metalCost,
-                              labor: a.labor,
-                              other: a.other,
-                              stoneCost: a.stones,
-                              stoneRetail: a.stoneRetail,
-                              overhead: a.overhead,
-                              totalMaterials: a.totalMaterials,
-                            };
-                          })()}
-                        />
+                      <div className="border-t border-stone-200 mt-3 pt-3">
+                        <p className="text-[9px] font-black text-stone-400 uppercase tracking-wider mb-2">Select formula</p>
+                        {formulas.length === 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => { setActiveTab('formulas'); setFormulaEditorOpen(true); setEditingFormulaId(null); setFormulaDraftName(''); setFormulaDraft({ formula_base: PRESET_A.base, formula_wholesale: PRESET_A.wholesale, formula_retail: PRESET_A.retail }); }}
+                            className="w-full py-2.5 px-3 rounded-xl border-2 border-dashed border-stone-200 bg-stone-50/50 hover:border-[#A5BEAC]/50 text-left text-[10px] font-bold text-stone-500 hover:text-[#A5BEAC] transition"
+                          >
+                            Create your first formula →
+                          </button>
+                        ) : (
+                          <select
+                            value={selectedFormulaId || ''}
+                            onChange={(e) => {
+                              const id = e.target.value || null;
+                              setSelectedFormulaId(id);
+                              const f = formulas.find(x => x.id === id);
+                              if (f) {
+                                setCustomFormulaModel({ formula_base: f.formula_base, formula_wholesale: f.formula_wholesale, formula_retail: f.formula_retail });
+                              } else {
+                                setCustomFormulaModel({ formula_base: PRESET_A.base, formula_wholesale: PRESET_A.wholesale, formula_retail: PRESET_A.retail });
+                              }
+                            }}
+                            className="w-full p-3 rounded-xl border border-stone-200 bg-white text-sm font-bold outline-none focus:border-[#A5BEAC]"
+                          >
+                            <option value="">Choose a formula…</option>
+                            {formulas.map((f) => (
+                              <option key={f.id} value={f.id}>{f.name}</option>
+                            ))}
+                          </select>
+                        )}
+                        {formulas.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setActiveTab('formulas')}
+                            className="mt-2 text-[9px] font-bold text-[#A5BEAC] hover:underline"
+                          >
+                            Manage formulas →
+                          </button>
+                        )}
                       </div>
-                    )}
+                    </div>
                   </div>
                   )}
                 </div>
@@ -2506,12 +2612,6 @@ export default function Home() {
                     value={itemName}
                     onChange={e => setItemName(e.target.value)}
                   />
-                  <p className="text-[9px] font-bold text-stone-400 uppercase">Tag</p>
-                  <div className="flex flex-wrap gap-2">
-                    {(['necklace', 'ring', 'bracelet', 'other'] as const).map(t => (
-                      <button key={t} type="button" onClick={() => setItemTag(t)} className={`py-2 px-3.5 rounded-xl text-[9px] font-black uppercase border transition-all ${itemTag === t ? 'bg-[#A5BEAC] text-white border-[#A5BEAC] shadow-sm' : 'bg-white border-stone-200 text-stone-500 hover:border-stone-300 hover:bg-stone-50'}`}>{t}</button>
-                    ))}
-                  </div>
                   <button type="button" onClick={addToInventory} disabled={(isGuest && !token && hasTurnstile) || savingToVault} className={`w-full py-4 rounded-2xl font-black uppercase tracking-[0.12em] text-sm transition-all ${(isGuest && !token && hasTurnstile) || savingToVault ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-[#A5BEAC] text-white shadow-lg hover:bg-slate-900 hover:shadow-xl active:scale-[0.98]'}`}>{(isGuest && !token && hasTurnstile) ? "Verifying…" : savingToVault ? "Saving…" : "Save to vault"}</button>
                 </div>
                 </div>
@@ -2571,7 +2671,8 @@ export default function Home() {
                         <div className="space-y-1">
                           <label className="text-[9px] font-bold text-stone-400 uppercase">Tag</label>
                           <div className="flex flex-wrap gap-2">
-                            {['All', 'necklace', 'ring', 'bracelet', 'other'].map(t => (
+                            <button key="All" onClick={() => setFilterTag('All')} className={`py-1.5 px-2 rounded-lg text-[9px] font-black uppercase border ${filterTag === 'All' ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-400'}`}>All</button>
+                            {uniqueTags.map(t => (
                               <button key={t} onClick={() => setFilterTag(t)} className={`py-1.5 px-2 rounded-lg text-[9px] font-black uppercase border ${filterTag === t ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-400'}`}>{t}</button>
                             ))}
                           </div>
@@ -2623,7 +2724,7 @@ export default function Home() {
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-300 text-xs">🔍</span>
                     <input
                       type="text"
-                      placeholder="Search items..."
+                      placeholder="Search by name, tag, metal, location..."
                       className="w-full h-full min-h-[48px] sm:min-h-0 pl-10 pr-4 bg-stone-50 border rounded-xl text-xs font-bold outline-none focus:border-[#A5BEAC] transition-all"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
@@ -2876,25 +2977,53 @@ export default function Home() {
                               <div className="flex flex-wrap items-center gap-2 mt-2">
                                 {(isSold || isArchived) && <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-stone-200 text-stone-600 uppercase">SOLD / ARCHIVED</span>}
 
-                                {/* Tag Badge & Dropdown */}
+                                {/* Tag Badge & Dropdown (optional - vault only) */}
                                 <div className="relative tag-menu-container">
                                   <button
                                     onClick={() => setShowTagMenuId(showTagMenuId === item.id ? null : item.id)}
-                                    className="text-[8px] font-black px-1.5 py-0.5 rounded-md border bg-amber-50 text-amber-700 border-amber-100 uppercase hover:bg-amber-100 transition-colors leading-none flex items-center h-[18px]"
+                                    className={`text-[8px] font-black px-1.5 py-0.5 rounded-md border uppercase transition-colors leading-none flex items-center h-[18px] ${item.tag ? 'bg-amber-50 text-amber-700 border-amber-100 hover:bg-amber-100' : 'bg-stone-100 text-stone-500 border-stone-200 hover:bg-stone-200'}`}
                                   >
-                                    {item.tag || 'other'}
+                                    {item.tag || '+ Tag'}
                                   </button>
                                   {showTagMenuId === item.id && (
-                                    <div className="tag-menu-dropdown absolute top-full left-0 mt-1 w-28 bg-white border border-stone-200 rounded-xl shadow-lg z-[60] overflow-hidden animate-in fade-in">
-                                      {(['necklace', 'ring', 'bracelet', 'other'] as const).map(t => (
+                                    <div className="tag-menu-dropdown absolute top-full left-0 mt-1 w-36 bg-white border border-stone-200 rounded-xl shadow-lg z-[60] overflow-hidden animate-in fade-in">
+                                      {uniqueTags.length > 0 && (
+                                        <>
+                                          {uniqueTags.map(t => (
+                                            <button
+                                              key={t}
+                                              onClick={() => updateTag(item.id, t)}
+                                              className="w-full px-3 py-2 text-left text-[9px] font-bold uppercase text-slate-600 hover:bg-stone-50 border-b border-stone-50"
+                                            >
+                                              {t}
+                                            </button>
+                                          ))}
+                                        </>
+                                      )}
+                                      {item.tag && (
                                         <button
-                                          key={t}
-                                          onClick={() => updateTag(item.id, t)}
-                                          className="w-full px-3 py-2 text-left text-[9px] font-bold uppercase text-slate-600 hover:bg-stone-50 border-b border-stone-50 last:border-0"
+                                          onClick={() => clearTag(item.id)}
+                                          className="w-full px-3 py-2 text-left text-[9px] font-bold text-red-600 hover:bg-red-50 border-b border-stone-50"
                                         >
-                                          {t}
+                                          Remove tag
                                         </button>
-                                      ))}
+                                      )}
+                                      <div className="p-2 border-t border-stone-100 bg-stone-50">
+                                        <input
+                                          type="text"
+                                          placeholder="New tag..."
+                                          className="w-full p-1.5 text-[9px] border rounded bg-white mb-1.5"
+                                          value={newTagInput}
+                                          onChange={(e) => setNewTagInput(e.target.value)}
+                                          onClick={(e) => e.stopPropagation()}
+                                        />
+                                        <button
+                                          onClick={() => addCustomTag(item.id)}
+                                          className="w-full py-1 bg-[#A5BEAC] text-white rounded text-[9px] font-bold uppercase hover:bg-slate-900"
+                                        >
+                                          Add +
+                                        </button>
+                                      </div>
                                     </div>
                                   )}
                                 </div>
@@ -2991,7 +3120,7 @@ export default function Home() {
                             {/* Strategy Box */}
                             <div className="bg-white p-3.5 md:p-3 rounded-xl border border-stone-100 shadow-sm flex flex-col justify-center items-center text-center min-h-[70px] md:min-h-0">
                               <p className="text-[9px] md:text-[8px] font-black text-stone-400 uppercase mb-1.5 md:mb-1">Strategy</p>
-                              <p className="text-sm md:text-xs font-black text-slate-700 uppercase">{item.strategy === 'custom' ? 'Custom' : item.strategy}</p>
+                              <p className="text-sm md:text-xs font-black text-slate-700 uppercase">{item.strategy === 'custom' ? (item.custom_formula?.formula_name || 'Custom') : item.strategy}</p>
                             </div>
                             {/* Materials Box */}
                             <div className="bg-white p-3.5 md:p-3 rounded-xl border border-stone-100 shadow-sm flex flex-col justify-center items-center text-center min-h-[70px] md:min-h-0">
@@ -3007,7 +3136,9 @@ export default function Home() {
 
                           {item.strategy === 'custom' && item.custom_formula && (
                             <div className="bg-white p-4 rounded-xl border border-stone-100 shadow-sm text-left">
-                              <h4 className="text-[9px] font-black text-stone-400 uppercase mb-2">Custom Formula</h4>
+                              <h4 className="text-[9px] font-black text-stone-400 uppercase mb-2">
+                                {item.custom_formula.formula_name ? `Custom: ${item.custom_formula.formula_name}` : 'Custom Formula'}
+                              </h4>
                               <div className="space-y-1.5 text-[9px] text-slate-700">
                                 <p><span className="font-bold text-stone-500">Base:</span> {formulaToReadableString(item.custom_formula.formula_base)}</p>
                                 <p><span className="font-bold text-stone-500">Wholesale:</span> {formulaToReadableString(item.custom_formula.formula_wholesale)}</p>
@@ -3093,6 +3224,188 @@ export default function Home() {
                     </div>
                   );
                 })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* FORMULAS PANEL */}
+          <div className={`bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm flex flex-col flex-1 min-h-0 h-[85vh] lg:max-h-[calc(100vh-7rem)] overflow-hidden ${activeTab !== 'formulas' ? 'hidden' : ''}`}>
+            <div className="p-6 border-b border-stone-100 bg-white space-y-4 rounded-t-[2.5rem] shrink-0">
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Saved Formulas</h2>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingFormulaId(null);
+                    setFormulaDraftName('');
+                    setFormulaDraft({ formula_base: PRESET_A.base, formula_wholesale: PRESET_A.wholesale, formula_retail: PRESET_A.retail });
+                    setFormulaEditorOpen(true);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-[#A5BEAC] text-white text-xs font-black uppercase hover:bg-slate-900 transition"
+                >
+                  Create formula
+                </button>
+              </div>
+              <p className="text-[10px] text-stone-500">Create custom price formulas and select them in the Calculator.</p>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              {!user ? (
+                <div className="text-center py-12 text-stone-400 text-sm font-bold">
+                  Sign in to create and manage formulas.
+                </div>
+              ) : formulas.length === 0 && !formulaEditorOpen ? (
+                <div className="text-center py-12 space-y-4">
+                  <p className="text-stone-500 text-sm">No formulas yet.</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingFormulaId(null);
+                      setFormulaDraftName('');
+                      setFormulaDraft({ formula_base: PRESET_A.base, formula_wholesale: PRESET_A.wholesale, formula_retail: PRESET_A.retail });
+                      setFormulaEditorOpen(true);
+                    }}
+                    className="px-4 py-2 rounded-xl bg-[#A5BEAC] text-white text-xs font-black uppercase hover:bg-slate-900 transition"
+                  >
+                    Create your first formula
+                  </button>
+                </div>
+              ) : formulaEditorOpen ? (
+                <div className="bg-stone-50 rounded-2xl border border-stone-200 p-6 space-y-4">
+                  <div>
+                    <label className="block text-[10px] font-black uppercase text-stone-500 mb-1">Formula name</label>
+                    <input
+                      type="text"
+                      value={formulaDraftName}
+                      onChange={(e) => setFormulaDraftName(e.target.value)}
+                      placeholder="e.g. High-End Retail"
+                      className="w-full p-3 rounded-xl border border-stone-200 bg-white text-sm font-bold outline-none focus:border-[#A5BEAC]"
+                    />
+                  </div>
+                  <FormulaBuilder
+                    model={formulaDraft}
+                    onChange={setFormulaDraft}
+                    previewContext={(() => {
+                      const a = calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType);
+                      return {
+                        metalCost: a.metalCost,
+                        labor: a.labor,
+                        other: a.other,
+                        stoneCost: a.stones,
+                        stoneRetail: a.stoneRetail,
+                        overhead: a.overhead,
+                        totalMaterials: a.totalMaterials,
+                      };
+                    })()}
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!formulaDraftName.trim()) {
+                          setNotification({ title: 'Name required', message: 'Please enter a name for your formula.', type: 'info' });
+                          return;
+                        }
+                        setSavingFormula(true);
+                        try {
+                          const session = (await supabase.auth.getSession()).data.session;
+                          const accessToken = (session as any)?.access_token;
+                          if (!accessToken || !user?.id) {
+                            setNotification({ title: 'Session expired', message: 'Please sign in again.', type: 'info' });
+                            return;
+                          }
+                          const body: any = { accessToken, userId: user.id, formula: { name: formulaDraftName.trim(), formula_base: formulaDraft.formula_base, formula_wholesale: formulaDraft.formula_wholesale, formula_retail: formulaDraft.formula_retail } };
+                          if (editingFormulaId) body.formula.id = editingFormulaId;
+                          const res = await fetch('/api/save-formula', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                          if (res.ok) {
+                            const saved = await res.json();
+                            setFormulas(prev => {
+                              const without = prev.filter(f => f.id !== saved.id);
+                              return [saved, ...without];
+                            });
+                            setFormulaEditorOpen(false);
+                            setEditingFormulaId(null);
+                            setFormulaDraftName('');
+                            setNotification({ title: 'Formula saved', message: `"${formulaDraftName}" has been saved.`, type: 'success' });
+                          } else {
+                            const err = await res.json().catch(() => ({}));
+                            setNotification({ title: 'Save failed', message: err?.error || 'Could not save formula.', type: 'error' });
+                          }
+                        } finally {
+                          setSavingFormula(false);
+                        }
+                      }}
+                      disabled={savingFormula}
+                      className="px-4 py-2 rounded-xl bg-[#A5BEAC] text-white text-xs font-black uppercase hover:bg-slate-900 transition disabled:opacity-50"
+                    >
+                      {savingFormula ? 'Saving…' : 'Save'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormulaEditorOpen(false);
+                        setEditingFormulaId(null);
+                        setFormulaDraftName('');
+                      }}
+                      className="px-4 py-2 rounded-xl bg-stone-200 text-stone-600 text-xs font-black uppercase hover:bg-stone-300 transition"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {formulas.map((f) => (
+                    <div
+                      key={f.id}
+                      className="p-4 rounded-xl border border-stone-200 bg-white hover:border-[#A5BEAC]/50 transition flex items-start justify-between gap-4"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-black text-slate-900 truncate">{f.name}</p>
+                        <p className="text-[10px] text-stone-500 truncate mt-1" title={formulaToReadableString(f.formula_base) + ' → ' + formulaToReadableString(f.formula_wholesale) + ' → ' + formulaToReadableString(f.formula_retail)}>
+                          Base: {formulaToReadableString(f.formula_base)} | Wholesale: {formulaToReadableString(f.formula_wholesale)} | Retail: {formulaToReadableString(f.formula_retail)}
+                        </p>
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingFormulaId(f.id);
+                            setFormulaDraftName(f.name);
+                            setFormulaDraft({ formula_base: f.formula_base, formula_wholesale: f.formula_wholesale, formula_retail: f.formula_retail });
+                            setFormulaEditorOpen(true);
+                          }}
+                          className="px-2 py-1 rounded-lg text-[10px] font-bold border border-stone-200 hover:border-[#A5BEAC] transition"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              const session = (await supabase.auth.getSession()).data.session;
+                              const accessToken = (session as any)?.access_token;
+                              if (!accessToken || !user?.id) return;
+                              const res = await fetch('/api/delete-formula', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accessToken, userId: user.id, formulaId: f.id }) });
+                              if (res.ok) {
+                                setFormulas(prev => prev.filter(x => x.id !== f.id));
+                                if (selectedFormulaId === f.id) {
+                                  setSelectedFormulaId(null);
+                                  setCustomFormulaModel({ formula_base: PRESET_A.base, formula_wholesale: PRESET_A.wholesale, formula_retail: PRESET_A.retail });
+                                }
+                                setNotification({ title: 'Formula deleted', message: `"${f.name}" has been removed.`, type: 'success' });
+                              }
+                            } catch (e) {
+                              setNotification({ title: 'Delete failed', message: 'Could not delete formula.', type: 'error' });
+                            }
+                          }}
+                          className="px-2 py-1 rounded-lg text-[10px] font-bold border border-red-200 text-red-600 hover:border-red-400 transition"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
