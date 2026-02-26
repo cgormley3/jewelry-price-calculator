@@ -2663,7 +2663,7 @@ export default function Home() {
           </div>
 
           {/* VAULT PANEL */}
-          <div className={`bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm flex flex-col flex-1 min-h-0 h-[90vh] lg:max-h-[calc(100vh-5rem)] overflow-hidden ${activeTab !== 'vault' ? 'hidden' : ''}`}>
+          <div className={`bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm flex flex-col flex-1 min-h-0 h-[calc(100dvh-3rem)] lg:h-auto lg:max-h-[calc(100vh-5rem)] overflow-hidden ${activeTab !== 'vault' ? 'hidden' : ''}`}>
             <div className="p-6 border-b border-stone-100 bg-white space-y-4 rounded-t-[2.5rem] shrink-0">
               <div className="flex justify-between items-center text-left">
                 <div>
@@ -3462,8 +3462,8 @@ export default function Home() {
           </div>
 
           {/* LOGIC PANEL */}
-          <div className={`flex flex-col flex-1 min-h-0 h-[90vh] lg:max-h-[calc(100vh-5rem)] overflow-y-auto ${activeTab !== 'logic' ? 'hidden' : ''}`}>
-            <div className="grid grid-cols-1 gap-8 pt-0 mt-[-1rem] md:mt-0 md:pt-4 lg:max-h-[calc(100vh-5rem)]">
+          <div className={`flex flex-col flex-1 min-h-0 h-[calc(100dvh-3rem)] lg:h-auto lg:max-h-[calc(100vh-5rem)] overflow-y-auto ${activeTab !== 'logic' ? 'hidden' : ''}`}>
+            <div className="grid grid-cols-1 gap-8 pt-6 mt-0 md:pt-4 lg:max-h-[calc(100vh-5rem)]">
           <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC] min-h-[400px] md:min-h-0">
             <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">1. MATERIAL CALCULATION DETAIL</h2>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 text-left">
