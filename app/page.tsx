@@ -14,6 +14,9 @@ const UNIT_TO_GRAMS: { [key: string]: number } = {
   "Ounces (std)": 28.3495
 };
 
+// Fallback spot prices ($/troy oz) when API hasn't loaded — used only when live price is 0
+const FALLBACK_SPOT: Record<string, number> = { gold: 2600, silver: 28, platinum: 950, palladium: 1000 };
+
 export default function Home() {
   // Check if Turnstile is configured (for human verification)
   const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '';
@@ -116,6 +119,7 @@ export default function Home() {
 
   // Image Upload & Crop State
   const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [savingToVault, setSavingToVault] = useState(false);
   const [cropImage, setCropImage] = useState<string | null>(null);
   const [cropItemId, setCropItemId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
@@ -134,6 +138,25 @@ export default function Home() {
   const [showTagMenuId, setShowTagMenuId] = useState<string | null>(null);
   const [newLocationInput, setNewLocationInput] = useState('');
   const [itemTag, setItemTag] = useState<'necklace' | 'ring' | 'bracelet' | 'other'>('other');
+
+  type PriceRoundingOption = 'none' | 1 | 5 | 10 | 25;
+  const [priceRounding, setPriceRounding] = useState<PriceRoundingOption>(1);
+
+  useEffect(() => {
+    const stored = localStorage.getItem('price_rounding');
+    if (stored === '1' || stored === '5' || stored === '10' || stored === '25') setPriceRounding(Number(stored) as 1 | 5 | 10 | 25);
+    else if (stored === 'none') setPriceRounding('none');
+  }, []);
+
+  const roundForDisplay = useCallback((num: number): number => {
+    if (priceRounding === 'none' || num === 0) return num;
+    return Math.round(num / priceRounding) * priceRounding;
+  }, [priceRounding]);
+
+  const setPriceRoundingWithPersist = useCallback((val: PriceRoundingOption) => {
+    setPriceRounding(val);
+    if (typeof window !== 'undefined') localStorage.setItem('price_rounding', val === 'none' ? 'none' : String(val));
+  }, []);
 
   const fetchInProgressRef = useRef(false);
   const fetchVersionRef = useRef(0);
@@ -167,12 +190,21 @@ export default function Home() {
     const cachedData = sessionStorage.getItem('vault_prices');
     const cacheTimestamp = sessionStorage.getItem('vault_prices_time');
     const now = Date.now();
-    const oneMinute = 60 * 1000;
+    const fiveMinutes = 5 * 60 * 1000;
 
-    if (!force && cachedData && cacheTimestamp && (now - Number(cacheTimestamp) < oneMinute)) {
-      setPrices(JSON.parse(cachedData));
-      setPricesLoaded(true);
-      return;
+    // Use cache immediately if valid (even when stale) so UI shows prices right away on refresh
+    if (cachedData) {
+      try {
+        const parsed = JSON.parse(cachedData);
+        if (parsed.gold > 0 || parsed.silver > 0 || parsed.platinum > 0 || parsed.palladium > 0) {
+          setPrices(parsed);
+          setPricesLoaded(true);
+        }
+      } catch (_) { /* ignore */ }
+    }
+
+    if (!force && cachedData && cacheTimestamp && (now - Number(cacheTimestamp) < fiveMinutes)) {
+      return; // Skip network fetch, we already applied cache above
     }
 
     if (fetchInProgressRef.current) return;
@@ -241,15 +273,24 @@ export default function Home() {
     metals.forEach(m => {
       let pricePerGram = 0;
       if (m.isManual && m.manualPrice) {
-        pricePerGram = m.manualPrice / UNIT_TO_GRAMS[m.unit];
+        pricePerGram = m.manualPrice / (UNIT_TO_GRAMS[m.unit] || 1);
       } else {
         let spot = 0;
-        const type = m.type.toLowerCase();
+        const type = (m.type || '').toLowerCase();
 
         if (type.includes('gold')) spot = (priceOverride && priceOverride.gold) ? Number(priceOverride.gold) : prices.gold;
         else if (type.includes('silver')) spot = (priceOverride && priceOverride.silver) ? Number(priceOverride.silver) : prices.silver;
         else if (type.includes('platinum')) spot = (priceOverride && priceOverride.platinum) ? Number(priceOverride.platinum) : prices.platinum;
         else if (type.includes('palladium')) spot = (priceOverride && priceOverride.palladium) ? Number(priceOverride.palladium) : prices.palladium;
+
+        // Fallback: use saved spot from add-time, then static defaults when live prices haven't loaded
+        if (!spot && m.spotSaved != null && m.spotSaved > 0) spot = m.spotSaved;
+        else if (!spot) {
+          if (type.includes('gold')) spot = FALLBACK_SPOT.gold;
+          else if (type.includes('silver')) spot = FALLBACK_SPOT.silver;
+          else if (type.includes('platinum')) spot = FALLBACK_SPOT.platinum;
+          else if (type.includes('palladium')) spot = FALLBACK_SPOT.palladium;
+        }
 
         const purities: any = { '10K Gold': 0.417, '14K Gold': 0.583, '18K Gold': 0.75, '22K Gold': 0.916, '24K Gold': 0.999, 'Sterling Silver': 0.925, 'Platinum 950': 0.95, 'Palladium': 0.95 };
         pricePerGram = (spot / 31.1035) * (purities[m.type] || 1.0);
@@ -318,30 +359,55 @@ export default function Home() {
   };
 
   useEffect(() => {
-    async function initSession() {
-      // Only attempt Supabase auth if credentials are configured
-      if (hasValidSupabaseCredentials) {
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (!session) {
-            const { data } = await supabase.auth.signInAnonymously();
-            setUser(data.user);
-          } else {
-            setUser(session.user);
-          }
-        } catch (error: any) {
-          console.warn('Supabase auth error:', error);
-          if (error?.message?.includes('Cannot reach') || error?.message?.includes('timed out') || error?.message === 'Failed to fetch') {
-            setNotification({ title: 'Connection Issue', message: 'Unable to reach the vault service. The calculator works offline—try again when you\'re back online.', type: 'info' });
-          }
-          // Continue without auth - app can still function
-        }
-      } else {
-        console.log('Skipping Supabase auth - credentials not configured');
-      }
+    let mounted = true;
+    const fallbackTimer = setTimeout(() => {
+      if (mounted) setLoading(false);
+    }, 10000);
 
-      await fetchPrices();
-      fetchInventory();
+    // Apply cached prices immediately so calculator shows values on refresh before any network calls
+    try {
+      const cached = typeof window !== 'undefined' ? sessionStorage.getItem('vault_prices') : null;
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed.gold > 0 || parsed.silver > 0 || parsed.platinum > 0 || parsed.palladium > 0) {
+          setPrices(parsed);
+          setPricesLoaded(true);
+        }
+      }
+    } catch (_) { /* ignore */ }
+
+    async function initSession() {
+      try {
+        // Run auth and price fetch in parallel (prices don't depend on auth)
+        const authPromise = hasValidSupabaseCredentials ? (async () => {
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) {
+              const { data } = await supabase.auth.signInAnonymously();
+              setUser(data.user);
+            } else {
+              setUser(session.user);
+            }
+          } catch (error: any) {
+            console.warn('Supabase auth error:', error);
+            if (error?.message?.includes('Cannot reach') || error?.message?.includes('timed out') || error?.message === 'Failed to fetch') {
+              setNotification({ title: 'Connection Issue', message: 'Unable to reach the vault service. The calculator works offline—try again when you\'re back online.', type: 'info' });
+            }
+          }
+        })() : Promise.resolve();
+        if (!hasValidSupabaseCredentials) console.log('Skipping Supabase auth - credentials not configured');
+
+        await Promise.all([authPromise, fetchPrices()]);
+        setLoading(false); // Show UI immediately; load inventory in background
+        fetchInventory(); // Don't await - prevents hang if Supabase is slow
+      } catch (e) {
+        console.warn('initSession error:', e);
+      } finally {
+        if (mounted) {
+          clearTimeout(fallbackTimer);
+          setLoading(false);
+        }
+      }
     }
     initSession();
 
@@ -377,6 +443,8 @@ export default function Home() {
     }
 
     return () => {
+      mounted = false;
+      clearTimeout(fallbackTimer);
       if (subscription && typeof subscription.unsubscribe === 'function') {
         subscription.unsubscribe();
       }
@@ -536,7 +604,8 @@ export default function Home() {
   };
 
   const addMetalToPiece = () => {
-    if (tempWeight <= 0) return;
+    const w = Number(tempWeight);
+    if (!Number.isFinite(w) || w <= 0) return;
     let currentSpot = 0;
     const type = tempMetal.toLowerCase();
     if (type.includes('gold')) currentSpot = prices.gold;
@@ -544,22 +613,24 @@ export default function Home() {
     else if (type.includes('platinum')) currentSpot = prices.platinum;
     else if (type.includes('palladium')) currentSpot = prices.palladium;
 
-    setMetalList([...metalList, {
+    setMetalList(prev => [...prev, {
       type: tempMetal,
-      weight: tempWeight,
+      weight: w,
       unit: tempUnit,
       isManual: useManualPrice,
-      manualPrice: useManualPrice ? Number(manualPriceInput) : undefined,
+      manualPrice: useManualPrice && manualPriceInput !== '' ? Number(manualPriceInput) : undefined,
       spotSaved: useManualPrice ? undefined : currentSpot
     }]);
     setTempWeight(0); setManualPriceInput(''); setUseManualPrice(false);
   };
 
   const addStoneToPiece = () => {
-    if (!tempStoneName.trim() || Number(tempStoneCost) <= 0) return;
-    setStoneList([...stoneList, {
-      name: tempStoneName.trim(),
-      cost: Number(tempStoneCost),
+    const cost = Number(tempStoneCost);
+    if (!Number.isFinite(cost) || cost <= 0) return;
+    const stoneName = tempStoneName.trim() || `Stone ${stoneList.length + 1}`;
+    setStoneList(prev => [...prev, {
+      name: stoneName,
+      cost,
       markup: Number(tempStoneMarkup) || 2
     }]);
     setIncludeStonesSection(true); // auto-include when user adds a stone
@@ -851,6 +922,8 @@ export default function Home() {
   };
 
   const addToInventory = async () => {
+    if (savingToVault) return;
+
     // Check if Supabase is configured
     if (!hasValidSupabaseCredentials) {
       setNotification({ 
@@ -890,7 +963,10 @@ export default function Home() {
       setNotification({ title: "Name Required", message: "Please provide a name for this piece to save it to your Vault.", type: 'info' });
       return;
     }
-    if (metalList.length === 0) return;
+    if (metalList.length === 0) {
+      setNotification({ title: "Add Metal", message: "Add at least one metal component to save this piece.", type: 'info' });
+      return;
+    }
 
     // Calculate with new inputs
     const a = calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneList, overheadCost, overheadType);
@@ -905,7 +981,7 @@ export default function Home() {
       labor_at_making: a.labor,
       other_costs_at_making: Number(otherCosts) || 0,
       stone_cost: a.stones, // Total stone cost for backward compatibility
-      stone_markup: stoneList.length > 0 ? stoneList.reduce((sum, s) => sum + (s.cost * s.markup), 0) / a.stones : 1.5, // Weighted average markup
+      stone_markup: (stoneList.length > 0 && a.stones > 0) ? stoneList.reduce((sum, s) => sum + (s.cost * s.markup), 0) / a.stones : 1.5, // Weighted average markup
       // CHANGE THIS: Save the calculated dollar amount from 'a', not the raw input
       overhead_cost: a.overhead,
       overhead_type: overheadType,
@@ -920,10 +996,16 @@ export default function Home() {
       status: 'active'
     };
 
+    setSavingToVault(true);
     try {
       const { data, error } = await supabase.from('inventory').insert([newItem]).select();
-      if (!error && data) {
-        setInventory([data[0], ...inventory]);
+      if (!error) {
+        if (data && data.length > 0) {
+          setInventory(prev => [data[0], ...prev]);
+        } else {
+          // Insert may have succeeded but SELECT returned empty (e.g. RLS); refresh in background
+          fetchInventory();
+        }
         // Reset calculator to original state
         setItemName('');
         setMetalList([]);
@@ -964,6 +1046,8 @@ export default function Home() {
         message: error?.message || "Could not save item to database. Please check your Supabase configuration.", 
         type: 'error' 
       });
+    } finally {
+      setSavingToVault(false);
     }
   };
 
@@ -972,7 +1056,7 @@ export default function Home() {
       const lowerTerm = searchTerm.toLowerCase();
       if (searchTerm) {
         const matchName = item.name.toLowerCase().includes(lowerTerm);
-        const matchMetal = item.metals.some((m: any) => m.type.toLowerCase().includes(lowerTerm));
+        const matchMetal = (item.metals || []).some((m: any) => m?.type?.toLowerCase().includes(lowerTerm));
         const matchNotes = item.notes && item.notes.toLowerCase().includes(lowerTerm);
         const matchLocation = item.location && item.location.toLowerCase().includes(lowerTerm);
         const matchTag = (item.tag || 'other').toLowerCase().includes(lowerTerm);
@@ -984,7 +1068,7 @@ export default function Home() {
       if (filterTag !== 'All' && (item.tag || 'other') !== filterTag) return false;
       if (filterStrategy !== 'All' && item.strategy !== filterStrategy) return false;
       if (filterMetal !== 'All') {
-        if (!item.metals.some((m: any) => m.type.toLowerCase().includes(filterMetal.toLowerCase()))) return false;
+        if (!(item.metals || []).some((m: any) => m?.type?.toLowerCase().includes(filterMetal.toLowerCase()))) return false;
       }
 
       const itemStatus = item.status || 'active';
@@ -1052,10 +1136,10 @@ export default function Home() {
         `"${item.status || 'active'}"`,
         `"${item.tag || 'other'}"`,
         `"${item.location || 'Main Vault'}"`,
-        liveRetail.toFixed(2),
-        liveWholesale.toFixed(2),
-        Number(item.retail).toFixed(2),
-        Number(item.wholesale).toFixed(2),
+        roundForDisplay(liveRetail).toFixed(2),
+        roundForDisplay(liveWholesale).toFixed(2),
+        roundForDisplay(Number(item.retail)).toFixed(2),
+        roundForDisplay(Number(item.wholesale)).toFixed(2),
         item.hours || 0,
         Number(item.labor_at_making || 0).toFixed(2),
         (Number(current.metalCost)).toFixed(2),
@@ -1224,10 +1308,10 @@ export default function Home() {
 
       const tableStartY = currentY;
       const tableHead = includeLiveInPDF ? [['', 'Saved', 'Live (market)']] : [['', 'Saved']];
-      const retailRow: any[] = ['Retail', `$${Number(item.retail).toFixed(2)}`];
-      if (includeLiveInPDF) retailRow.push(`$${liveRetail.toFixed(2)}`);
-      const wholesaleRow: any[] = ['Wholesale', `$${Number(item.wholesale).toFixed(2)}`];
-      if (includeLiveInPDF) wholesaleRow.push(`$${liveWholesale.toFixed(2)}`);
+      const retailRow: any[] = ['Retail', `$${roundForDisplay(Number(item.retail)).toFixed(2)}`];
+      if (includeLiveInPDF) retailRow.push(`$${roundForDisplay(liveRetail).toFixed(2)}`);
+      const wholesaleRow: any[] = ['Wholesale', `$${roundForDisplay(Number(item.wholesale)).toFixed(2)}`];
+      if (includeLiveInPDF) wholesaleRow.push(`$${roundForDisplay(liveWholesale).toFixed(2)}`);
 
       autoTable(doc, {
         startY: tableStartY,
@@ -1607,7 +1691,7 @@ export default function Home() {
 
                 return (
                   <>
-                    <div className="flex justify-between items-center"><span className="text-[10px] font-bold text-stone-400 uppercase">Recalculated Retail</span><span className="text-xl font-black">${liveRetail.toFixed(2)}</span></div>
+                    <div className="flex justify-between items-center"><span className="text-[10px] font-bold text-stone-400 uppercase">Recalculated Retail</span><span className="text-xl font-black">${roundForDisplay(liveRetail).toFixed(2)}</span></div>
                     <div className="flex justify-between items-center"><span className="text-[10px] font-bold text-stone-400 uppercase">Material Cost</span><span className="text-sm font-bold text-stone-300">${calc.totalMaterials.toFixed(2)}</span></div>
 
                     <div className="pl-2 space-y-1 my-1 border-l-2 border-stone-600">
@@ -1947,7 +2031,7 @@ export default function Home() {
                   <option>Sterling Silver</option><option>10K Gold</option><option>14K Gold</option><option>18K Gold</option><option>22K Gold</option><option>24K Gold</option><option>Platinum 950</option><option>Palladium</option>
                 </select>
                 <div className="flex gap-2">
-                  <input type="number" min={0} placeholder="Weight" className="w-full p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none transition-shadow" value={tempWeight || ''} onChange={e => setTempWeight(Number(e.target.value))} />
+                  <input type="number" min={0} step="any" placeholder="Weight" className="w-full p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none transition-shadow" value={tempWeight || ''} onChange={e => { const v = parseFloat(e.target.value); setTempWeight(Number.isNaN(v) ? 0 : v); }} />
                   <select className="p-3 border border-stone-200 rounded-xl text-[10px] font-bold focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none" value={tempUnit} onChange={e => setTempUnit(e.target.value)}>{Object.keys(UNIT_TO_GRAMS).map(u => <option key={u}>{u}</option>)}</select>
                 </div>
                 <div className="space-y-2">
@@ -1960,7 +2044,7 @@ export default function Home() {
                 {metalList.map((m, i) => (
                   <div key={i} className="text-[10px] font-bold bg-white p-2 rounded border border-stone-100 flex justify-between items-center">
                     <span className="text-slate-700">{m.weight}{m.unit} {m.type}</span>
-                    <button onClick={() => setMetalList(metalList.filter((_, idx) => idx !== i))} className="text-red-500 text-lg hover:text-red-700 transition-colors">×</button>
+                    <button onClick={() => setMetalList(prev => prev.filter((_, idx) => idx !== i))} className="text-red-500 text-lg hover:text-red-700 transition-colors">×</button>
                   </div>
                 ))}
                 </div>
@@ -1973,7 +2057,7 @@ export default function Home() {
                 <div className="p-4 bg-stone-50 rounded-2xl border-2 border-dotted border-stone-300 space-y-3">
                 <input
                   type="text"
-                  placeholder="Stone name (e.g. Diamond, Ruby)"
+                  placeholder="Stone name (optional — e.g. Diamond, Ruby)"
                   className="w-full p-3 border border-stone-200 rounded-xl font-bold bg-white focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none text-[10px]"
                   value={tempStoneName}
                   onChange={e => setTempStoneName(e.target.value)}
@@ -1995,7 +2079,7 @@ export default function Home() {
                 {stoneList.map((stone, i) => (
                   <div key={i} className="text-[10px] font-bold bg-white p-2 rounded border border-stone-100 flex justify-between items-center">
                     <span className="text-slate-700">{stone.name} ${stone.cost.toFixed(2)} ×{stone.markup.toFixed(1)}</span>
-                    <button onClick={() => setStoneList(stoneList.filter((_, idx) => idx !== i))} className="text-red-500 text-lg hover:text-red-700 transition-colors">×</button>
+                    <button onClick={() => setStoneList(prev => prev.filter((_, idx) => idx !== i))} className="text-red-500 text-lg hover:text-red-700 transition-colors">×</button>
                   </div>
                 ))}
                 <details className="group mt-2">
@@ -2097,6 +2181,19 @@ export default function Home() {
 
                 <div className="w-full space-y-2">
                   <p className="text-[10px] font-black uppercase tracking-wider text-stone-400">Retail price</p>
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <span className="text-[9px] font-bold text-stone-500 uppercase">Round prices to</span>
+                  {(['none', 1, 5, 10, 25] as const).map(opt => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => setPriceRoundingWithPersist(opt)}
+                      className={`py-1 px-2.5 rounded-lg text-[9px] font-black uppercase border transition-all ${priceRounding === opt ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-400 hover:border-stone-300'}`}
+                    >
+                      {opt === 'none' ? 'None' : `$${opt}`}
+                    </button>
+                  ))}
+                </div>
                 <div className="grid grid-cols-1 gap-4 w-full">
                   <div
                     className={`rounded-2xl border-2 transition-all overflow-hidden ${strategy === 'A' ? 'border-[#A5BEAC] bg-stone-50 shadow-md' : 'border-stone-100 bg-white'}`}
@@ -2108,8 +2205,8 @@ export default function Home() {
                     >
                       <div className="flex-1 min-w-0">
                         <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter mb-1">Strategy A</p>
-                        <p className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums">${calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType).retailA.toFixed(2)}</p>
-                        <p className="text-[10px] font-semibold text-stone-500 mt-1">Wholesale ${calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType).wholesaleA.toFixed(2)}</p>
+                        <p className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums">${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType).retailA).toFixed(2)}</p>
+                        <p className="text-[10px] font-semibold text-stone-500 mt-1">Wholesale ${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType).wholesaleA).toFixed(2)}</p>
                       </div>
                     </button>
                     <div className="border-t border-stone-200 sm:border-t-0 sm:border-l min-w-0 sm:min-w-[180px]">
@@ -2153,8 +2250,8 @@ export default function Home() {
                     >
                       <div className="flex-1 min-w-0">
                         <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter mb-1">Strategy B</p>
-                        <p className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums">${calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType).retailB.toFixed(2)}</p>
-                        <p className="text-[10px] font-semibold text-stone-500 mt-1">Wholesale ${calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType).wholesaleB.toFixed(2)}</p>
+                        <p className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums">${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType).retailB).toFixed(2)}</p>
+                        <p className="text-[10px] font-semibold text-stone-500 mt-1">Wholesale ${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType).wholesaleB).toFixed(2)}</p>
                       </div>
                     </button>
                     <div className="border-t border-stone-200 sm:border-t-0 sm:border-l min-w-0 sm:min-w-[220px]">
@@ -2207,7 +2304,7 @@ export default function Home() {
                       <button key={t} type="button" onClick={() => setItemTag(t)} className={`py-1.5 px-3 rounded-xl text-[9px] font-black uppercase border transition-all ${itemTag === t ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-400 hover:border-stone-300'}`}>{t}</button>
                     ))}
                   </div>
-                  <button onClick={addToInventory} disabled={isGuest && !token && hasTurnstile} className={`w-full py-5 rounded-[1.8rem] font-black uppercase tracking-[0.15em] text-sm transition-all ${(isGuest && !token && hasTurnstile) ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-[#A5BEAC] text-white shadow-xl hover:bg-slate-900 active:scale-[0.97]'}`}>{(isGuest && !token && hasTurnstile) ? "Verifying…" : "Save to vault"}</button>
+                  <button type="button" onClick={addToInventory} disabled={(isGuest && !token && hasTurnstile) || savingToVault} className={`w-full py-5 rounded-[1.8rem] font-black uppercase tracking-[0.15em] text-sm transition-all ${(isGuest && !token && hasTurnstile) || savingToVault ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-[#A5BEAC] text-white shadow-xl hover:bg-slate-900 active:scale-[0.97]'}`}>{(isGuest && !token && hasTurnstile) ? "Verifying…" : savingToVault ? "Saving…" : "Save to vault"}</button>
                 </div>
                 </div>
 
@@ -2227,7 +2324,7 @@ export default function Home() {
                 </div>
                 <div className="text-right">
                   <p className="text-[9px] font-black text-stone-400 uppercase italic">Total Vault Value</p>
-                  <p className="text-2xl font-black text-slate-900">${pricesLoaded ? totalVaultValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "--.--"}</p>
+                  <p className="text-2xl font-black text-slate-900">${pricesLoaded ? roundForDisplay(totalVaultValue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "--.--"}</p>
                 </div>
               </div>
 
@@ -2393,7 +2490,7 @@ export default function Home() {
                   const isUp = priceDiff >= 0;
 
                   const formatCurrency = (num: number) => {
-                    return num.toLocaleString(undefined, {
+                    return roundForDisplay(num).toLocaleString(undefined, {
                       minimumFractionDigits: 2,
                       maximumFractionDigits: 2
                     });
@@ -2522,8 +2619,8 @@ export default function Home() {
                                           <button
                                             onClick={() => {
                                               setEditingItem(item);
-                                              setManualRetail(item.retail.toFixed(2));
-                                              setManualWholesale(item.wholesale.toFixed(2));
+                                              setManualRetail(roundForDisplay(Number(item.retail)).toFixed(2));
+                                              setManualWholesale(roundForDisplay(Number(item.wholesale)).toFixed(2));
                                               setOpenMenuId(null);
                                             }}
                                             className="w-full px-4 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-stone-50 transition-colors flex items-center gap-3"
@@ -2844,7 +2941,8 @@ export default function Home() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
               <div className="p-6 md:p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all flex flex-col justify-between">
                 <div>
-                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6">STRATEGY A (STANDARD MULTIPLIER)</h3>
+                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-2">STRATEGY A (STANDARD MULTIPLIER)</h3>
+                  <p className="text-[10px] text-stone-500 leading-relaxed mb-4">Uses a basic markup of 2–3× on your total cost (metal, labor, overhead). Industry standard for straightforward pricing.</p>
                   <div className="space-y-4 mb-8">
                     <div className="flex items-start gap-3">
                       <div className="w-8 h-8 rounded-lg bg-white border border-stone-200 flex items-center justify-center font-black text-xs shrink-0 mt-0.5">B</div>
@@ -2874,7 +2972,8 @@ export default function Home() {
 
               <div className="p-6 md:p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all flex flex-col justify-between">
                 <div>
-                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6">STRATEGY B (MATERIALS MARKUP)</h3>
+                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-2">STRATEGY B (MATERIALS MARKUP)</h3>
+                  <p className="text-[10px] text-stone-500 leading-relaxed mb-4">Prioritizes materials: metal + other costs get a markup (typically 1.5–2×), then labor and overhead are added. Industry standard for material-focused pieces.</p>
                   <div className="space-y-4 mb-8">
                     <div className="flex items-start gap-3">
                       <div className="w-8 h-8 rounded-lg bg-white border border-stone-200 flex items-center justify-center font-black text-xs shrink-0 mt-0.5">B</div>
