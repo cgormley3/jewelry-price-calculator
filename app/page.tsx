@@ -2821,8 +2821,8 @@ export default function Home() {
               </div>
             </div>
 
-            {/* flex-1 min-h-0 allows scrolling when parent has max-h on desktop */}
-            <div className="p-4 md:p-6 overflow-y-auto flex-1 min-h-0 pb-40 custom-scrollbar overscroll-behavior-contain touch-pan-y bg-stone-50/20 rounded-b-[2.5rem]">
+            {/* flex-1 min-h-0 allows scrolling when parent has max-h on desktop; mobile: cap at ~4 cards height */}
+            <div className="p-4 md:p-6 overflow-y-auto flex-1 min-h-0 max-h-[34rem] md:max-h-none pb-40 custom-scrollbar overscroll-behavior-contain touch-pan-y bg-stone-50/20 rounded-b-[2.5rem]">
               {loading ? (
                 <div className="p-20 text-center text-stone-400 font-bold uppercase text-xs tracking-widest animate-pulse">Opening Vault...</div>
               ) : inventory.length === 0 && hasValidSupabaseCredentials ? (
