@@ -2214,7 +2214,7 @@ export default function Home() {
         {/* Single full-width panel per tab - one visible at a time */}
         <div className="w-full max-w-7xl mx-auto max-h-[calc(100vh-5rem)] overflow-hidden flex flex-col">
           {/* CALCULATOR PANEL */}
-          <div className={`flex flex-col flex-1 min-h-0 ${activeTab !== 'calculator' ? 'hidden' : ''}`}>
+          <div className={`flex flex-col flex-1 min-h-0 h-[calc(100dvh-3rem)] lg:h-auto lg:max-h-[calc(100vh-5rem)] ${activeTab !== 'calculator' ? 'hidden' : ''}`}>
             <div className="bg-white p-8 rounded-[2rem] shadow-xl border-2 border-[#A5BEAC] space-y-4 lg:space-y-4 overflow-y-auto lg:overflow-hidden lg:h-full lg:min-h-0 lg:flex lg:flex-col custom-scrollbar">
               <h2 className="text-2xl font-black uppercase italic tracking-tighter text-slate-900 shrink-0">Calculator</h2>
 
@@ -3270,7 +3270,7 @@ export default function Home() {
           </div>
 
           {/* FORMULAS PANEL */}
-          <div className={`bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm flex flex-col flex-1 min-h-0 h-[90vh] lg:max-h-[calc(100vh-5rem)] overflow-hidden ${activeTab !== 'formulas' ? 'hidden' : ''}`}>
+          <div className={`bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm flex flex-col flex-1 min-h-0 h-[calc(100dvh-3rem)] lg:h-auto lg:max-h-[calc(100vh-5rem)] overflow-hidden ${activeTab !== 'formulas' ? 'hidden' : ''}`}>
             <div className="p-6 border-b border-stone-100 bg-white space-y-4 rounded-t-[2.5rem] shrink-0">
               <div className="flex justify-between items-center">
                 <h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Saved Formulas</h2>
