@@ -6,6 +6,8 @@ import { supabase, hasValidSupabaseCredentials } from '../lib/supabase';
 import { Turnstile } from '@marsidev/react-turnstile';
 import { GoogleLogin, CredentialResponse } from '@react-oauth/google';
 import InstallPrompt from './InstallPrompt';
+import FormulaBuilder from '../components/FormulaBuilder';
+import { evaluateCustomModel, formulaToReadableString, PRESET_A, type FormulaNode } from '../lib/formula-engine';
 
 const UNIT_TO_GRAMS: { [key: string]: number } = {
   "Grams": 1,
@@ -82,9 +84,18 @@ export default function Home() {
   const [overheadType, setOverheadType] = useState<'flat' | 'percent'>('percent');
   const [otherCosts, setOtherCosts] = useState<number | ''>('');
 
-  const [strategy, setStrategy] = useState<'A' | 'B'>('A');
+  const [strategy, setStrategy] = useState<'A' | 'B' | 'custom'>('A');
   const [retailMultA, setRetailMultA] = useState(3);
   const [markupB, setMarkupB] = useState(1.8);
+  const [customFormulaModel, setCustomFormulaModel] = useState<{
+    formula_base: FormulaNode;
+    formula_wholesale: FormulaNode;
+    formula_retail: FormulaNode;
+  }>({
+    formula_base: PRESET_A.base,
+    formula_wholesale: PRESET_A.wholesale,
+    formula_retail: PRESET_A.retail,
+  });
 
   // Which calculator sections to show (build from bottom up: only show what you include)
   const [includeStonesSection, setIncludeStonesSection] = useState(false);
@@ -96,6 +107,7 @@ export default function Home() {
   // Formula dropdowns in retail strategy cards: closed by default
   const [formulaAOpen, setFormulaAOpen] = useState(false);
   const [formulaBOpen, setFormulaBOpen] = useState(false);
+  const [customFormulaOpen, setCustomFormulaOpen] = useState(false);
 
   // When Labor section is off, use 0 for labor/overhead/other in display (save still uses real values)
   const calcHours = includeLaborSection ? hours : 0;
@@ -343,6 +355,43 @@ export default function Home() {
 
     return { wholesaleA, retailA, wholesaleB, retailB, totalMaterials, labor, metalCost, stones: totalStoneCost, stoneRetail: totalStoneRetail, overhead, other };
   }, [prices, retailMultA, markupB]);
+
+  // Compute wholesale/retail for current strategy (including custom)
+  const getStrategyPrices = useCallback((breakdown: { wholesaleA: number; retailA: number; wholesaleB: number; retailB: number; metalCost: number; labor: number; other: number; stones: number; stoneRetail: number; overhead: number }) => {
+    if (strategy === 'A') return { wholesale: breakdown.wholesaleA, retail: breakdown.retailA };
+    if (strategy === 'B') return { wholesale: breakdown.wholesaleB, retail: breakdown.retailB };
+    const ctx = {
+      metalCost: breakdown.metalCost,
+      labor: breakdown.labor,
+      other: breakdown.other,
+      stoneCost: breakdown.stones,
+      stoneRetail: breakdown.stoneRetail,
+      overhead: breakdown.overhead,
+      totalMaterials: breakdown.metalCost + breakdown.other + breakdown.stones,
+    };
+    const r = evaluateCustomModel(customFormulaModel, ctx);
+    return { wholesale: r.wholesale, retail: r.retail };
+  }, [strategy, customFormulaModel]);
+
+  // Compute wholesale/retail for a vault ITEM (may have custom formula)
+  const getItemPrices = useCallback((item: any, breakdown: { wholesaleA: number; retailA: number; wholesaleB: number; retailB: number; metalCost: number; labor: number; other: number; stones: number; stoneRetail: number; overhead: number }) => {
+    if (item.strategy === 'A') return { wholesale: breakdown.wholesaleA, retail: breakdown.retailA };
+    if (item.strategy === 'B') return { wholesale: breakdown.wholesaleB, retail: breakdown.retailB };
+    if (item.strategy === 'custom' && item.custom_formula) {
+      const ctx = {
+        metalCost: breakdown.metalCost,
+        labor: breakdown.labor,
+        other: breakdown.other,
+        stoneCost: breakdown.stones,
+        stoneRetail: breakdown.stoneRetail,
+        overhead: breakdown.overhead,
+        totalMaterials: breakdown.metalCost + breakdown.other + breakdown.stones,
+      };
+      const r = evaluateCustomModel(item.custom_formula, ctx);
+      return { wholesale: r.wholesale, retail: r.retail };
+    }
+    return { wholesale: breakdown.wholesaleA, retail: breakdown.retailA };
+  }, []);
 
   // Helper function to convert old stone format (stone_cost, stone_markup) to new format (stones array)
   const convertStonesToArray = (item: any): { name: string, cost: number, markup: number }[] => {
@@ -725,8 +774,9 @@ export default function Home() {
           item.markup_b
         );
 
-        const liveRetail = item.strategy === 'A' ? current.retailA : current.retailB;
-        const liveWholesaleFinal = item.strategy === 'A' ? current.wholesaleA : current.wholesaleB;
+        const itemPrices = getItemPrices(item, current);
+        const liveRetail = itemPrices.retail;
+        const liveWholesaleFinal = itemPrices.wholesale;
 
         const updatedMetals = item.metals.map((m: any) => {
           let currentSpot = 0;
@@ -783,8 +833,9 @@ export default function Home() {
             item.markup_b
           );
 
-          const liveRetail = item.strategy === 'A' ? calc.retailA : calc.retailB;
-          const liveWholesale = item.strategy === 'A' ? calc.wholesaleA : calc.wholesaleB;
+          const itemPrices = getItemPrices(item, calc);
+          const liveRetail = itemPrices.retail;
+          const liveWholesale = itemPrices.wholesale;
 
           const updatedMetals = item.metals.map((m: any) => {
             let currentSpot = 0;
@@ -846,8 +897,9 @@ export default function Home() {
             recalcParams
           );
 
-          const newWholesale = item.strategy === 'A' ? calc.wholesaleA : calc.wholesaleB;
-          const newRetail = item.strategy === 'A' ? calc.retailA : calc.retailB;
+          const itemPrices = getItemPrices(item, calc);
+          const newWholesale = itemPrices.wholesale;
+          const newRetail = itemPrices.retail;
 
           const updatedMetals = (item.metals || []).map((m: any) => {
             const type = m.type.toLowerCase();
@@ -999,13 +1051,14 @@ export default function Home() {
 
     // Calculate with new inputs
     const a = calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneList, overheadCost, overheadType);
+    const { wholesale, retail } = getStrategyPrices(a);
 
     const newItem = {
       name: itemName,
       metals: metalList,
       stones: stoneList, // Store as JSON array
-      wholesale: strategy === 'A' ? a.wholesaleA : a.wholesaleB,
-      retail: strategy === 'A' ? a.retailA : a.retailB,
+      wholesale,
+      retail,
       materials_at_making: a.metalCost,
       labor_at_making: a.labor,
       other_costs_at_making: Number(otherCosts) || 0,
@@ -1017,6 +1070,7 @@ export default function Home() {
       strategy: strategy,
       multiplier: retailMultA,
       markup_b: markupB,
+      custom_formula: strategy === 'custom' ? customFormulaModel : null,
       user_id: currentUser.id,
       notes: '',
       hours: Number(hours) || 0,
@@ -1128,7 +1182,8 @@ export default function Home() {
         // FIX: Pass labor cost so live price includes labor
         const stonesArray = convertStonesToArray(item);
         const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, stonesArray, item.overhead_cost || 0, 'flat', item.multiplier, item.markup_b);
-        const liveRetail = item.strategy === 'A' ? current.retailA : current.retailB;
+        const itemPrices = getItemPrices(item, current);
+        const liveRetail = itemPrices.retail;
 
         if (filterMinPrice && liveRetail < Number(filterMinPrice)) return false;
         if (filterMaxPrice && liveRetail > Number(filterMaxPrice)) return false;
@@ -1145,8 +1200,8 @@ export default function Home() {
       // FIX: Pass labor cost so live price includes labor
       const stonesArray = convertStonesToArray(item);
       const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, stonesArray, item.overhead_cost || 0, 'flat', item.multiplier, item.markup_b);
-      const liveRetail = item.strategy === 'A' ? current.retailA : current.retailB;
-      return acc + liveRetail;
+      const itemPrices = getItemPrices(item, current);
+      return acc + itemPrices.retail;
     }, 0);
   }, [inventory, prices, calculateFullBreakdown]);
 
@@ -1161,8 +1216,9 @@ export default function Home() {
       // FIX: Pass labor cost
       const stonesArray = convertStonesToArray(item);
       const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, stonesArray, item.overhead_cost || 0, 'flat', item.multiplier, item.markup_b);
-      const liveWholesale = item.strategy === 'A' ? current.wholesaleA : current.wholesaleB;
-      const liveRetail = item.strategy === 'A' ? current.retailA : current.retailB;
+      const itemPrices = getItemPrices(item, current);
+      const liveWholesale = itemPrices.wholesale;
+      const liveRetail = itemPrices.retail;
       const metalsStr = item.metals.map((m: any) => `${m.weight}${m.unit} ${m.type}`).join('; ');
 
       const stoneRetail = current.stoneRetail || 0;
@@ -1319,8 +1375,9 @@ export default function Home() {
 
       const stonesArray = convertStonesToArray(item);
       const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, stonesArray, item.overhead_cost || 0, 'flat', item.multiplier, item.markup_b);
-      const liveWholesale = item.strategy === 'A' ? current.wholesaleA : current.wholesaleB;
-      const liveRetail = item.strategy === 'A' ? current.retailA : current.retailB;
+      const itemPrices = getItemPrices(item, current);
+      const liveWholesale = itemPrices.wholesale;
+      const liveRetail = itemPrices.retail;
 
       const pdfThumbSize = 18;
       const pdfThumbGap = 4;
@@ -1725,7 +1782,8 @@ export default function Home() {
                   recalcParams
                 );
 
-                const liveRetail = recalcItem.strategy === 'A' ? calc.retailA : calc.retailB;
+                const itemPrices = getItemPrices(recalcItem, calc);
+                const liveRetail = itemPrices.retail;
 
                 return (
                   <>
@@ -2018,11 +2076,11 @@ export default function Home() {
           </div>
         </div>
 
-        {/* On desktop (lg) items-stretch so calculator and vault columns match height; mobile unchanged */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start lg:items-stretch">
+        {/* On desktop (lg) max-h constrains both panels; mobile unchanged */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start lg:items-stretch lg:max-h-[calc(100vh-7rem)]">
           {/* CALCULATOR COLUMN */}
-          <div className={`lg:col-span-5 space-y-6 lg:sticky lg:top-6 self-start lg:self-stretch ${activeTab !== 'calculator' ? 'hidden md:block' : ''}`}>
-            <div className="bg-white p-8 rounded-[2rem] shadow-xl border-2 border-[#A5BEAC] space-y-6 lg:h-full flex flex-col">
+          <div className={`lg:col-span-5 space-y-6 lg:sticky lg:top-6 self-start lg:self-stretch lg:max-h-[calc(100vh-7rem)] lg:overflow-hidden flex flex-col ${activeTab !== 'calculator' ? 'hidden md:flex' : ''}`}>
+            <div className="bg-white p-8 rounded-[2rem] shadow-xl border-2 border-[#A5BEAC] space-y-6 lg:h-full lg:min-h-0 lg:flex lg:flex-col lg:overflow-y-auto">
               <h2 className="text-2xl font-black uppercase italic tracking-tighter text-slate-900">Calculator</h2>
 
               {/* Calculator section tabs: one visible at a time */}
@@ -2344,6 +2402,67 @@ export default function Home() {
                       )}
                     </div>
                   </div>
+
+                  <div
+                    className={`rounded-2xl border-2 transition-all overflow-hidden ${strategy === 'custom' ? 'border-[#A5BEAC] bg-stone-50 shadow-md' : 'border-stone-100 bg-white'}`}
+                  >
+                    <div className="w-full flex flex-col sm:flex-row sm:items-stretch sm:gap-4 p-5">
+                      <button
+                        type="button"
+                        onClick={() => setStrategy('custom')}
+                        className="flex-1 min-w-0 text-left"
+                      >
+                        <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter mb-1">Custom</p>
+                        <p className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums">
+                          ${(() => {
+                            const a = calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType);
+                            const p = getStrategyPrices(a);
+                            return roundForDisplay(p.retail).toFixed(2);
+                          })()}
+                        </p>
+                        <p className="text-[10px] font-semibold text-stone-500 mt-1">
+                          Wholesale ${(() => {
+                            const a = calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType);
+                            const p = getStrategyPrices(a);
+                            return roundForDisplay(p.wholesale).toFixed(2);
+                          })()}
+                        </p>
+                      </button>
+                      {strategy === 'custom' && (
+                        <div className="border-t border-stone-200 sm:border-t-0 sm:border-l min-w-0 sm:min-w-[140px] flex flex-col">
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setCustomFormulaOpen(!customFormulaOpen); }}
+                            className="w-full flex items-center justify-between gap-2 py-2.5 px-4 sm:px-5 text-left hover:bg-stone-100/80 transition-colors shrink-0"
+                            aria-expanded={customFormulaOpen}
+                          >
+                            <span className="text-[9px] font-black text-stone-400 uppercase tracking-wider">Build formula</span>
+                            <span className={`text-stone-400 text-[10px] transition-transform shrink-0 ${customFormulaOpen ? 'rotate-180' : ''}`}>▼</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    {strategy === 'custom' && customFormulaOpen && (
+                      <div className="border-t border-stone-200 p-4">
+                        <FormulaBuilder
+                          model={customFormulaModel}
+                          onChange={setCustomFormulaModel}
+                          previewContext={(() => {
+                            const a = calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType);
+                            return {
+                              metalCost: a.metalCost,
+                              labor: a.labor,
+                              other: a.other,
+                              stoneCost: a.stones,
+                              stoneRetail: a.stoneRetail,
+                              overhead: a.overhead,
+                              totalMaterials: a.totalMaterials,
+                            };
+                          })()}
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
                 </div>
 
@@ -2374,8 +2493,8 @@ export default function Home() {
           </div>
 
           {/* VAULT COLUMN */}
-          {/* On desktop lg:h-full matches calculator column height; mobile keeps h-[85vh] */}
-          <div className={`lg:col-span-7 bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm flex flex-col h-[85vh] lg:h-full ${activeTab !== 'vault' ? 'hidden md:flex' : 'flex'}`}>
+          {/* On desktop lg:max-h constrains height; mobile keeps h-[85vh] */}
+          <div className={`lg:col-span-7 bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm flex flex-col h-[85vh] lg:max-h-[calc(100vh-7rem)] lg:min-h-0 ${activeTab !== 'vault' ? 'hidden md:flex' : 'flex'}`}>
             <div className="p-6 border-b border-stone-100 bg-white space-y-4 rounded-t-[2.5rem]">
               <div className="flex justify-between items-center text-left">
                 <div>
@@ -2443,8 +2562,8 @@ export default function Home() {
                         <div className="space-y-1">
                           <label className="text-[9px] font-bold text-stone-400 uppercase">Strategy</label>
                           <div className="flex gap-2">
-                            {['All', 'A', 'B'].map(s => (
-                              <button key={s} onClick={() => setFilterStrategy(s)} className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase border ${filterStrategy === s ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-400'}`}>{s}</button>
+                            {['All', 'A', 'B', 'custom'].map(s => (
+                              <button key={s} onClick={() => setFilterStrategy(s)} className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase border ${filterStrategy === s ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-400'}`}>{s === 'custom' ? 'Custom' : s}</button>
                             ))}
                           </div>
                         </div>
@@ -2532,9 +2651,8 @@ export default function Home() {
               </div>
             </div>
 
-            {/* FIXED: Removed max-h, added flex-1 min-h-0 and min-h-[600px] to ensure list has height */}
-            {/* Added pb-40 to allow scrolling past last item so dropdown is visible */}
-            <div className="p-4 md:p-6 space-y-4 overflow-y-auto flex-1 pb-40 custom-scrollbar overscroll-behavior-contain touch-pan-y bg-stone-50/20 rounded-b-[2.5rem]">
+            {/* flex-1 min-h-0 allows scrolling when parent has max-h on desktop */}
+            <div className="p-4 md:p-6 space-y-4 overflow-y-auto flex-1 min-h-0 pb-40 custom-scrollbar overscroll-behavior-contain touch-pan-y bg-stone-50/20 rounded-b-[2.5rem]">
               {loading ? (
                 <div className="p-20 text-center text-stone-400 font-bold uppercase text-xs tracking-widest animate-pulse">Opening Vault...</div>
               ) : inventory.length === 0 && hasValidSupabaseCredentials ? (
@@ -2548,8 +2666,9 @@ export default function Home() {
                   const stonesArray = convertStonesToArray(item);
                   const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, stonesArray, item.overhead_cost || 0, 'flat', item.multiplier, item.markup_b);
                   const labor = item.labor_at_making || 0;
-                  const liveWholesale = item.strategy === 'A' ? current.wholesaleA : current.wholesaleB;
-                  const liveRetail = item.strategy === 'A' ? current.retailA : current.retailB;
+                  const itemPrices = getItemPrices(item, current);
+                  const liveWholesale = itemPrices.wholesale;
+                  const liveRetail = itemPrices.retail;
                   const priceDiff = liveRetail - item.retail;
                   const isUp = priceDiff >= 0;
 
@@ -2842,7 +2961,7 @@ export default function Home() {
                             {/* Strategy Box */}
                             <div className="bg-white p-3.5 md:p-3 rounded-xl border border-stone-100 shadow-sm flex flex-col justify-center items-center text-center min-h-[70px] md:min-h-0">
                               <p className="text-[9px] md:text-[8px] font-black text-stone-400 uppercase mb-1.5 md:mb-1">Strategy</p>
-                              <p className="text-sm md:text-xs font-black text-slate-700 uppercase">{item.strategy}</p>
+                              <p className="text-sm md:text-xs font-black text-slate-700 uppercase">{item.strategy === 'custom' ? 'Custom' : item.strategy}</p>
                             </div>
                             {/* Materials Box */}
                             <div className="bg-white p-3.5 md:p-3 rounded-xl border border-stone-100 shadow-sm flex flex-col justify-center items-center text-center min-h-[70px] md:min-h-0">
@@ -2855,6 +2974,17 @@ export default function Home() {
                               <p className="text-sm md:text-xs font-black text-slate-700">${Number(item.labor_at_making || 0).toFixed(2)}</p>
                             </div>
                           </div>
+
+                          {item.strategy === 'custom' && item.custom_formula && (
+                            <div className="bg-white p-4 rounded-xl border border-stone-100 shadow-sm text-left">
+                              <h4 className="text-[9px] font-black text-stone-400 uppercase mb-2">Custom Formula</h4>
+                              <div className="space-y-1.5 text-[9px] text-slate-700">
+                                <p><span className="font-bold text-stone-500">Base:</span> {formulaToReadableString(item.custom_formula.formula_base)}</p>
+                                <p><span className="font-bold text-stone-500">Wholesale:</span> {formulaToReadableString(item.custom_formula.formula_wholesale)}</p>
+                                <p><span className="font-bold text-stone-500">Retail:</span> {formulaToReadableString(item.custom_formula.formula_retail)}</p>
+                              </div>
+                            </div>
+                          )}
 
                           <div className="grid grid-cols-1 gap-8 text-left">
                             <div className="space-y-3">
