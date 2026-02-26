@@ -2570,6 +2570,10 @@ export default function Home() {
                     return acc + val;
                   }, 0) || 0;
 
+                  // Stone cost for Materials display only (does not affect other calculations)
+                  const savedStonesArray = convertStonesToArray(item);
+                  const savedStoneCost = savedStonesArray.reduce((sum, s) => sum + (Number(s.cost) || 0), 0);
+
                   const isSold = item.status === 'sold';
                   const isArchived = item.status === 'archived';
 
@@ -2843,7 +2847,7 @@ export default function Home() {
                             {/* Materials Box */}
                             <div className="bg-white p-3.5 md:p-3 rounded-xl border border-stone-100 shadow-sm flex flex-col justify-center items-center text-center min-h-[70px] md:min-h-0">
                               <p className="text-[9px] md:text-[8px] font-black text-stone-400 uppercase mb-1.5 md:mb-1">Materials</p>
-                              <p className="text-sm md:text-xs font-black text-slate-700">${(savedMetalCost + Number(item.other_costs_at_making || 0)).toFixed(2)}</p>
+                              <p className="text-sm md:text-xs font-black text-slate-700">${(savedMetalCost + Number(item.other_costs_at_making || 0) + savedStoneCost).toFixed(2)}</p>
                             </div>
                             {/* Labor Box */}
                             <div className="bg-white p-3.5 md:p-3 rounded-xl border border-stone-100 shadow-sm flex flex-col justify-center items-center text-center col-span-2 md:col-span-1 min-h-[70px] md:min-h-0">
