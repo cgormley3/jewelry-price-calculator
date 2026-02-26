@@ -381,7 +381,11 @@ export default function Home() {
         // Run auth and price fetch in parallel (prices don't depend on auth)
         const authPromise = hasValidSupabaseCredentials ? (async () => {
           try {
-            const { data: { session } } = await supabase.auth.getSession();
+            let { data: { session } } = await supabase.auth.getSession();
+            if (!session) {
+              await new Promise(r => setTimeout(r, 300));
+              ({ data: { session } } = await supabase.auth.getSession());
+            }
             if (!session) {
               const { data } = await supabase.auth.signInAnonymously();
               setUser(data.user);
@@ -398,8 +402,7 @@ export default function Home() {
         if (!hasValidSupabaseCredentials) console.log('Skipping Supabase auth - credentials not configured');
 
         await Promise.all([authPromise, fetchPrices()]);
-        setLoading(false); // Show UI immediately; load inventory in background
-        fetchInventory(); // Don't await - prevents hang if Supabase is slow
+        await fetchInventory();
       } catch (e) {
         console.warn('initSession error:', e);
       } finally {
@@ -455,25 +458,57 @@ export default function Home() {
   }, [fetchPrices]);
 
   async function fetchInventory() {
-    // Skip if Supabase credentials are not configured
     if (!hasValidSupabaseCredentials) {
       setLoading(false);
       return;
     }
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user?.id) { setLoading(false); return; }
-      const { data, error } = await supabase.from('inventory').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false });
-      if (!error && data) {
-        setInventory(data);
-        const uniqueLocs = Array.from(new Set(data.map(i => i.location).filter(Boolean)));
-        setLocations(prev => Array.from(new Set([...prev, ...uniqueLocs])));
+      let session = (await supabase.auth.getSession()).data.session;
+      if (!session?.user?.id) {
+        await new Promise(r => setTimeout(r, 400));
+        session = (await supabase.auth.getSession()).data.session;
       }
-    } catch (error) {
+      if (!session?.user?.id) {
+        setLoading(false);
+        return;
+      }
+      const accessToken = (session as any).access_token;
+      if (!accessToken) {
+        setNotification({ title: 'Session Error', message: 'Could not get access token. Try signing in again.', type: 'info' });
+        setLoading(false);
+        return;
+      }
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
+      const res = await fetch('/api/fetch-inventory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accessToken }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const data = await res.json();
+        setInventory(Array.isArray(data) ? data : []);
+        const items = Array.isArray(data) ? data : [];
+        const uniqueLocs = Array.from(new Set(items.map((i: any) => i.location).filter(Boolean)));
+        setLocations(prev => Array.from(new Set([...prev, ...uniqueLocs])));
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setNotification({ title: 'Vault Load Failed', message: err?.error || 'Could not load vault.', type: 'info', onConfirm: () => { setLoading(true); fetchInventory(); } });
+      }
+    } catch (error: any) {
       console.warn('Error fetching inventory:', error);
+      const retry = () => { setLoading(true); fetchInventory(); };
+      if (error?.name === 'AbortError') {
+        setNotification({ title: 'Vault Load Timeout', message: 'Connection is slow.', type: 'info', onConfirm: retry });
+      } else {
+        setNotification({ title: 'Vault Load Failed', message: error?.message || 'Could not load vault.', type: 'info', onConfirm: retry });
+      }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   // --- SELECTION & LOCATION HANDLERS ---
@@ -998,14 +1033,25 @@ export default function Home() {
 
     setSavingToVault(true);
     try {
-      const { data, error } = await supabase.from('inventory').insert([newItem]).select();
-      if (!error) {
-        if (data && data.length > 0) {
-          setInventory(prev => [data[0], ...prev]);
-        } else {
-          // Insert may have succeeded but SELECT returned empty (e.g. RLS); refresh in background
-          fetchInventory();
-        }
+      // Use API route (service role) - bypasses client RLS/connection issues
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      const res = await fetch('/api/save-item', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newItem }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      let data = null;
+      let errBody: { error?: string; code?: string } = {};
+      if (res.ok) {
+        data = await res.json();
+      } else {
+        errBody = await res.json().catch(() => ({}));
+      }
+      if (res.ok && data) {
+        setInventory(prev => [data, ...prev]);
         // Reset calculator to original state
         setItemName('');
         setMetalList([]);
@@ -1036,16 +1082,14 @@ export default function Home() {
         setNotification({ title: "Item Saved", message: `"${newItem.name}" is now stored in your Vault.`, type: 'success' });
         if (!user) setUser(currentUser);
       } else {
-        console.error(error);
-        setNotification({ title: "Save Failed", message: error?.message || "Could not save item.", type: 'error' });
+        const msg = errBody?.error || `Save failed (${res.status})`;
+        const hint = errBody?.code === '42501' || msg?.includes('policy') ? ' Check that the inventory table exists and has correct columns.' : '';
+        setNotification({ title: "Save Failed", message: msg + hint, type: 'error' });
       }
     } catch (error: any) {
-      console.error('Database save error:', error);
-      setNotification({ 
-        title: "Save Failed", 
-        message: error?.message || "Could not save item to database. Please check your Supabase configuration.", 
-        type: 'error' 
-      });
+      console.error('Save error:', error);
+      const msg = error?.name === 'AbortError' ? 'Request timed out. Check your internet connection.' : (error?.message || 'Could not save.');
+      setNotification({ title: "Save Failed", message: msg, type: 'error' });
     } finally {
       setSavingToVault(false);
     }
@@ -1832,6 +1876,11 @@ export default function Home() {
                   <button onClick={() => setNotification(null)} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
                   <button onClick={() => { notification.onConfirm?.(); setNotification(null); }} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition shadow-lg">Confirm</button>
                 </>
+              ) : notification.onConfirm ? (
+                <>
+                  <button onClick={() => setNotification(null)} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Dismiss</button>
+                  <button onClick={() => { notification.onConfirm?.(); setNotification(null); }} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition shadow-lg">Retry</button>
+                </>
               ) : (
                 <button
                   onClick={() => setNotification(null)}
@@ -2477,6 +2526,30 @@ export default function Home() {
             <div className="p-4 md:p-6 space-y-4 overflow-y-auto flex-1 pb-40 custom-scrollbar overscroll-behavior-contain touch-pan-y bg-stone-50/20 rounded-b-[2.5rem]">
               {loading ? (
                 <div className="p-20 text-center text-stone-400 font-bold uppercase text-xs tracking-widest animate-pulse">Opening Vault...</div>
+              ) : inventory.length === 0 && hasValidSupabaseCredentials ? (
+                <div className="p-12 text-center space-y-4">
+                  <p className="text-stone-500 font-bold uppercase text-xs tracking-wider">No items yet</p>
+                  <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                    <button onClick={() => { setLoading(true); fetchInventory(); }} className="py-3 px-6 bg-[#A5BEAC] text-white rounded-xl font-black text-[10px] uppercase hover:bg-slate-900 transition">Reload Vault</button>
+                    <button onClick={async () => {
+                      try {
+                        const res = await fetch('/api/db-health');
+                        const h = await res.json();
+                        let msg = '';
+                        if (!h.configured) msg = 'Supabase URL and anon key not set in .env.local';
+                        else if (!h.urlValid) msg = 'Supabase URL invalid';
+                        else if (!h.serviceKeyPresent) msg = 'SUPABASE_SERVICE_ROLE_KEY missing (needed for prices)';
+                        else if (h.inventoryTableTest === 'fail') msg = 'inventory table missing or inaccessible. Run migrations in Supabase SQL Editor.';
+                        else if (h.connectionTest === 'fail') msg = h.error || 'Cannot reach Supabase';
+                        else if (h.inventoryTableTest === 'ok') msg = 'Database OK. Vault may be empty or RLS blocking access. Check Supabase RLS policies for inventory table.';
+                        else msg = JSON.stringify(h, null, 2);
+                        setNotification({ title: 'Database Check', message: msg, type: 'info' });
+                      } catch (e: any) {
+                        setNotification({ title: 'Check Failed', message: e?.message || 'Could not reach health API', type: 'error' });
+                      }
+                    }} className="py-3 px-6 bg-stone-200 text-stone-700 rounded-xl font-black text-[10px] uppercase hover:bg-stone-300 transition">Check connection</button>
+                  </div>
+                </div>
               ) : (
                 filteredInventory.map(item => {
                   // FIX: Force overhead_type to 'flat' here to correctly calculate Live Retail using the stored Dollar value
