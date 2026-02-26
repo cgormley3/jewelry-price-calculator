@@ -679,6 +679,43 @@ export default function Home() {
     }
   };
 
+  const deleteTagFromLibrary = async (tagToDelete: string) => {
+    try {
+      if (savedUserTags.includes(tagToDelete)) {
+        const session = (await supabase.auth.getSession()).data.session;
+        const accessToken = (session as any)?.access_token;
+        if (!accessToken || !user?.id) {
+          setNotification({ title: "Sign in required", message: "Please sign in to manage your tag library.", type: 'info' });
+          return;
+        }
+        const res = await fetch('/api/delete-user-tag', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessToken, userId: user.id, tag: tagToDelete }),
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          setNotification({ title: "Failed to remove tag", message: err?.error || 'Could not remove tag from library.', type: 'error' });
+          return;
+        }
+        setSavedUserTags(prev => prev.filter(t => t !== tagToDelete));
+      }
+      // Clear this tag from any items that have it
+      const itemsWithTag = inventory.filter(i => i.tag === tagToDelete);
+      if (itemsWithTag.length > 0) {
+        const { error } = await supabase.from('inventory').update({ tag: null }).eq('tag', tagToDelete);
+        if (error) {
+          setNotification({ title: "Tag removed from library", message: "Could not clear tag from some items.", type: 'info' });
+        } else {
+          setInventory(inventory.map(i => i.tag === tagToDelete ? { ...i, tag: null } : i));
+        }
+      }
+      setShowTagMenuId(null);
+    } catch (_) {
+      setNotification({ title: "Error", message: "Could not remove tag from library.", type: 'error' });
+    }
+  };
+
   const addCustomLocation = async (id: string) => {
     if (!newLocationInput.trim()) return;
     setLocations(prev => Array.from(new Set([...prev, newLocationInput])));
@@ -3030,13 +3067,22 @@ export default function Home() {
                                       {uniqueTags.length > 0 && (
                                         <>
                                           {uniqueTags.map(t => (
-                                            <button
-                                              key={t}
-                                              onClick={() => updateTag(item.id, t)}
-                                              className="w-full px-3 py-2 text-left text-[9px] font-bold uppercase text-slate-600 hover:bg-stone-50 border-b border-stone-50"
-                                            >
-                                              {t}
-                                            </button>
+                                            <div key={t} className="flex items-center justify-between border-b border-stone-50 last:border-0 hover:bg-stone-50 pr-2 group">
+                                              <button
+                                                onClick={() => updateTag(item.id, t)}
+                                                className="flex-1 px-3 py-2 text-left text-[9px] font-bold uppercase text-slate-600"
+                                              >
+                                                {t}
+                                              </button>
+                                              <button
+                                                onClick={(e) => { e.stopPropagation(); deleteTagFromLibrary(t); }}
+                                                className="text-red-400 text-[10px] font-bold px-1.5 py-1 hover:text-red-600 hover:bg-red-50 rounded shrink-0"
+                                                title={`Remove "${t}" from tag list`}
+                                                aria-label={`Remove ${t} from tag list`}
+                                              >
+                                                ×
+                                              </button>
+                                            </div>
                                           ))}
                                         </>
                                       )}
