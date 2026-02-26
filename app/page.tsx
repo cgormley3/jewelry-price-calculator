@@ -859,8 +859,8 @@ export default function Home() {
         );
 
         const itemPrices = getItemPrices(item, current);
-        const liveRetail = itemPrices.retail;
-        const liveWholesaleFinal = itemPrices.wholesale;
+        const liveRetail = roundForDisplay(itemPrices.retail);
+        const liveWholesaleFinal = roundForDisplay(itemPrices.wholesale);
 
         const updatedMetals = item.metals.map((m: any) => {
           let currentSpot = 0;
@@ -918,8 +918,8 @@ export default function Home() {
           );
 
           const itemPrices = getItemPrices(item, calc);
-          const liveRetail = itemPrices.retail;
-          const liveWholesale = itemPrices.wholesale;
+          const liveRetail = roundForDisplay(itemPrices.retail);
+          const liveWholesale = roundForDisplay(itemPrices.wholesale);
 
           const updatedMetals = item.metals.map((m: any) => {
             let currentSpot = 0;
