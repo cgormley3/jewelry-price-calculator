@@ -329,8 +329,11 @@ export default function Home() {
           } else {
             setUser(session.user);
           }
-        } catch (error) {
+        } catch (error: any) {
           console.warn('Supabase auth error:', error);
+          if (error?.message?.includes('Cannot reach') || error?.message?.includes('timed out') || error?.message === 'Failed to fetch') {
+            setNotification({ title: 'Connection Issue', message: 'Unable to reach the vault service. The calculator works offline—try again when you\'re back online.', type: 'info' });
+          }
           // Continue without auth - app can still function
         }
       } else {
@@ -359,11 +362,12 @@ export default function Home() {
     if (hasValidSupabaseCredentials) {
       try {
         const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-          setUser(session?.user ?? null);
-          if (session) fetchInventory();
-
-          if (event === "PASSWORD_RECOVERY") {
-            setShowResetModal(true);
+          try {
+            setUser(session?.user ?? null);
+            if (session) await fetchInventory();
+            if (event === "PASSWORD_RECOVERY") setShowResetModal(true);
+          } catch (e) {
+            console.warn('Auth state change handler error:', e);
           }
         });
         subscription = authSubscription;
