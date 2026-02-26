@@ -2075,9 +2075,9 @@ export default function Home() {
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="max-w-7xl mx-auto flex flex-col min-h-[calc(100dvh-2rem)] gap-6 md:min-h-0 md:space-y-6 md:gap-0">
         {/* HEADER */}
-        <div className="flex flex-col md:flex-row justify-between items-center bg-white px-6 py-8 rounded-[2rem] border-2 shadow-sm gap-8 mb-6 relative border-[#A5BEAC]">
+        <div className="flex flex-col md:flex-row justify-between items-center bg-white px-6 py-8 rounded-[2rem] border-2 shadow-sm gap-8 shrink-0 relative border-[#A5BEAC]">
           <div className="hidden md:block md:w-1/4"></div>
           <div className="flex flex-col items-center justify-center text-center w-full md:w-2/4">
             <img src="/icon.png?v=2" alt="Logo" className="w-12 h-12 object-contain bg-transparent block brightness-110 contrast-125 mb-3" style={{ mixBlendMode: 'multiply' }} />
@@ -2167,7 +2167,7 @@ export default function Home() {
         </div>
 
         {/* MARKET TICKER - MODIFIED: Increased mb-2 to mb-6 for spacing */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 px-2 mb-6 md:mb-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 px-2 shrink-0">
           {['gold', 'silver', 'platinum', 'palladium'].map((name) => (
             <div key={name} className="bg-white p-4 rounded-xl border-l-4 border-[#A5BEAC] shadow-sm text-center lg:text-left">
               <p className="text-[10px] font-black uppercase text-stone-400">{name}</p>
@@ -2182,7 +2182,7 @@ export default function Home() {
         </div>
 
         {/* Tab Navigation - same width as panels below */}
-        <div className="w-full px-2 mt-0 mb-4">
+        <div className="w-full px-2 shrink-0">
           <div className="flex bg-white rounded-2xl border border-[#A5BEAC] shadow-sm overflow-hidden p-1 w-full max-w-7xl mx-auto">
             <button
               onClick={() => setActiveTab('calculator')}
@@ -2212,9 +2212,9 @@ export default function Home() {
         </div>
 
         {/* Single full-width panel per tab - one visible at a time */}
-        <div className="w-full max-w-7xl mx-auto max-h-[calc(100vh-5rem)] overflow-hidden flex flex-col">
+        <div className="w-full max-w-7xl mx-auto flex-1 min-h-0 flex flex-col overflow-hidden md:flex-initial md:max-h-[calc(100vh-5rem)]">
           {/* CALCULATOR PANEL */}
-          <div className={`flex flex-col flex-1 min-h-0 h-[calc(100dvh-3rem)] lg:h-auto lg:max-h-[calc(100vh-5rem)] ${activeTab !== 'calculator' ? 'hidden' : ''}`}>
+          <div className={`flex flex-col flex-1 min-h-0 min-h-[50vh] lg:min-h-0 lg:max-h-[calc(100vh-5rem)] ${activeTab !== 'calculator' ? 'hidden' : ''}`}>
             <div className="bg-white p-8 rounded-[2rem] shadow-xl border-2 border-[#A5BEAC] space-y-4 lg:space-y-4 overflow-y-auto lg:overflow-hidden lg:h-full lg:min-h-0 lg:flex lg:flex-col custom-scrollbar">
               <h2 className="text-2xl font-black uppercase italic tracking-tighter text-slate-900 shrink-0">Calculator</h2>
 
@@ -2663,7 +2663,7 @@ export default function Home() {
           </div>
 
           {/* VAULT PANEL */}
-          <div className={`bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm flex flex-col flex-1 min-h-0 h-[calc(100dvh-3rem)] lg:h-auto lg:max-h-[calc(100vh-5rem)] overflow-hidden ${activeTab !== 'vault' ? 'hidden' : ''}`}>
+          <div className={`bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm flex flex-col flex-1 min-h-0 min-h-[50vh] lg:min-h-0 lg:max-h-[calc(100vh-5rem)] overflow-hidden ${activeTab !== 'vault' ? 'hidden' : ''}`}>
             <div className="p-6 border-b border-stone-100 bg-white space-y-4 rounded-t-[2.5rem] shrink-0">
               <div className="flex justify-between items-center text-left">
                 <div>
@@ -3270,7 +3270,7 @@ export default function Home() {
           </div>
 
           {/* FORMULAS PANEL */}
-          <div className={`bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm flex flex-col flex-1 min-h-0 h-[calc(100dvh-3rem)] lg:h-auto lg:max-h-[calc(100vh-5rem)] overflow-hidden ${activeTab !== 'formulas' ? 'hidden' : ''}`}>
+          <div className={`bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm flex flex-col flex-1 min-h-0 min-h-[50vh] lg:min-h-0 lg:max-h-[calc(100vh-5rem)] overflow-hidden ${activeTab !== 'formulas' ? 'hidden' : ''}`}>
             <div className="p-6 border-b border-stone-100 bg-white space-y-4 rounded-t-[2.5rem] shrink-0">
               <div className="flex justify-between items-center">
                 <h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Saved Formulas</h2>
@@ -3462,7 +3462,7 @@ export default function Home() {
           </div>
 
           {/* LOGIC PANEL */}
-          <div className={`flex flex-col flex-1 min-h-0 h-[calc(100dvh-3rem)] lg:h-auto lg:max-h-[calc(100vh-5rem)] overflow-y-auto ${activeTab !== 'logic' ? 'hidden' : ''}`}>
+          <div className={`flex flex-col flex-1 min-h-0 min-h-[50vh] lg:min-h-0 lg:max-h-[calc(100vh-5rem)] overflow-y-auto ${activeTab !== 'logic' ? 'hidden' : ''}`}>
             <div className="grid grid-cols-1 gap-8 pt-6 mt-0 md:pt-4 lg:max-h-[calc(100vh-5rem)]">
           <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC] min-h-[400px] md:min-h-0">
             <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">1. MATERIAL CALCULATION DETAIL</h2>
