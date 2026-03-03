@@ -127,7 +127,7 @@ export default function Home() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [activeTab, setActiveTab] = useState<'calculator' | 'vault' | 'logic' | 'formulas'>('calculator');
+  const [activeTab, setActiveTab] = useState<'calculator' | 'vault' | 'logic' | 'formulas' | 'time'>('calculator');
 
   // Saved formulas (fetched when logged in)
   const [formulas, setFormulas] = useState<any[]>([]);
@@ -139,10 +139,37 @@ export default function Home() {
   const [savingFormula, setSavingFormula] = useState(false);
   const [selectedFormulaId, setSelectedFormulaId] = useState<string | null>(null);
   const [savedUserTags, setSavedUserTags] = useState<string[]>([]);
+  const [timeEntries, setTimeEntries] = useState<any[]>([]);
+  const [showLogTimeModal, setShowLogTimeModal] = useState(false);
+  const [logTimeItemId, setLogTimeItemId] = useState<string | null>(null);
+  const [logTimeHours, setLogTimeHours] = useState<string>('');
+  const [logTimeNote, setLogTimeNote] = useState('');
+  const [logTimeAllowItemSelect, setLogTimeAllowItemSelect] = useState(false);
+  const [timeFilterDateFrom, setTimeFilterDateFrom] = useState('');
+  const [timeFilterDateTo, setTimeFilterDateTo] = useState('');
+  const [timeFilterItemId, setTimeFilterItemId] = useState<string>('');
+  // Timer persisted to localStorage so it survives refresh/background (PWA, mobile home screen)
+  const [timerStartedAt, setTimerStartedAt] = useState<number | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const v = localStorage.getItem('vault_timer_started_at');
+    const n = v ? parseFloat(v) : NaN;
+    return Number.isFinite(n) ? n : null;
+  });
+  const [timerPausedElapsed, setTimerPausedElapsed] = useState<number>(() => {
+    if (typeof window === 'undefined') return 0;
+    if (localStorage.getItem('vault_timer_started_at')) return 0; // If running, ignore paused
+    const v = localStorage.getItem('vault_timer_paused_elapsed');
+    const n = v ? parseFloat(v) : NaN;
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  });
+  const [timerTick, setTimerTick] = useState(0);
 
   // Image Upload & Crop State
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [savingToVault, setSavingToVault] = useState(false);
+  const [saveAsDraft, setSaveAsDraft] = useState(false);
+  const [showQuickAddPiece, setShowQuickAddPiece] = useState(false);
+  const [quickAddPieceName, setQuickAddPieceName] = useState('');
   const [loggingOut, setLoggingOut] = useState(false);
   const [cropImage, setCropImage] = useState<string | null>(null);
   const [cropItemId, setCropItemId] = useState<string | null>(null);
@@ -171,6 +198,39 @@ export default function Home() {
     if (stored === '1' || stored === '5' || stored === '10' || stored === '25') setPriceRounding(Number(stored) as 1 | 5 | 10 | 25);
     else if (stored === 'none') setPriceRounding('none');
   }, []);
+
+  // Persist timer to localStorage so it survives refresh, tab close, PWA background
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (timerStartedAt != null) {
+      localStorage.setItem('vault_timer_started_at', String(timerStartedAt));
+      localStorage.removeItem('vault_timer_paused_elapsed');
+    } else if (timerPausedElapsed > 0) {
+      localStorage.setItem('vault_timer_paused_elapsed', String(timerPausedElapsed));
+      localStorage.removeItem('vault_timer_started_at');
+    } else {
+      localStorage.removeItem('vault_timer_started_at');
+      localStorage.removeItem('vault_timer_paused_elapsed');
+    }
+  }, [timerStartedAt, timerPausedElapsed]);
+
+  // Timer tick for live elapsed display when running
+  useEffect(() => {
+    if (!timerStartedAt) return;
+    const id = setInterval(() => setTimerTick(t => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [timerStartedAt]);
+
+  const timerElapsedSeconds = timerStartedAt
+    ? Math.floor((Date.now() - timerStartedAt) / 1000)
+    : timerPausedElapsed;
+  const timerElapsedDisplay = (() => {
+    const h = Math.floor(timerElapsedSeconds / 3600);
+    const m = Math.floor((timerElapsedSeconds % 3600) / 60);
+    const s = timerElapsedSeconds % 60;
+    if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    return `${m}:${String(s).padStart(2, '0')}`;
+  })();
 
   const roundForDisplay = useCallback((num: number): number => {
     if (priceRounding === 'none' || num === 0) return num;
@@ -571,6 +631,16 @@ export default function Home() {
         if (resTags.ok) {
           const tagsData = await resTags.json();
           setSavedUserTags(Array.isArray(tagsData) ? tagsData : []);
+        }
+        // Fetch time entries for tracked time display
+        const resTime = await fetch('/api/fetch-time-entries', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessToken, userId: session.user.id }),
+        });
+        if (resTime.ok) {
+          const timeData = await resTime.json();
+          setTimeEntries(Array.isArray(timeData) ? timeData : []);
         }
       } else {
         const err = await res.json().catch(() => ({}));
@@ -1166,40 +1236,66 @@ export default function Home() {
       setNotification({ title: "Name Required", message: "Please provide a name for this piece to save it to your Vault.", type: 'info' });
       return;
     }
-    if (metalList.length === 0) {
+    const isDraft = saveAsDraft;
+    if (!isDraft && metalList.length === 0) {
       setNotification({ title: "Add Metal", message: "Add at least one metal component to save this piece.", type: 'info' });
       return;
     }
 
-    // Calculate with new inputs
-    const a = calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneList, overheadCost, overheadType);
-    const { wholesale, retail } = getStrategyPrices(a);
-
-    const newItem = {
-      name: itemName,
-      metals: metalList,
-      stones: stoneList, // Store as JSON array
-      wholesale,
-      retail,
-      materials_at_making: a.metalCost,
-      labor_at_making: a.labor,
-      other_costs_at_making: Number(otherCosts) || 0,
-      stone_cost: a.stones, // Total stone cost for backward compatibility
-      stone_markup: (stoneList.length > 0 && a.stones > 0) ? stoneList.reduce((sum, s) => sum + (s.cost * s.markup), 0) / a.stones : 1.5, // Weighted average markup
-      // CHANGE THIS: Save the calculated dollar amount from 'a', not the raw input
-      overhead_cost: a.overhead,
-      overhead_type: overheadType,
-      strategy: strategy,
-      multiplier: retailMultA,
-      markup_b: markupB,
-      custom_formula: strategy === 'custom' ? (selectedFormulaId ? { ...customFormulaModel, formula_name: formulas.find(f => f.id === selectedFormulaId)?.name || null } : customFormulaModel) : null,
-      user_id: currentUser.id,
-      notes: '',
-      hours: Number(hours) || 0,
-      location: 'Main Vault',
-      tag: null,
-      status: 'active'
-    };
+    let newItem: any;
+    if (isDraft) {
+      newItem = {
+        name: itemName,
+        metals: [],
+        stones: [],
+        wholesale: 0,
+        retail: 0,
+        materials_at_making: 0,
+        labor_at_making: 0,
+        other_costs_at_making: 0,
+        stone_cost: 0,
+        stone_markup: 1.5,
+        overhead_cost: 0,
+        overhead_type: 'flat',
+        strategy: 'A',
+        multiplier: 2.5,
+        markup_b: 1.8,
+        custom_formula: null,
+        user_id: currentUser.id,
+        notes: '',
+        hours: 0,
+        location: 'Main Vault',
+        tag: null,
+        status: 'draft'
+      };
+    } else {
+      const a = calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneList, overheadCost, overheadType);
+      const { wholesale, retail } = getStrategyPrices(a);
+      newItem = {
+        name: nameToUse,
+        metals: metalList,
+        stones: stoneList,
+        wholesale,
+        retail,
+        materials_at_making: a.metalCost,
+        labor_at_making: a.labor,
+        other_costs_at_making: Number(otherCosts) || 0,
+        stone_cost: a.stones,
+        stone_markup: (stoneList.length > 0 && a.stones > 0) ? stoneList.reduce((sum, s) => sum + (s.cost * s.markup), 0) / a.stones : 1.5,
+        overhead_cost: a.overhead,
+        overhead_type: overheadType,
+        strategy: strategy,
+        multiplier: retailMultA,
+        markup_b: markupB,
+        custom_formula: strategy === 'custom' ? (selectedFormulaId ? { ...customFormulaModel, formula_name: formulas.find(f => f.id === selectedFormulaId)?.name || null } : customFormulaModel) : null,
+        user_id: currentUser.id,
+        notes: '',
+        hours: Number(hours) || 0,
+        location: 'Main Vault',
+        tag: null,
+        status: 'active'
+      };
+    }
 
     setSavingToVault(true);
     try {
@@ -1248,6 +1344,7 @@ export default function Home() {
         setFormulaAOpen(false);
         setFormulaBOpen(false);
         setToken(null);
+        setSaveAsDraft(false);
         setNotification({ title: "Item Saved", message: `"${newItem.name}" is now stored in your Vault.`, type: 'success' });
         if (!user) setUser(currentUser);
       } else {
@@ -1261,6 +1358,127 @@ export default function Home() {
       setNotification({ title: "Save Failed", message: msg, type: 'error' });
     } finally {
       setSavingToVault(false);
+    }
+  };
+
+  const addQuickAddPiece = async () => {
+    const name = quickAddPieceName.trim();
+    if (!name) {
+      setNotification({ title: "Name Required", message: "Please enter a name for this piece.", type: 'info' });
+      return;
+    }
+    if (!hasValidSupabaseCredentials) {
+      setNotification({ title: "Database Not Configured", message: "Please configure Supabase to save pieces.", type: 'error' });
+      return;
+    }
+    let currentUser = user;
+    if (!currentUser) {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        currentUser = session?.user;
+        if (!currentUser) {
+          const { data: anonData } = await supabase.auth.signInAnonymously();
+          currentUser = anonData?.user;
+        }
+      } catch (_) {}
+      if (!currentUser) { setShowAuth(true); setShowQuickAddPiece(false); return; }
+    }
+    if (isGuest && !token && hasTurnstile) {
+      setNotification({ title: "Verification Required", message: "Please complete verification to save.", type: 'info' });
+      return;
+    }
+    const newItem = {
+      name,
+      metals: [],
+      stones: [],
+      wholesale: 0,
+      retail: 0,
+      materials_at_making: 0,
+      labor_at_making: 0,
+      other_costs_at_making: 0,
+      stone_cost: 0,
+      stone_markup: 1.5,
+      overhead_cost: 0,
+      overhead_type: 'flat',
+      strategy: 'A',
+      multiplier: 2.5,
+      markup_b: 1.8,
+      custom_formula: null,
+      user_id: currentUser.id,
+      notes: '',
+      hours: 0,
+      location: 'Main Vault',
+      tag: null,
+      status: 'draft'
+    };
+    setSavingToVault(true);
+    try {
+      const res = await fetch('/api/save-item', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newItem }),
+      });
+      const data = res.ok ? await res.json() : null;
+      const errBody = !res.ok ? await res.json().catch(() => ({})) : {};
+      if (res.ok && data) {
+        setInventory(prev => [data, ...prev]);
+        setQuickAddPieceName('');
+        setShowQuickAddPiece(false);
+        setNotification({ title: "Piece Added", message: `"${name}" has been added. Add metal and time as you work.`, type: 'success' });
+      } else {
+        setNotification({ title: "Save Failed", message: errBody?.error || `Save failed (${res.status})`, type: 'error' });
+      }
+    } catch (e: any) {
+      setNotification({ title: "Save Failed", message: e?.message || 'Could not save.', type: 'error' });
+    } finally {
+      setSavingToVault(false);
+    }
+  };
+
+  const saveTimeEntry = async () => {
+    const hrs = parseFloat(logTimeHours);
+    if (!Number.isFinite(hrs) || hrs <= 0) {
+      setNotification({ title: "Invalid Time", message: "Enter a valid number of hours (e.g. 2.5).", type: 'info' });
+      return;
+    }
+    const currentUser = user || (await supabase.auth.getUser()).data?.user;
+    if (!currentUser) { setShowAuth(true); return; }
+    const { data: { session } } = await supabase.auth.getSession();
+    const accessToken = session?.access_token;
+    if (!accessToken) {
+      setNotification({ title: "Session Error", message: "Please sign in again.", type: 'info' });
+      return;
+    }
+    const duration_minutes = Math.round(hrs * 60);
+    try {
+      const res = await fetch('/api/save-time-entry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accessToken,
+          userId: currentUser.id,
+          inventory_id: logTimeItemId || null,
+          duration_minutes,
+          note: logTimeNote.trim() || null,
+        }),
+      });
+      const data = res.ok ? await res.json() : null;
+      const errBody = !res.ok ? await res.json().catch(() => ({})) : {};
+      if (res.ok && data) {
+        setTimeEntries(prev => [data, ...prev]);
+        setShowLogTimeModal(false);
+        setLogTimeItemId(null);
+        setLogTimeHours('');
+        setLogTimeNote('');
+        setLogTimeAllowItemSelect(false);
+        setTimerStartedAt(null);
+        setTimerPausedElapsed(0);
+        setNotification({ title: "Time Logged", message: `${hrs}h added successfully.`, type: 'success' });
+      } else {
+        setNotification({ title: "Failed", message: errBody?.error || 'Could not save time.', type: 'error' });
+      }
+    } catch (e: any) {
+      setNotification({ title: "Failed", message: e?.message || 'Could not save time.', type: 'error' });
     }
   };
 
@@ -1286,7 +1504,8 @@ export default function Home() {
 
       const itemStatus = item.status || 'active';
       if (filterStatus === 'Active' && itemStatus !== 'active') return false;
-      if (filterStatus === 'Archived' && itemStatus === 'active') return false;
+      if (filterStatus === 'Archived' && (itemStatus === 'active' || itemStatus === 'draft')) return false;
+      if (filterStatus === 'Draft' && itemStatus !== 'draft') return false;
 
       if (filterStartDate || filterEndDate) {
         const itemDate = new Date(item.created_at).getTime();
@@ -1320,9 +1539,63 @@ export default function Home() {
     return merged.sort() as string[];
   }, [inventory, savedUserTags]);
 
+  const trackedTimeByItem = useMemo(() => {
+    const byItem: Record<string, number> = {};
+    for (const e of timeEntries) {
+      const key = e.inventory_id || '_unassigned';
+      byItem[key] = (byItem[key] || 0) + Number(e.duration_minutes || 0);
+    }
+    return byItem;
+  }, [timeEntries]);
+
+  const filteredTimeEntries = useMemo(() => {
+    let list = [...timeEntries];
+    if (timeFilterDateFrom) {
+      const from = new Date(timeFilterDateFrom);
+      from.setHours(0, 0, 0, 0);
+      list = list.filter(e => new Date(e.created_at) >= from);
+    }
+    if (timeFilterDateTo) {
+      const to = new Date(timeFilterDateTo);
+      to.setHours(23, 59, 59, 999);
+      list = list.filter(e => new Date(e.created_at) <= to);
+    }
+    if (timeFilterItemId) {
+      if (timeFilterItemId === '_unassigned') {
+        list = list.filter(e => !e.inventory_id);
+      } else {
+        list = list.filter(e => e.inventory_id === timeFilterItemId);
+      }
+    }
+    return list;
+  }, [timeEntries, timeFilterDateFrom, timeFilterDateTo, timeFilterItemId]);
+
+  const timeSummaryToday = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const end = new Date(today);
+    end.setHours(23, 59, 59, 999);
+    return timeEntries
+      .filter(e => {
+        const d = new Date(e.created_at);
+        return d >= today && d <= end;
+      })
+      .reduce((sum, e) => sum + Number(e.duration_minutes || 0), 0);
+  }, [timeEntries]);
+
+  const timeSummaryThisWeek = useMemo(() => {
+    const now = new Date();
+    const weekStart = new Date(now);
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+    weekStart.setHours(0, 0, 0, 0);
+    return timeEntries
+      .filter(e => new Date(e.created_at) >= weekStart)
+      .reduce((sum, e) => sum + Number(e.duration_minutes || 0), 0);
+  }, [timeEntries]);
+
   const totalVaultValue = useMemo(() => {
     return inventory.reduce((acc, item) => {
-      if (item.status === 'archived' || item.status === 'sold') return acc;
+      if (item.status === 'archived' || item.status === 'sold' || item.status === 'draft') return acc;
       // FIX: Force overhead_type to 'flat' here to correctly calculate Live Retail using the stored Dollar value
       // FIX: Pass labor cost so live price includes labor
       const stonesArray = convertStonesToArray(item);
@@ -1992,6 +2265,80 @@ export default function Home() {
         </div>
       )}
 
+      {/* Log Time Modal */}
+      {showLogTimeModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-5">
+            <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Log Time</h3>
+            <p className="text-[10px] text-stone-400 font-bold uppercase">
+              {logTimeItemId ? `Add time to: ${inventory.find(i => i.id === logTimeItemId)?.name || 'Piece'}` : 'Log general shop time (unassigned)'}
+            </p>
+            {logTimeAllowItemSelect && (
+              <div>
+                <label className="text-[9px] font-bold text-stone-400 uppercase block mb-1">Assign to piece (optional)</label>
+                <select
+                  value={logTimeItemId || ''}
+                  onChange={e => setLogTimeItemId(e.target.value || null)}
+                  className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl outline-none focus:border-[#A5BEAC] text-sm font-bold"
+                >
+                  <option value="">General / unassigned</option>
+                  {inventory.map((i: any) => (
+                    <option key={i.id} value={i.id}>{i.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <div>
+              <label className="text-[9px] font-bold text-stone-400 uppercase block mb-1">Hours</label>
+              <input
+                type="number"
+                min={0.01}
+                step={0.25}
+                placeholder="e.g. 2.5"
+                className="w-full p-4 bg-stone-50 border border-stone-200 rounded-xl outline-none focus:border-[#A5BEAC] font-bold"
+                value={logTimeHours}
+                onChange={e => setLogTimeHours(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-[9px] font-bold text-stone-400 uppercase block mb-1">Note (optional)</label>
+              <input
+                type="text"
+                placeholder="e.g. Polishing, stone setting"
+                className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl outline-none focus:border-[#A5BEAC] text-sm"
+                value={logTimeNote}
+                onChange={e => setLogTimeNote(e.target.value)}
+              />
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => { setShowLogTimeModal(false); setLogTimeItemId(null); setLogTimeHours(''); setLogTimeNote(''); setLogTimeAllowItemSelect(false); }} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
+              <button onClick={saveTimeEntry} disabled={!logTimeHours || parseFloat(logTimeHours) <= 0} className={`flex-1 py-4 rounded-2xl font-black text-[10px] uppercase transition shadow-lg ${!logTimeHours || parseFloat(logTimeHours) <= 0 ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-[#A5BEAC] text-white hover:bg-slate-900'}`}>Add time</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Add Piece Modal (draft - time-only) */}
+      {showQuickAddPiece && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-5">
+            <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Quick Add Piece</h3>
+            <p className="text-[10px] text-stone-400 font-bold uppercase">Create a draft piece to track time. Add metal and pricing later.</p>
+            <input
+              placeholder="Piece name"
+              className="w-full p-4 bg-stone-50 border border-stone-200 rounded-xl outline-none focus:border-[#A5BEAC] font-bold"
+              value={quickAddPieceName}
+              onChange={e => setQuickAddPieceName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && addQuickAddPiece()}
+            />
+            <div className="flex gap-3">
+              <button onClick={() => { setShowQuickAddPiece(false); setQuickAddPieceName(''); }} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
+              <button onClick={addQuickAddPiece} disabled={savingToVault || !quickAddPieceName.trim()} className={`flex-1 py-4 rounded-2xl font-black text-[10px] uppercase transition shadow-lg ${savingToVault || !quickAddPieceName.trim() ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-[#A5BEAC] text-white hover:bg-slate-900'}`}>{savingToVault ? 'Saving…' : 'Add piece'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* NEW: GLOBAL RECALCULATE MODAL */}
       {showGlobalRecalc && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
@@ -2244,6 +2591,12 @@ export default function Home() {
               className={`flex-1 py-3 text-xs font-black uppercase tracking-tighter transition-all rounded-xl ${activeTab === 'logic' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400'}`}
             >
               Logic
+            </button>
+            <button
+              onClick={() => setActiveTab('time')}
+              className={`flex-1 py-3 text-xs font-black uppercase tracking-tighter transition-all rounded-xl ${activeTab === 'time' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400'}`}
+            >
+              Time
             </button>
           </div>
         </div>
@@ -2689,6 +3042,10 @@ export default function Home() {
                     value={itemName}
                     onChange={e => setItemName(e.target.value)}
                   />
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={saveAsDraft} onChange={e => setSaveAsDraft(e.target.checked)} className="w-4 h-4 accent-[#A5BEAC] rounded border-stone-300" />
+                    <span className="text-[10px] font-bold text-stone-600 uppercase">Save as draft / time-only</span>
+                  </label>
                   <button type="button" onClick={addToInventory} disabled={(isGuest && !token && hasTurnstile) || savingToVault} className={`w-full py-4 rounded-2xl font-black uppercase tracking-[0.12em] text-sm transition-all ${(isGuest && !token && hasTurnstile) || savingToVault ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-[#A5BEAC] text-white shadow-lg hover:bg-slate-900 hover:shadow-xl active:scale-[0.98]'}`}>{(isGuest && !token && hasTurnstile) ? "Verifying…" : savingToVault ? "Saving…" : "Save to vault"}</button>
                 </div>
                 </div>
@@ -2758,8 +3115,8 @@ export default function Home() {
                         {/* Status */}
                         <div className="space-y-1">
                           <label className="text-[9px] font-bold text-stone-400 uppercase">Item Status</label>
-                          <div className="flex gap-2 bg-stone-100 p-1 rounded-lg">
-                            {['Active', 'Archived', 'All'].map(s => (
+                          <div className="flex gap-2 bg-stone-100 p-1 rounded-lg flex-wrap">
+                            {['Active', 'Draft', 'Archived', 'All'].map(s => (
                               <button key={s} onClick={() => setFilterStatus(s)} className={`flex-1 py-1.5 rounded-md text-[8px] font-black uppercase transition-all ${filterStatus === s ? 'bg-white text-slate-900 shadow-sm' : 'text-stone-400 hover:text-stone-600'}`}>{s}</button>
                             ))}
                           </div>
@@ -2809,6 +3166,13 @@ export default function Home() {
                   </div>
                 </div>
 
+                <div className="flex gap-2 shrink-0">
+                <button
+                  onClick={() => setShowQuickAddPiece(true)}
+                  className="min-h-[48px] sm:min-h-0 px-4 rounded-xl text-[10px] font-black uppercase bg-[#A5BEAC] text-white hover:bg-slate-900 transition shadow-sm flex items-center justify-center"
+                >
+                  Quick add piece
+                </button>
                 {/* NEW: Combined Vault Options Menu */}
                 <div className="relative vault-menu-container min-h-[48px] sm:h-full">
                   <button
@@ -2854,6 +3218,7 @@ export default function Home() {
                       )}
                     </div>
                   )}
+                </div>
                 </div>
               </div>
             </div>
@@ -3052,6 +3417,7 @@ export default function Home() {
                               )}
 
                               <div className="flex flex-wrap items-center gap-2 mt-2">
+                                {item.status === 'draft' && <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-700 border border-amber-200 uppercase">Draft</span>}
                                 {(isSold || isArchived) && <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-stone-200 text-stone-600 uppercase">SOLD / ARCHIVED</span>}
 
                                 {/* Tag Badge & Dropdown (optional - vault only) */}
@@ -3217,6 +3583,16 @@ export default function Home() {
                             <div className="bg-white p-3.5 md:p-3 rounded-xl border border-stone-100 shadow-sm flex flex-col justify-center items-center text-center col-span-2 md:col-span-1 min-h-[70px] md:min-h-0">
                               <p className="text-[9px] md:text-[8px] font-black text-stone-400 uppercase mb-1.5 md:mb-1 leading-tight">Labor ({Number(item.hours || 0)}h @ ${((Number(item.labor_at_making) || 0) / (Number(item.hours) || 1)).toFixed(2)}/hr)</p>
                               <p className="text-sm md:text-xs font-black text-slate-700">${Number(item.labor_at_making || 0).toFixed(2)}</p>
+                              {(trackedTimeByItem[item.id] || 0) > 0 && (
+                                <p className="text-[8px] font-bold text-amber-600 mt-1">Tracked: {(trackedTimeByItem[item.id] / 60).toFixed(1)}h</p>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => { setLogTimeItemId(item.id); setLogTimeAllowItemSelect(false); setLogTimeHours(''); setLogTimeNote(''); setShowLogTimeModal(true); }}
+                                className="mt-1.5 py-1 px-2 rounded-lg text-[8px] font-black uppercase bg-[#A5BEAC]/20 text-[#A5BEAC] hover:bg-[#A5BEAC]/30 transition"
+                              >
+                                Log time
+                              </button>
                             </div>
                           </div>
 
@@ -3503,6 +3879,190 @@ export default function Home() {
                     </div>
                   ))}
                 </div>
+              )}
+            </div>
+          </div>
+
+          {/* TIME PANEL */}
+          <div className={`bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm flex flex-col flex-1 min-h-0 min-h-[50vh] lg:min-h-0 lg:max-h-[calc(100vh-5rem)] overflow-hidden ${activeTab !== 'time' ? 'hidden' : ''}`}>
+            <div className="p-6 border-b border-stone-100 bg-white space-y-4 rounded-t-[2.5rem] shrink-0">
+              <div className="flex justify-between items-center flex-wrap gap-3">
+                <h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Time Tracking</h2>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLogTimeItemId(null);
+                    setLogTimeAllowItemSelect(true);
+                    setLogTimeHours('');
+                    setLogTimeNote('');
+                    setShowLogTimeModal(true);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-[#A5BEAC] text-white text-xs font-black uppercase hover:bg-slate-900 transition"
+                >
+                  Log time
+                </button>
+              </div>
+              <p className="text-[10px] text-stone-500">Track time spent on pieces or general shop work.</p>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {!user ? (
+                <div className="text-center py-12 text-stone-400 text-sm font-bold">
+                  Sign in to track time.
+                </div>
+              ) : (
+                <>
+                  {/* Timer */}
+                  <div className="bg-stone-50 rounded-2xl border-2 border-[#A5BEAC]/30 p-6 space-y-4">
+                    <p className="text-[9px] font-black uppercase text-stone-400">Live Timer</p>
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                      <div className="flex items-baseline gap-2">
+                        <span className={`text-4xl sm:text-5xl font-black tabular-nums ${timerStartedAt ? 'text-[#A5BEAC] animate-pulse' : timerPausedElapsed > 0 ? 'text-slate-900' : 'text-stone-300'}`}>
+                          {timerElapsedDisplay}
+                        </span>
+                        <span className="text-sm font-bold text-stone-400">
+                          {(timerElapsedSeconds / 3600).toFixed(2)}h
+                        </span>
+                      </div>
+                      <div className="flex gap-2 flex-wrap justify-center">
+                        {!timerStartedAt && timerPausedElapsed === 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setTimerStartedAt(Date.now())}
+                            className="px-6 py-3 rounded-xl bg-[#A5BEAC] text-white text-sm font-black uppercase hover:bg-slate-900 transition shadow-lg flex items-center gap-2"
+                          >
+                            <span className="w-3 h-3 rounded-full bg-white" /> Start
+                          </button>
+                        )}
+                        {timerStartedAt && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const elapsed = Math.floor((Date.now() - timerStartedAt) / 1000);
+                              setTimerPausedElapsed(elapsed);
+                              setTimerStartedAt(null);
+                            }}
+                            className="px-6 py-3 rounded-xl bg-slate-900 text-white text-sm font-black uppercase hover:bg-[#A5BEAC] transition shadow-lg"
+                          >
+                            Stop
+                          </button>
+                        )}
+                        {!timerStartedAt && timerPausedElapsed > 0 && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setLogTimeItemId(null);
+                                setLogTimeAllowItemSelect(true);
+                                setLogTimeHours((timerPausedElapsed / 3600).toFixed(2));
+                                setLogTimeNote('');
+                                setShowLogTimeModal(true);
+                              }}
+                              className="px-6 py-3 rounded-xl bg-[#A5BEAC] text-white text-sm font-black uppercase hover:bg-slate-900 transition shadow-lg"
+                            >
+                              Log time
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setTimerPausedElapsed(0)}
+                              className="px-6 py-3 rounded-xl bg-stone-200 text-stone-600 text-sm font-black uppercase hover:bg-stone-300 transition"
+                            >
+                              Reset
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setTimerStartedAt(Date.now() - timerPausedElapsed * 1000);
+                                setTimerPausedElapsed(0);
+                              }}
+                              className="px-6 py-3 rounded-xl border-2 border-[#A5BEAC] text-[#A5BEAC] text-sm font-black uppercase hover:bg-[#A5BEAC]/10 transition"
+                            >
+                              Resume
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-stone-500">
+                      {timerStartedAt ? 'Timer running…' : timerPausedElapsed > 0 ? 'Stopped. Log it, adjust in the modal, or resume.' : 'Start the timer when you begin working, stop when you finish.'}
+                    </p>
+                  </div>
+
+                  {/* Summary */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-stone-50 rounded-2xl border border-stone-200 p-4">
+                      <p className="text-[9px] font-black uppercase text-stone-400">Today</p>
+                      <p className="text-2xl font-black text-slate-900 mt-0.5">{(timeSummaryToday / 60).toFixed(1)}h</p>
+                    </div>
+                    <div className="bg-stone-50 rounded-2xl border border-stone-200 p-4">
+                      <p className="text-[9px] font-black uppercase text-stone-400">This week</p>
+                      <p className="text-2xl font-black text-slate-900 mt-0.5">{(timeSummaryThisWeek / 60).toFixed(1)}h</p>
+                    </div>
+                  </div>
+
+                  {/* Filters */}
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <span className="text-[9px] font-bold text-stone-400 uppercase">Filters</span>
+                    <input
+                      type="date"
+                      value={timeFilterDateFrom}
+                      onChange={e => setTimeFilterDateFrom(e.target.value)}
+                      className="py-2 px-3 rounded-lg border border-stone-200 text-xs font-bold outline-none focus:border-[#A5BEAC]"
+                    />
+                    <span className="text-stone-300">–</span>
+                    <input
+                      type="date"
+                      value={timeFilterDateTo}
+                      onChange={e => setTimeFilterDateTo(e.target.value)}
+                      className="py-2 px-3 rounded-lg border border-stone-200 text-xs font-bold outline-none focus:border-[#A5BEAC]"
+                    />
+                    <select
+                      value={timeFilterItemId}
+                      onChange={e => setTimeFilterItemId(e.target.value)}
+                      className="py-2 px-3 rounded-lg border border-stone-200 text-xs font-bold outline-none focus:border-[#A5BEAC] min-w-[140px]"
+                    >
+                      <option value="">All pieces</option>
+                      <option value="_unassigned">General / unassigned</option>
+                      {inventory.map((i: any) => (
+                        <option key={i.id} value={i.id}>{i.name}</option>
+                      ))}
+                    </select>
+                    {(timeFilterDateFrom || timeFilterDateTo || timeFilterItemId) && (
+                      <button
+                        type="button"
+                        onClick={() => { setTimeFilterDateFrom(''); setTimeFilterDateTo(''); setTimeFilterItemId(''); }}
+                        className="py-2 px-3 rounded-lg text-[10px] font-black uppercase text-stone-500 hover:text-slate-900 border border-stone-200 hover:border-stone-300 transition"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Recent entries */}
+                  <div>
+                    <h3 className="text-sm font-black uppercase text-slate-900 mb-3">Recent entries</h3>
+                    {filteredTimeEntries.length === 0 ? (
+                      <p className="text-stone-500 text-sm py-6">No time entries yet. Log time to get started.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {filteredTimeEntries.map((e: any) => {
+                          const date = new Date(e.created_at);
+                          const itemName = e.inventory_id ? (inventory.find((i: any) => i.id === e.inventory_id)?.name || 'Piece') : 'General';
+                          const hrs = (Number(e.duration_minutes) / 60).toFixed(2);
+                          return (
+                            <div key={e.id} className="flex items-center justify-between gap-4 py-3 px-4 rounded-xl border border-stone-200 bg-white hover:border-[#A5BEAC]/50 transition">
+                              <div className="min-w-0">
+                                <p className="font-bold text-slate-900 truncate">{itemName}</p>
+                                <p className="text-[10px] text-stone-500">{date.toLocaleDateString()} {date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                {e.note && <p className="text-[10px] text-stone-400 mt-0.5 truncate">{e.note}</p>}
+                              </div>
+                              <span className="text-sm font-black text-[#A5BEAC] shrink-0">{hrs}h</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </>
               )}
             </div>
           </div>
