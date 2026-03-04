@@ -1,16 +1,29 @@
-# Shopify app configuration
-# Run: shopify app config link (to link to your app)
-# See: https://shopify.dev/docs/apps/build/cli-for-apps/app-configuration
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
+client_id = "2f85e6218759957bed7c9fe7377e8833"
 name = "The Vault"
-client_id = "0c12a934d06a55a3875e6a44e729b0d5"
-application_url = "https://vault.bearsilverandstone.com"
+application_url = "https://vault.bearsilverandstone.com/"
+embedded = false
 
 [webhooks]
-api_version = "2025-01"
+api_version = "2026-01"
 
-# Mandatory compliance webhooks (required for App Store)
-# Endpoint: app/api/shopify/webhooks/route.ts - verifies HMAC, handles all three topics
-[[webhooks.subscriptions]]
-uri = "https://vault.bearsilverandstone.com/api/shopify/webhooks"
-compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
+  [[webhooks.subscriptions]]
+  uri = "/api/shopify/webhooks"
+  compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "read_products,write_products"
+optional_scopes = [ ]
+use_legacy_install_flow = false
+
+[auth]
+redirect_urls = [
+  "http://localhost:3000/api/shopify/callback",
+  "http://localhost:3001/api/shopify/callback",
+  "http://localhost:3002/api/shopify/callback",
+  "https://vault.bearsilverandstone.com/api/shopify/callback",
+  "https://jewelry-price-calculator-gamma.vercel.app/api/shopify/callback",
+  "https://jewelry-price-calculator-b6mp22086-claires-projects-4b85753e.vercel.app/api/shopify/callback"
+]
