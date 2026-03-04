@@ -2567,34 +2567,34 @@ export default function Home() {
 
         {/* Tab Navigation - same width as panels below */}
         <div className="w-full px-2 shrink-0">
-          <div className="flex bg-white rounded-2xl border border-[#A5BEAC] shadow-sm overflow-hidden p-1 w-full max-w-7xl mx-auto">
+          <div className="grid grid-cols-3 md:flex md:grid-cols-none bg-white rounded-2xl border border-[#A5BEAC] shadow-sm overflow-hidden p-1.5 md:p-1 w-full max-w-7xl mx-auto gap-1.5 md:gap-0">
             <button
               onClick={() => setActiveTab('calculator')}
-              className={`flex-1 py-3 text-xs font-black uppercase tracking-tighter transition-all rounded-xl ${activeTab === 'calculator' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400'}`}
+              className={`py-3.5 md:py-3 px-2 md:px-2 text-[11px] md:text-xs font-black uppercase tracking-tighter transition-all rounded-xl col-span-1 md:flex-1 ${activeTab === 'calculator' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400'}`}
             >
               Calculator
             </button>
             <button
               onClick={() => setActiveTab('vault')}
-              className={`flex-1 py-3 text-xs font-black uppercase tracking-tighter transition-all rounded-xl ${activeTab === 'vault' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400'}`}
+              className={`py-3.5 md:py-3 px-2 md:px-2 text-[11px] md:text-xs font-black uppercase tracking-tighter transition-all rounded-xl col-span-1 md:flex-1 ${activeTab === 'vault' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400'}`}
             >
               The Vault
             </button>
             <button
               onClick={() => setActiveTab('formulas')}
-              className={`flex-1 py-3 text-xs font-black uppercase tracking-tighter transition-all rounded-xl ${activeTab === 'formulas' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400'}`}
+              className={`py-3.5 md:py-3 px-2 md:px-2 text-[11px] md:text-xs font-black uppercase tracking-tighter transition-all rounded-xl col-span-1 md:flex-1 ${activeTab === 'formulas' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400'}`}
             >
               Formulas
             </button>
             <button
               onClick={() => setActiveTab('logic')}
-              className={`flex-1 py-3 text-xs font-black uppercase tracking-tighter transition-all rounded-xl ${activeTab === 'logic' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400'}`}
+              className={`py-3.5 md:py-3 px-2 md:px-2 text-[11px] md:text-xs font-black uppercase tracking-tighter transition-all rounded-xl col-span-1 md:flex-1 ${activeTab === 'logic' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400'}`}
             >
               Logic
             </button>
             <button
               onClick={() => setActiveTab('time')}
-              className={`flex-1 py-3 text-xs font-black uppercase tracking-tighter transition-all rounded-xl ${activeTab === 'time' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400'}`}
+              className={`py-3.5 md:py-3 px-2 md:px-2 text-[11px] md:text-xs font-black uppercase tracking-tighter transition-all rounded-xl col-span-1 md:flex-1 ${activeTab === 'time' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400'}`}
             >
               Time
             </button>
