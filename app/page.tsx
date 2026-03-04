@@ -47,6 +47,7 @@ export default function Home() {
   const [showGlobalRecalc, setShowGlobalRecalc] = useState(false);
   const [openEditId, setOpenEditId] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<any>(null);
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [recalcItem, setRecalcItem] = useState<any>(null);
   const [showResetModal, setShowResetModal] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
@@ -62,6 +63,13 @@ export default function Home() {
   const [showShopifyConnectModal, setShowShopifyConnectModal] = useState(false);
   const [shopifyConnectInput, setShopifyConnectInput] = useState('');
   const [shopifyExporting, setShopifyExporting] = useState(false);
+  const [showShopifyExportOptions, setShowShopifyExportOptions] = useState(false);
+  const [shopifyExportProgress, setShopifyExportProgress] = useState<null | 'exporting' | { created: number; updated: number; errors: string[] }>(null);
+  const [shopifyIncludeDescription, setShopifyIncludeDescription] = useState(true);
+  const [shopifyIncludeImage, setShopifyIncludeImage] = useState(true);
+  const [shopifyIncludeRetail, setShopifyIncludeRetail] = useState(true);
+  const [shopifyIncludeWholesale, setShopifyIncludeWholesale] = useState(true);
+  const [shopifyPriceSource, setShopifyPriceSource] = useState<'saved' | 'live'>('saved');
 
   // Form States
   const [manualRetail, setManualRetail] = useState('');
@@ -983,6 +991,40 @@ export default function Home() {
     fetchInventory();
   };
 
+  const loadItemIntoCalculator = (item: any) => {
+    setEditingItemId(item.id);
+    setItemName(item.name || '');
+    setMetalList(Array.isArray(item.metals) ? [...item.metals] : []);
+    setStoneList(convertStonesToArray(item));
+    setHours(item.hours ?? '');
+    const h = Number(item.hours) || 0;
+    const laborTotal = Number(item.labor_at_making) || 0;
+    setRate(h > 0 ? laborTotal / h : laborTotal);
+    setOtherCosts(item.other_costs_at_making ?? '');
+    setOverheadCost(item.overhead_cost ?? '');
+    setOverheadType((item.overhead_type as 'flat' | 'percent') || 'flat');
+    setStrategy((item.strategy as 'A' | 'B' | 'custom') || 'A');
+    setRetailMultA(Number(item.multiplier) || 2.5);
+    setMarkupB(Number(item.markup_b) || 1.8);
+    if (item.strategy === 'custom' && item.custom_formula) {
+      setCustomFormulaModel({
+        formula_base: item.custom_formula.formula_base || PRESET_A.base,
+        formula_wholesale: item.custom_formula.formula_wholesale || PRESET_A.wholesale,
+        formula_retail: item.custom_formula.formula_retail || PRESET_A.retail,
+      });
+      const formulaName = item.custom_formula.formula_name;
+      const match = formulas.find(f => f.name === formulaName);
+      setSelectedFormulaId(match?.id ?? null);
+    } else {
+      setSelectedFormulaId(null);
+      setCustomFormulaModel({ formula_base: PRESET_A.base, formula_wholesale: PRESET_A.wholesale, formula_retail: PRESET_A.retail });
+    }
+    setIncludeStonesSection((item.stones && item.stones.length > 0) || (Number(item.stone_cost) || 0) > 0);
+    setIncludeLaborSection((Number(item.hours) || 0) > 0 || (Number(item.labor_at_making) || 0) > 0);
+    setActiveTab('calculator');
+    setOpenMenuId(null);
+  };
+
   const syncToMarket = async (item: any) => {
     setNotification({
       title: "Sync Prices",
@@ -1273,7 +1315,8 @@ export default function Home() {
       setNotification({ title: "Name Required", message: "Please provide a name for this piece to save it to your Vault.", type: 'info' });
       return;
     }
-    const isDraft = saveAsDraft;
+    const isUpdating = !!editingItemId;
+    const isDraft = saveAsDraft && !isUpdating;
     if (!isDraft && metalList.length === 0) {
       setNotification({ title: "Add Metal", message: "Add at least one metal component to save this piece.", type: 'info' });
       return;
@@ -1304,6 +1347,30 @@ export default function Home() {
         location: 'Main Vault',
         tag: null,
         status: 'draft'
+      };
+    } else if (isUpdating) {
+      const a = calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneList, overheadCost, overheadType);
+      const { wholesale, retail } = getStrategyPrices(a);
+      newItem = {
+        id: editingItemId,
+        name: itemName,
+        metals: metalList,
+        stones: stoneList,
+        wholesale,
+        retail,
+        materials_at_making: a.metalCost,
+        labor_at_making: a.labor,
+        other_costs_at_making: Number(otherCosts) || 0,
+        stone_cost: a.stones,
+        stone_markup: (stoneList.length > 0 && a.stones > 0) ? stoneList.reduce((sum, s) => sum + (s.cost * s.markup), 0) / a.stones : 1.5,
+        overhead_cost: a.overhead,
+        overhead_type: overheadType,
+        strategy: strategy,
+        multiplier: retailMultA,
+        markup_b: markupB,
+        custom_formula: strategy === 'custom' ? (selectedFormulaId ? { ...customFormulaModel, formula_name: formulas.find(f => f.id === selectedFormulaId)?.name || null } : customFormulaModel) : null,
+        hours: Number(hours) || 0,
+        status: 'active'
       };
     } else {
       const a = calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneList, overheadCost, overheadType);
@@ -1342,7 +1409,7 @@ export default function Home() {
       const res = await fetch('/api/save-item', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ newItem }),
+        body: JSON.stringify({ newItem, itemId: editingItemId || undefined }),
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
@@ -1354,7 +1421,14 @@ export default function Home() {
         errBody = await res.json().catch(() => ({}));
       }
       if (res.ok && data) {
-        setInventory(prev => [data, ...prev]);
+        if (editingItemId) {
+          setInventory(prev => prev.map(i => i.id === editingItemId ? { ...i, ...data } : i));
+          setNotification({ title: "Item Updated", message: `"${newItem.name}" now has metals and pricing.`, type: 'success' });
+        } else {
+          setInventory(prev => [data, ...prev]);
+          setNotification({ title: "Item Saved", message: `"${newItem.name}" is now stored in your Vault.`, type: 'success' });
+        }
+        setEditingItemId(null);
         // Reset calculator to original state
         setItemName('');
         setMetalList([]);
@@ -1382,7 +1456,6 @@ export default function Home() {
         setFormulaBOpen(false);
         setToken(null);
         setSaveAsDraft(false);
-        setNotification({ title: "Item Saved", message: `"${newItem.name}" is now stored in your Vault.`, type: 'success' });
         if (!user) setUser(currentUser);
       } else {
         const msg = errBody?.error || `Save failed (${res.status})`;
@@ -1709,26 +1782,57 @@ export default function Home() {
       return;
     }
     setShopifyExporting(true);
-    setShowVaultMenu(false);
+    setShopifyExportProgress('exporting');
     try {
+      let itemPrices: Record<string, { retail: number; wholesale: number }> | undefined;
+      if (shopifyPriceSource === 'live') {
+        itemPrices = {};
+        for (const item of targetItems) {
+          const stonesArray = convertStonesToArray(item);
+          const h = item.hours || 0;
+          const laborTotal = item.labor_at_making || 0;
+          const r = h > 0 ? laborTotal / h : laborTotal;
+          const breakdown = calculateFullBreakdown(
+            item.metals || [],
+            h || 1,
+            r,
+            item.other_costs_at_making || 0,
+            stonesArray,
+            item.overhead_cost || 0,
+            (item.overhead_type as 'flat' | 'percent') || 'flat',
+            item.multiplier,
+            item.markup_b
+          );
+          const prices = getItemPrices(item, breakdown);
+          itemPrices[item.id] = { retail: prices.retail, wholesale: prices.wholesale };
+        }
+      }
+      const exportOptions = {
+        includeDescription: shopifyIncludeDescription,
+        includeImage: shopifyIncludeImage,
+        includeRetail: shopifyIncludeRetail,
+        includeWholesale: shopifyIncludeWholesale,
+        priceSource: shopifyPriceSource,
+      };
       const res = await fetch('/api/shopify/export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accessToken, itemIds: targetItems.map(i => i.id) }),
+        body: JSON.stringify({
+          accessToken,
+          itemIds: targetItems.map(i => i.id),
+          exportOptions,
+          itemPrices: itemPrices ?? undefined,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setNotification({ title: 'Export Failed', message: data?.error || 'Could not export to Shopify.', type: 'info' });
+        setShopifyExportProgress({ created: 0, updated: 0, errors: [data?.error || 'Could not export to Shopify.'] });
         return;
       }
-      const { created, errors } = data;
-      if (errors?.length > 0 && created === 0) {
-        setNotification({ title: 'Export Failed', message: errors.slice(0, 2).join(' '), type: 'info' });
-      } else if (created > 0) {
-        setNotification({ title: 'Exported to Shopify', message: `${created} item${created !== 1 ? 's' : ''} exported.${errors?.length ? ` ${errors.length} error(s).` : ''}`, type: 'success' });
-      }
+      const { created = 0, updated = 0, errors = [] } = data;
+      setShopifyExportProgress({ created, updated, errors: Array.isArray(errors) ? errors : [String(errors)] });
     } catch (e: any) {
-      setNotification({ title: 'Export Failed', message: e?.message || 'Could not export.', type: 'info' });
+      setShopifyExportProgress({ created: 0, updated: 0, errors: [e?.message || 'Could not export.'] });
     } finally {
       setShopifyExporting(false);
     }
@@ -2234,6 +2338,95 @@ export default function Home() {
               <button onClick={() => { setShowShopifyConnectModal(false); setShopifyConnectInput(''); }} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
               <button onClick={initiateShopifyConnect} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition shadow-lg">Connect</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Export to Shopify Options Modal */}
+      {showShopifyExportOptions && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-6">
+            <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Export to Shopify</h3>
+            <p className="text-[10px] text-stone-500 font-bold">Choose what to sync. Existing Shopify products with matching SKU will be updated, not duplicated.</p>
+
+            <div className="space-y-3">
+              <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setShopifyIncludeDescription(!shopifyIncludeDescription)}>
+                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${shopifyIncludeDescription ? 'bg-[#A5BEAC] border-[#A5BEAC] text-white' : 'bg-white border-stone-300'}`}>{shopifyIncludeDescription && '✓'}</div>
+                <div>
+                  <p className="text-xs font-black uppercase text-slate-900">Include description</p>
+                  <p className="text-[10px] text-stone-400 font-bold">Notes, metals, stones</p>
+                </div>
+              </div>
+              <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setShopifyIncludeImage(!shopifyIncludeImage)}>
+                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${shopifyIncludeImage ? 'bg-[#A5BEAC] border-[#A5BEAC] text-white' : 'bg-white border-stone-300'}`}>{shopifyIncludeImage && '✓'}</div>
+                <div>
+                  <p className="text-xs font-black uppercase text-slate-900">Include image</p>
+                  <p className="text-[10px] text-stone-400 font-bold">Adds our image without removing existing</p>
+                </div>
+              </div>
+              <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setShopifyIncludeRetail(!shopifyIncludeRetail)}>
+                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${shopifyIncludeRetail ? 'bg-[#A5BEAC] border-[#A5BEAC] text-white' : 'bg-white border-stone-300'}`}>{shopifyIncludeRetail && '✓'}</div>
+                <div>
+                  <p className="text-xs font-black uppercase text-slate-900">Include retail price</p>
+                </div>
+              </div>
+              <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setShopifyIncludeWholesale(!shopifyIncludeWholesale)}>
+                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${shopifyIncludeWholesale ? 'bg-[#A5BEAC] border-[#A5BEAC] text-white' : 'bg-white border-stone-300'}`}>{shopifyIncludeWholesale && '✓'}</div>
+                <div>
+                  <p className="text-xs font-black uppercase text-slate-900">Include wholesale price</p>
+                  <p className="text-[10px] text-stone-400 font-bold">Compare-at price in Shopify</p>
+                </div>
+              </div>
+              <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 space-y-2">
+                <p className="text-xs font-black uppercase text-slate-900">Price source</p>
+                <div className="flex gap-2">
+                  <button onClick={() => setShopifyPriceSource('saved')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase border transition-all ${shopifyPriceSource === 'saved' ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-500'}`}>Saved</button>
+                  <button onClick={() => setShopifyPriceSource('live')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase border transition-all ${shopifyPriceSource === 'live' ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-500'}`}>Live</button>
+                </div>
+                <p className="text-[10px] text-stone-400 font-bold">Saved = vault values. Live = computed from current metals & formula.</p>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button onClick={() => setShowShopifyExportOptions(false)} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
+              <button onClick={() => { setShowShopifyExportOptions(false); exportToShopify(); }} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition shadow-lg">Export</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Shopify Export Progress Modal */}
+      {shopifyExportProgress === 'exporting' && (
+        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[400] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] border-2 border-[#A5BEAC] p-10 space-y-6 shadow-2xl animate-in zoom-in-95 text-center">
+            <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto bg-[#A5BEAC]/20 animate-pulse">
+              <span className="text-3xl">⟳</span>
+            </div>
+            <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Exporting to Shopify</h3>
+            <p className="text-xs font-bold text-stone-500 uppercase tracking-wide">Syncing items... This may take a minute for many items.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Shopify Export Confirmation Modal */}
+      {shopifyExportProgress && shopifyExportProgress !== 'exporting' && (
+        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[400] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] border-2 border-[#A5BEAC] p-10 space-y-6 shadow-2xl animate-in zoom-in-95 text-center">
+            <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto bg-[#A5BEAC]/10 text-[#A5BEAC]">
+              <span className="text-2xl">✓</span>
+            </div>
+            <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Export Complete</h3>
+            <p className="text-xs font-bold text-stone-500 uppercase tracking-wide">
+              {shopifyExportProgress.created > 0 || shopifyExportProgress.updated > 0
+                ? `${shopifyExportProgress.created} created, ${shopifyExportProgress.updated} updated.${shopifyExportProgress.errors.length > 0 ? ` ${shopifyExportProgress.errors.length} error(s).` : ''}`
+                : shopifyExportProgress.errors.length > 0
+                  ? `Export failed. ${shopifyExportProgress.errors.slice(0, 2).join(' ')}`
+                  : 'No items were synced.'}
+            </p>
+            {shopifyExportProgress.errors.length > 0 && shopifyExportProgress.errors.length <= 3 && (
+              <p className="text-[10px] text-stone-500 font-bold">{shopifyExportProgress.errors.join(' ')}</p>
+            )}
+            <button onClick={() => setShopifyExportProgress(null)} className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-[#A5BEAC] transition-all shadow-lg">Done</button>
           </div>
         </div>
       )}
@@ -3172,11 +3365,21 @@ export default function Home() {
                     value={itemName}
                     onChange={e => setItemName(e.target.value)}
                   />
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" checked={saveAsDraft} onChange={e => setSaveAsDraft(e.target.checked)} className="w-4 h-4 accent-[#A5BEAC] rounded border-stone-300" />
-                    <span className="text-[10px] font-bold text-stone-600 uppercase">Save as draft / time-only</span>
-                  </label>
-                  <button type="button" onClick={addToInventory} disabled={(isGuest && !token && hasTurnstile) || savingToVault} className={`w-full py-4 rounded-2xl font-black uppercase tracking-[0.12em] text-sm transition-all ${(isGuest && !token && hasTurnstile) || savingToVault ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-[#A5BEAC] text-white shadow-lg hover:bg-slate-900 hover:shadow-xl active:scale-[0.98]'}`}>{(isGuest && !token && hasTurnstile) ? "Verifying…" : savingToVault ? "Saving…" : "Save to vault"}</button>
+                  {!editingItemId && (
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={saveAsDraft} onChange={e => setSaveAsDraft(e.target.checked)} className="w-4 h-4 accent-[#A5BEAC] rounded border-stone-300" />
+                      <span className="text-[10px] font-bold text-stone-600 uppercase">Save as draft / time-only</span>
+                    </label>
+                  )}
+                  {editingItemId && (
+                    <p className="text-[10px] font-bold text-amber-700 uppercase">Adding metals & components to existing piece</p>
+                  )}
+                  <div className="flex gap-2">
+                    {editingItemId && (
+                      <button type="button" onClick={() => { setEditingItemId(null); setItemName(''); setMetalList([]); setStoneList([]); setHours(''); setRate(''); setOtherCosts(''); setOverheadCost(''); setActiveTab('vault'); }} className="flex-1 py-4 rounded-2xl font-black uppercase tracking-[0.12em] text-sm bg-stone-200 text-stone-600 hover:bg-stone-300 transition-all">Cancel</button>
+                    )}
+                    <button type="button" onClick={addToInventory} disabled={(isGuest && !token && hasTurnstile) || savingToVault} className={`${editingItemId ? 'flex-1' : 'w-full'} py-4 rounded-2xl font-black uppercase tracking-[0.12em] text-sm transition-all ${(isGuest && !token && hasTurnstile) || savingToVault ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-[#A5BEAC] text-white shadow-lg hover:bg-slate-900 hover:shadow-xl active:scale-[0.98]'}`}>{(isGuest && !token && hasTurnstile) ? "Verifying…" : savingToVault ? "Saving…" : editingItemId ? "Update item" : "Save to vault"}</button>
+                  </div>
                 </div>
                 </div>
 
@@ -3342,7 +3545,7 @@ export default function Home() {
                         )}
                       </div>
                       {shopifyConnected && (
-                        <button onClick={exportToShopify} disabled={shopifyExporting || filteredInventory.length === 0} className={`w-full px-4 py-3 text-left text-[10px] font-black uppercase transition-colors border-b border-stone-100 ${shopifyExporting || filteredInventory.length === 0 ? 'text-stone-300 cursor-not-allowed' : 'text-slate-700 hover:bg-stone-50'}`}>
+                        <button onClick={() => { setShowShopifyExportOptions(true); setShowVaultMenu(false); }} disabled={shopifyExporting || filteredInventory.length === 0} className={`w-full px-4 py-3 text-left text-[10px] font-black uppercase transition-colors border-b border-stone-100 ${shopifyExporting || filteredInventory.length === 0 ? 'text-stone-300 cursor-not-allowed' : 'text-slate-700 hover:bg-stone-50'}`}>
                           {shopifyExporting ? 'Exporting…' : `Export to Shopify ${selectedItems.size > 0 ? `(${selectedItems.size})` : filteredInventory.length > 0 ? `(${filteredInventory.length})` : ''}`}
                         </button>
                       )}
@@ -3478,6 +3681,13 @@ export default function Home() {
                                           <p className="text-[9px] font-black uppercase tracking-wider text-stone-400">Item actions</p>
                                         </div>
                                         <div className="py-0.5">
+                                          <button
+                                            onClick={() => loadItemIntoCalculator(item)}
+                                            className={`w-full px-4 py-2 text-left text-sm font-semibold hover:bg-stone-50 transition-colors flex items-center gap-3 ${item.status === 'draft' ? 'text-[#2d4a22] font-bold' : 'text-slate-700'}`}
+                                          >
+                                            <span className="text-stone-400 w-5 text-center">🧪</span>
+                                            {item.status === 'draft' ? 'Add metals & components' : 'Edit metals & components'}
+                                          </button>
                                           <button
                                             onClick={() => {
                                               setEditingNameId(item.id);

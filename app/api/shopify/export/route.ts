@@ -77,7 +77,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { accessToken, itemIds, shopDomain: requestedShop } = body;
+    const { accessToken, itemIds, shopDomain: requestedShop, exportOptions: rawExportOptions, itemPrices: rawItemPrices } = body;
     if (!accessToken) {
       return NextResponse.json(
         { error: 'Missing access token', created: 0, errors: [] },
@@ -146,55 +146,134 @@ export async function POST(request: Request) {
       );
     }
 
+    const opts = rawExportOptions && typeof rawExportOptions === 'object'
+      ? {
+          includeDescription: !!rawExportOptions.includeDescription,
+          includeImage: !!rawExportOptions.includeImage,
+          includeRetail: rawExportOptions.includeRetail !== false,
+          includeWholesale: rawExportOptions.includeWholesale !== false,
+          priceSource: rawExportOptions.priceSource === 'live' ? 'live' : 'saved',
+        }
+      : { includeDescription: true, includeImage: true, includeRetail: true, includeWholesale: true, priceSource: 'saved' as const };
+    const itemPricesMap = rawItemPrices && typeof rawItemPrices === 'object' ? rawItemPrices : {};
+
     const errors: string[] = [];
     let created = 0;
+    let updated = 0;
+
+    const lookupBySkuQuery = `
+      query LookupBySku($query: String!) {
+        productVariants(first: 1, query: $query) {
+          edges {
+            node {
+              id
+              product { id }
+            }
+          }
+        }
+      }
+    `;
 
     for (const item of items) {
       try {
         const title = (item.name || 'Untitled Piece').slice(0, 255);
         const bodyHtml = buildBodyHtml(item);
         const productType = item.tag || 'other';
-        const retail = Number(item.retail ?? 0);
-        const wholesale = Number(item.wholesale ?? 0);
-        const sku = `VAULT-${(item.id || '').slice(0, 8)}`;
+        const skuPart = (item.id || '').slice(0, 8);
+        const sku = `VAULT-${skuPart}`;
         const imageUrl = item.image_url?.trim();
 
-        const productInput: Record<string, unknown> = {
-          title,
-          descriptionHtml: bodyHtml,
-          productType,
-          vendor: VENDOR,
-          status: 'ACTIVE',
-        };
+        const prices = itemPricesMap[item.id];
+        const retail = opts.priceSource === 'live' && prices
+          ? Number(prices.retail ?? 0)
+          : Number(item.retail ?? 0);
+        const wholesale = opts.priceSource === 'live' && prices
+          ? Number(prices.wholesale ?? 0)
+          : Number(item.wholesale ?? 0);
 
-        const mediaInput =
-          imageUrl && imageUrl.startsWith('http')
+        const lookupRes = await shopifyGraphql(shopDomain, shopifyToken, lookupBySkuQuery, {
+          query: `sku:'${sku}'`,
+        });
+        const edges = lookupRes.data?.productVariants?.edges || [];
+        const existingVariant = edges[0]?.node;
+        const existingProductId = existingVariant?.product?.id;
+        const existingVariantId = existingVariant?.id;
+
+        if (existingProductId && existingVariantId) {
+          const mediaInput = opts.includeImage && imageUrl?.startsWith('http')
             ? [{ mediaContentType: 'IMAGE', originalSource: imageUrl }]
             : [];
 
-        const createMutation = `
+          const productInput: Record<string, unknown> = { id: existingProductId };
+          if (opts.includeDescription) {
+            productInput.title = title;
+            productInput.descriptionHtml = bodyHtml;
+            productInput.productType = productType;
+          }
+
+          const hasProductUpdates = Object.keys(productInput).length > 1 || mediaInput.length > 0;
+          if (hasProductUpdates) {
+            const productUpdateRes = await shopifyGraphql(shopDomain, shopifyToken, `
+              mutation UpdateProduct($product: ProductUpdateInput!, $media: [CreateMediaInput!]) {
+                productUpdate(product: $product, media: $media) {
+                  product { id }
+                  userErrors { field message }
+                }
+              }
+            `, { product: productInput, media: mediaInput });
+
+            const puErrors = productUpdateRes.data?.productUpdate?.userErrors || [];
+            if (puErrors.length > 0) {
+              errors.push(`${title}: ${puErrors.map((e: any) => e.message).join(', ')}`);
+              continue;
+            }
+          }
+
+          const variantInput: Record<string, unknown> = { id: existingVariantId };
+          if (opts.includeRetail) variantInput.price = retail.toFixed(2);
+          if (opts.includeWholesale && wholesale > 0) variantInput.compareAtPrice = wholesale.toFixed(2);
+          variantInput.inventoryItem = { sku };
+
+          const variantUpdateRes = await shopifyGraphql(shopDomain, shopifyToken, `
+            mutation UpdateVariants($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+              productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+                userErrors { field message }
+              }
+            }
+          `, { productId: existingProductId, variants: [variantInput] });
+
+          const vuErrors = variantUpdateRes.data?.productVariantsBulkUpdate?.userErrors || [];
+          if (vuErrors.length > 0) {
+            errors.push(`${title}: ${vuErrors.map((e: any) => e.message).join(', ')}`);
+          } else {
+            updated++;
+          }
+          continue;
+        }
+
+        const productInput: Record<string, unknown> = {
+          title,
+          productType,
+          vendor: VENDOR,
+          status: 'ACTIVE',
+          descriptionHtml: opts.includeDescription ? bodyHtml : '<p>Handcrafted jewelry</p>',
+        };
+
+        const mediaInput = opts.includeImage && imageUrl?.startsWith('http')
+          ? [{ mediaContentType: 'IMAGE', originalSource: imageUrl }]
+          : [];
+
+        const createRes = await shopifyGraphql(shopDomain, shopifyToken, `
           mutation CreateProduct($product: ProductCreateInput!, $media: [CreateMediaInput!]) {
             productCreate(product: $product, media: $media) {
               product {
                 id
-                variants(first: 1) {
-                  nodes {
-                    id
-                  }
-                }
+                variants(first: 1) { nodes { id } }
               }
-              userErrors {
-                field
-                message
-              }
+              userErrors { field message }
             }
           }
-        `;
-
-        const createRes = await shopifyGraphql(shopDomain, shopifyToken, createMutation, {
-          product: productInput,
-          media: mediaInput,
-        });
+        `, { product: productInput, media: mediaInput });
 
         const payload = createRes.data?.productCreate;
         const userErrors = payload?.userErrors || [];
@@ -215,30 +294,17 @@ export async function POST(request: Request) {
           continue;
         }
 
-        const updateMutation = `
+        const variantInput: Record<string, unknown> = { id: variantId, inventoryItem: { sku } };
+        if (opts.includeRetail) variantInput.price = retail.toFixed(2);
+        if (opts.includeWholesale && wholesale > 0) variantInput.compareAtPrice = wholesale.toFixed(2);
+
+        const updateRes = await shopifyGraphql(shopDomain, shopifyToken, `
           mutation UpdateVariants($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
             productVariantsBulkUpdate(productId: $productId, variants: $variants) {
-              userErrors {
-                field
-                message
-              }
+              userErrors { field message }
             }
           }
-        `;
-
-        const variantInput: Record<string, unknown> = {
-          id: variantId,
-          price: retail.toFixed(2),
-        };
-        if (wholesale > 0) {
-          variantInput.compareAtPrice = wholesale.toFixed(2);
-        }
-        variantInput.inventoryItem = { sku };
-
-        const updateRes = await shopifyGraphql(shopDomain, shopifyToken, updateMutation, {
-          productId: product.id,
-          variants: [variantInput],
-        });
+        `, { productId: product.id, variants: [variantInput] });
 
         const updateErrors = updateRes.data?.productVariantsBulkUpdate?.userErrors || [];
         if (updateErrors.length > 0) {
@@ -253,6 +319,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       created,
+      updated,
       errors,
     });
   } catch (e: any) {
@@ -261,6 +328,7 @@ export async function POST(request: Request) {
       {
         error: e?.message || 'Server error',
         created: 0,
+        updated: 0,
         errors: [e?.message || 'Unknown error'],
       },
       { status: 500 }
