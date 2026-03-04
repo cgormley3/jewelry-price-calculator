@@ -30,7 +30,6 @@ export default function Home() {
 
   // Menus
   const [showVaultMenu, setShowVaultMenu] = useState(false);
-  const [showVaultActionsDropdown, setShowVaultActionsDropdown] = useState(false);
   const [showFilterMenu, setShowFilterMenu] = useState(false);
 
   // Filter States
@@ -296,7 +295,6 @@ export default function Home() {
       const target = event.target as HTMLElement;
       if (showFilterMenu && !target.closest('.filter-menu-container')) setShowFilterMenu(false);
       if (showVaultMenu && !target.closest('.vault-menu-container')) setShowVaultMenu(false);
-      if (showVaultActionsDropdown && !target.closest('.vault-actions-dropdown-container')) setShowVaultActionsDropdown(false);
       if (openMenuId && !target.closest('.item-menu-container')) setOpenMenuId(null);
       if (showLocationMenuId && !target.closest('.location-menu-container')) setShowLocationMenuId(null);
       if (showTagMenuId && !target.closest('.tag-menu-container')) { setShowTagMenuId(null); setNewTagInput(''); }
@@ -304,7 +302,7 @@ export default function Home() {
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showFilterMenu, showVaultMenu, showVaultActionsDropdown, openMenuId, showLocationMenuId, showTagMenuId, showAuth]);
+  }, [showFilterMenu, showVaultMenu, openMenuId, showLocationMenuId, showTagMenuId, showAuth]);
 
   const fetchPrices = useCallback(async (force = false) => {
     const cachedData = sessionStorage.getItem('vault_prices');
@@ -3531,10 +3529,30 @@ export default function Home() {
                         More {showVaultMenu ? '▲' : '▼'}
                       </button>
                       {showVaultMenu && (
-                        <div className="vault-menu-dropdown absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[50] overflow-hidden animate-in fade-in">
+                        <div className="vault-menu-dropdown absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[50] overflow-hidden animate-in fade-in max-h-[80vh] overflow-y-auto">
                           <div className="px-4 py-3 border-b border-stone-100 flex items-center justify-between">
                             <span className="text-[10px] font-black uppercase text-slate-900">Select All</span>
                             <input type="checkbox" onChange={toggleSelectAll} checked={selectedItems.size === filteredInventory.length && filteredInventory.length > 0} className="accent-[#A5BEAC] w-4 h-4 cursor-pointer" />
+                          </div>
+                          {/* Mobile only: action items merged into More */}
+                          <div className="md:hidden">
+                            <button onClick={() => { syncAllToMarket(); setShowVaultMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
+                              Sync {selectedItems.size > 0 ? `Selected (${selectedItems.size})` : 'All'} to Market
+                            </button>
+                            <button onClick={() => { setShowGlobalRecalc(true); setShowVaultMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
+                              Recalculate {selectedItems.size > 0 ? `Selected (${selectedItems.size})` : 'All'}
+                            </button>
+                            {shopifyConnected && (
+                              <button onClick={() => { setShowShopifyExportOptions(true); setShowVaultMenu(false); }} disabled={shopifyExporting} className={`w-full px-4 py-3 text-left text-[10px] font-black uppercase border-b border-stone-100 transition-colors ${shopifyExporting ? 'text-stone-400 cursor-not-allowed' : 'text-slate-700 hover:bg-stone-50'}`}>
+                                {shopifyExporting ? 'Exporting…' : `Export to Shopify ${selectedItems.size > 0 ? `(${selectedItems.size})` : `(${filteredInventory.length})`}`}
+                              </button>
+                            )}
+                            <button onClick={() => { setShowPDFOptions(true); setShowVaultMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
+                              Export PDF {selectedItems.size > 0 && `(${selectedItems.size})`}
+                            </button>
+                            <button onClick={() => { exportToCSV(); setShowVaultMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
+                              Export CSV {selectedItems.size > 0 && `(${selectedItems.size})`}
+                            </button>
                           </div>
                           {shopifyConnected ? (
                             <div className="px-4 py-2 border-b border-stone-100">
@@ -3560,41 +3578,9 @@ export default function Home() {
                 </div>
                 </div>
 
-                {/* Row 2: Action bar when items exist */}
+                {/* Row 2: Action bar when items exist (desktop only; mobile uses More dropdown) */}
                 {filteredInventory.length > 0 && (
-                  <>
-                    {/* Mobile: dropdown */}
-                    <div className="relative vault-actions-dropdown-container flex md:hidden">
-                      <button
-                        onClick={() => setShowVaultActionsDropdown(!showVaultActionsDropdown)}
-                        className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase bg-white text-slate-700 border-2 border-stone-200 hover:border-[#A5BEAC] hover:bg-stone-50 transition shadow-sm"
-                      >
-                        Vault Actions {showVaultActionsDropdown ? '▲' : '▼'}
-                      </button>
-                      {showVaultActionsDropdown && (
-                        <div className="absolute left-0 top-full mt-2 w-56 bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[50] overflow-hidden animate-in fade-in">
-                          <button onClick={() => { syncAllToMarket(); setShowVaultActionsDropdown(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
-                            Sync {selectedItems.size > 0 ? `Selected (${selectedItems.size})` : 'All'} to Market
-                          </button>
-                          <button onClick={() => { setShowGlobalRecalc(true); setShowVaultActionsDropdown(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
-                            Recalculate {selectedItems.size > 0 ? `Selected (${selectedItems.size})` : 'All'}
-                          </button>
-                          {shopifyConnected && (
-                            <button onClick={() => { setShowShopifyExportOptions(true); setShowVaultActionsDropdown(false); }} disabled={shopifyExporting} className={`w-full px-4 py-3 text-left text-[10px] font-black uppercase border-b border-stone-100 transition-colors ${shopifyExporting ? 'text-stone-400 cursor-not-allowed' : 'text-slate-700 hover:bg-stone-50'}`}>
-                              {shopifyExporting ? 'Exporting…' : `Export to Shopify ${selectedItems.size > 0 ? `(${selectedItems.size})` : `(${filteredInventory.length})`}`}
-                            </button>
-                          )}
-                          <button onClick={() => { setShowPDFOptions(true); setShowVaultActionsDropdown(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
-                            Export PDF {selectedItems.size > 0 && `(${selectedItems.size})`}
-                          </button>
-                          <button onClick={() => { exportToCSV(); setShowVaultActionsDropdown(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 transition-colors">
-                            Export CSV {selectedItems.size > 0 && `(${selectedItems.size})`}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    {/* Desktop: separate buttons, all white */}
-                    <div className="hidden md:flex flex-wrap gap-2">
+                  <div className="hidden md:flex flex-wrap gap-2">
                       <button onClick={syncAllToMarket} className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase bg-white text-slate-700 border-2 border-stone-200 hover:border-[#A5BEAC] hover:bg-stone-50 transition shadow-sm">
                         Sync {selectedItems.size > 0 ? `Selected (${selectedItems.size})` : 'All'} to Market
                       </button>
@@ -3613,7 +3599,6 @@ export default function Home() {
                         Export CSV {selectedItems.size > 0 && `(${selectedItems.size})`}
                       </button>
                     </div>
-                  </>
                 )}
               </div>
 
