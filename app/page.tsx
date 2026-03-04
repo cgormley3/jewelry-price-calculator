@@ -1272,7 +1272,7 @@ export default function Home() {
       const a = calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneList, overheadCost, overheadType);
       const { wholesale, retail } = getStrategyPrices(a);
       newItem = {
-        name: nameToUse,
+        name: itemName,
         metals: metalList,
         stones: stoneList,
         wholesale,
