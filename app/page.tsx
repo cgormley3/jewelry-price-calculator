@@ -2890,36 +2890,42 @@ export default function Home() {
 
         {/* Tab Navigation - same width as panels below */}
         <div className="w-full px-2 shrink-0">
-          <div className="grid grid-cols-3 md:flex md:grid-cols-none bg-white rounded-2xl border border-[#A5BEAC] shadow-sm overflow-hidden p-1.5 md:p-1 w-full max-w-7xl mx-auto gap-1.5 md:gap-0">
+          <div className="flex overflow-x-auto md:overflow-visible bg-white rounded-2xl border border-[#A5BEAC] shadow-sm p-2 w-full max-w-7xl mx-auto gap-2 md:gap-1 scrollbar-hide">
             <button
               onClick={() => setActiveTab('calculator')}
-              className={`py-3.5 md:py-3 px-2 md:px-2 text-[11px] md:text-xs font-black uppercase tracking-tighter transition-all rounded-xl col-span-1 md:flex-1 ${activeTab === 'calculator' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400'}`}
+              className={`flex-shrink-0 py-3 md:py-3 px-3 md:px-4 text-xs md:text-sm font-black uppercase tracking-tighter transition-all rounded-xl md:flex-1 min-w-0 ${activeTab === 'calculator' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400 hover:text-stone-600'}`}
             >
               Calculator
             </button>
             <button
               onClick={() => setActiveTab('vault')}
-              className={`py-3.5 md:py-3 px-2 md:px-2 text-[11px] md:text-xs font-black uppercase tracking-tighter transition-all rounded-xl col-span-1 md:flex-1 ${activeTab === 'vault' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400'}`}
+              className={`flex-shrink-0 py-3 md:py-3 px-3 md:px-4 text-xs md:text-sm font-black uppercase tracking-tighter transition-all rounded-xl md:flex-1 min-w-0 flex items-center justify-center gap-1.5 ${activeTab === 'vault' ? 'bg-[#A5BEAC] text-white shadow-inner' : inventory.length > 0 ? 'text-stone-500 relative' : 'text-stone-400 hover:text-stone-600'}`}
             >
               The Vault
+              {inventory.length > 0 && activeTab === 'vault' && (
+                <span className="text-[10px] font-bold opacity-90">({inventory.length})</span>
+              )}
+              {inventory.length > 0 && activeTab !== 'vault' && (
+                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#A5BEAC] animate-pulse" aria-hidden />
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('time')}
+              className={`flex-shrink-0 py-3 md:py-3 px-3 md:px-4 text-xs md:text-sm font-black uppercase tracking-tighter transition-all rounded-xl md:flex-1 min-w-0 ${activeTab === 'time' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400 hover:text-stone-600'}`}
+            >
+              Timer
             </button>
             <button
               onClick={() => setActiveTab('formulas')}
-              className={`py-3.5 md:py-3 px-2 md:px-2 text-[11px] md:text-xs font-black uppercase tracking-tighter transition-all rounded-xl col-span-1 md:flex-1 ${activeTab === 'formulas' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400'}`}
+              className={`flex-shrink-0 py-3 md:py-3 px-3 md:px-4 text-xs md:text-sm font-black uppercase tracking-tighter transition-all rounded-xl md:flex-1 min-w-0 ${activeTab === 'formulas' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400 hover:text-stone-600'}`}
             >
               Formulas
             </button>
             <button
               onClick={() => setActiveTab('logic')}
-              className={`py-3.5 md:py-3 px-2 md:px-2 text-[11px] md:text-xs font-black uppercase tracking-tighter transition-all rounded-xl col-span-1 md:flex-1 ${activeTab === 'logic' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400'}`}
+              className={`flex-shrink-0 py-3 md:py-3 px-3 md:px-4 text-xs md:text-sm font-black uppercase tracking-tighter transition-all rounded-xl md:flex-1 min-w-0 ${activeTab === 'logic' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400 hover:text-stone-600'}`}
             >
               Logic
-            </button>
-            <button
-              onClick={() => setActiveTab('time')}
-              className={`py-3.5 md:py-3 px-2 md:px-2 text-[11px] md:text-xs font-black uppercase tracking-tighter transition-all rounded-xl col-span-1 md:flex-1 ${activeTab === 'time' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400'}`}
-            >
-              Timer
             </button>
           </div>
         </div>
@@ -3500,76 +3506,74 @@ export default function Home() {
                 </div>
 
                 <div className="flex gap-2 shrink-0">
-                <button
-                  onClick={() => setShowQuickAddPiece(true)}
-                  className="min-h-[48px] sm:min-h-0 px-4 rounded-xl text-[10px] font-black uppercase bg-[#A5BEAC] text-white hover:bg-slate-900 transition shadow-sm flex items-center justify-center"
-                >
-                  Quick add piece
-                </button>
-                {/* NEW: Combined Vault Options Menu */}
-                <div className="relative vault-menu-container min-h-[48px] sm:h-full">
                   <button
-                    onClick={() => { if (inventory.length > 0) setShowVaultMenu(!showVaultMenu); }}
-                    disabled={inventory.length === 0}
-                    className={`vault-menu-trigger w-full h-full min-h-[48px] sm:min-h-0 sm:w-auto px-6 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 transition shadow-sm ${inventory.length === 0
-                        ? 'bg-stone-200 text-stone-400 cursor-not-allowed'
-                        : 'bg-slate-900 text-white hover:bg-[#A5BEAC]'
-                      }`}
+                    onClick={() => setShowQuickAddPiece(true)}
+                    className="min-h-[48px] sm:min-h-0 px-4 rounded-xl text-[10px] font-black uppercase bg-[#A5BEAC] text-white hover:bg-slate-900 transition shadow-sm flex items-center justify-center"
                   >
-                    Vault Options {showVaultMenu ? '▲' : '▼'}
+                    Quick add piece
                   </button>
-                  {showVaultMenu && (
-                    <div className="vault-menu-dropdown absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[50] overflow-hidden animate-in fade-in">
-                      {/* Selection Checkbox */}
-                      <div className="px-4 py-3 border-b border-stone-100 flex items-center justify-between">
-                        <span className="text-[10px] font-black uppercase text-slate-900">Select All</span>
-                        <input type="checkbox" onChange={toggleSelectAll} checked={selectedItems.size === filteredInventory.length && filteredInventory.length > 0} className="accent-[#A5BEAC] w-4 h-4 cursor-pointer" />
-                      </div>
-
-                      {/* Batch Actions */}
-                      <button onClick={syncAllToMarket} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
-                        Sync {selectedItems.size > 0 ? `Selected (${selectedItems.size})` : 'All'} to Market
+                  {filteredInventory.length > 0 ? (
+                    <div className="relative vault-menu-container min-h-[48px] sm:h-full">
+                      <button
+                        onClick={() => setShowVaultMenu(!showVaultMenu)}
+                        className="vault-menu-trigger w-full h-full min-h-[48px] sm:min-h-0 sm:w-auto px-4 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 transition shadow-sm bg-stone-100 text-slate-700 hover:bg-stone-200 border border-stone-200"
+                        title="Select All, Connect Shopify"
+                      >
+                        More {showVaultMenu ? '▲' : '▼'}
                       </button>
-                      <button onClick={() => { setShowGlobalRecalc(true); setShowVaultMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
-                        Recalculate {selectedItems.size > 0 ? `Selected (${selectedItems.size})` : 'All'}
-                      </button>
-
-                      {/* Shopify */}
-                      <div className="px-4 py-2 border-b border-stone-100">
-                        {shopifyConnected ? (
-                          <p className="text-[9px] font-bold text-[#A5BEAC] uppercase">Connected to {shopifyShop || 'Shopify'}</p>
-                        ) : (
-                          <button onClick={() => { setShowShopifyConnectModal(true); setShowVaultMenu(false); }} className="w-full text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 -mx-4 px-4 py-2 transition-colors">
-                            Connect Shopify
-                          </button>
-                        )}
-                      </div>
-                      {shopifyConnected && (
-                        <button onClick={() => { setShowShopifyExportOptions(true); setShowVaultMenu(false); }} disabled={shopifyExporting || filteredInventory.length === 0} className={`w-full px-4 py-3 text-left text-[10px] font-black uppercase transition-colors border-b border-stone-100 ${shopifyExporting || filteredInventory.length === 0 ? 'text-stone-300 cursor-not-allowed' : 'text-slate-700 hover:bg-stone-50'}`}>
-                          {shopifyExporting ? 'Exporting…' : `Export to Shopify ${selectedItems.size > 0 ? `(${selectedItems.size})` : filteredInventory.length > 0 ? `(${filteredInventory.length})` : ''}`}
-                        </button>
-                      )}
-                      {/* Export Options */}
-                      {filteredInventory.length > 0 ? (
-                        <>
-                          <button onClick={() => { setShowPDFOptions(true); setShowVaultMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
-                            Export PDF Report {selectedItems.size > 0 && `(${selectedItems.size})`}
-                          </button>
-                          <button onClick={() => { exportToCSV(); setShowVaultMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 transition-colors">
-                            Export CSV Spreadsheet {selectedItems.size > 0 && `(${selectedItems.size})`}
-                          </button>
-                        </>
-                      ) : (
-                        <div className="px-4 py-3 text-[9px] text-stone-300 italic text-center uppercase font-bold cursor-default">
-                          Vault Empty - No Exports
+                      {showVaultMenu && (
+                        <div className="vault-menu-dropdown absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[50] overflow-hidden animate-in fade-in">
+                          <div className="px-4 py-3 border-b border-stone-100 flex items-center justify-between">
+                            <span className="text-[10px] font-black uppercase text-slate-900">Select All</span>
+                            <input type="checkbox" onChange={toggleSelectAll} checked={selectedItems.size === filteredInventory.length && filteredInventory.length > 0} className="accent-[#A5BEAC] w-4 h-4 cursor-pointer" />
+                          </div>
+                          {shopifyConnected ? (
+                            <div className="px-4 py-2 border-b border-stone-100">
+                              <p className="text-[9px] font-bold text-[#A5BEAC] uppercase">Connected to {shopifyShop || 'Shopify'}</p>
+                            </div>
+                          ) : (
+                            <button onClick={() => { setShowShopifyConnectModal(true); setShowVaultMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
+                              Connect Shopify
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
+                  ) : (
+                    <button
+                      disabled
+                      className="min-h-[48px] sm:min-h-0 px-4 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 bg-stone-100 text-stone-400 cursor-not-allowed border border-stone-200"
+                      title="Add items to unlock Sync, Export, and Shopify"
+                    >
+                      Vault Options
+                    </button>
                   )}
                 </div>
                 </div>
+
+                {/* Row 2: Action bar when items exist */}
+                {filteredInventory.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={syncAllToMarket} className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase bg-slate-900 text-white hover:bg-[#A5BEAC] transition shadow-sm">
+                      Sync {selectedItems.size > 0 ? `Selected (${selectedItems.size})` : 'All'} to Market
+                    </button>
+                    <button onClick={() => { setShowGlobalRecalc(true); }} className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase bg-slate-900 text-white hover:bg-[#A5BEAC] transition shadow-sm">
+                      Recalculate {selectedItems.size > 0 ? `Selected (${selectedItems.size})` : 'All'}
+                    </button>
+                    {shopifyConnected && (
+                      <button onClick={() => { setShowShopifyExportOptions(true); }} disabled={shopifyExporting} className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase transition shadow-sm ${shopifyExporting ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-slate-900 text-white hover:bg-[#A5BEAC]'}`}>
+                        {shopifyExporting ? 'Exporting…' : `Export to Shopify ${selectedItems.size > 0 ? `(${selectedItems.size})` : `(${filteredInventory.length})`}`}
+                      </button>
+                    )}
+                    <button onClick={() => { setShowPDFOptions(true); }} className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase bg-white text-slate-700 border-2 border-stone-200 hover:border-[#A5BEAC] hover:bg-stone-50 transition shadow-sm">
+                      Export PDF {selectedItems.size > 0 && `(${selectedItems.size})`}
+                    </button>
+                    <button onClick={() => exportToCSV()} className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase bg-white text-slate-700 border-2 border-stone-200 hover:border-[#A5BEAC] hover:bg-stone-50 transition shadow-sm">
+                      Export CSV {selectedItems.size > 0 && `(${selectedItems.size})`}
+                    </button>
+                  </div>
+                )}
               </div>
-            </div>
 
             {/* flex-1 min-h-0 allows scrolling when parent has max-h on desktop; mobile: cap at ~4 cards height */}
             <div className="p-4 md:p-6 overflow-y-auto flex-1 min-h-0 max-h-[34rem] md:max-h-none pb-40 custom-scrollbar overscroll-behavior-contain touch-pan-y bg-stone-50/20 rounded-b-[2.5rem]">
