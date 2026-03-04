@@ -5,9 +5,10 @@ import crypto from 'crypto';
 export const dynamic = 'force-dynamic';
 
 function getAppOrigin(): string {
-  return process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const base = process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+    'http://localhost:3000';
+  return base.startsWith('http') ? base : `https://${base}`;
 }
 
 function parseAndVerifyState(

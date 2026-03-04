@@ -7,10 +7,12 @@ export const dynamic = 'force-dynamic';
 const SCOPES = 'write_products,read_products';
 
 function getRedirectUri(): string {
-  const base = process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  return `${base}/api/shopify/callback`;
+  // Prefer stable domain (Vercel custom domain) over deployment-specific VERCEL_URL
+  const base = process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+    'http://localhost:3000';
+  const url = base.startsWith('http') ? base : `https://${base}`;
+  return `${url.replace(/\/$/, '')}/api/shopify/callback`;
 }
 
 function createState(shop: string, userId: string, secret: string): string {
@@ -43,10 +45,16 @@ export async function POST(request: Request) {
       );
     }
 
-    // Normalize shop: "mystore" or "mystore.myshopify.com" → "mystore.myshopify.com"
+    // Normalize shop to "mystore.myshopify.com"
+    // Handles: "mystore", "mystore.myshopify.com", "mystore.com" (custom domain → use as store name)
     let shop = String(rawShop).toLowerCase().trim();
-    if (!shop.endsWith('.myshopify.com')) {
-      shop = `${shop.replace(/\.myshopify\.com$/i, '')}.myshopify.com`;
+    if (shop.endsWith('.myshopify.com')) {
+      // Already correct
+    } else {
+      let storeName = shop.replace(/\.myshopify\.com$/i, '');
+      // If user entered "store.com" or "store.net", strip TLD to get store name
+      storeName = storeName.replace(/\.(com|net|org|io|co|store)$/i, '');
+      shop = `${storeName}.myshopify.com`;
     }
 
     const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey);
