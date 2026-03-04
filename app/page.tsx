@@ -1945,6 +1945,95 @@ export default function Home() {
     }
   };
 
+  /** Compute height of one item block (header + table + breakdown + notes + divider) without drawing. Used for smart page breaks. */
+  const computeItemBlockHeight = (
+    doc: jsPDF,
+    item: any,
+    opts: { includeBreakdownInPDF: boolean; includeLiveInPDF: boolean }
+  ): number => {
+    const { includeBreakdownInPDF } = opts;
+    const pdfThumbSize = 18;
+    const pdfThumbPaddingBelow = 4;
+    const tableHeight = 22;
+    const pdfTableEndX = pdfMargin + (opts.includeLiveInPDF ? 96 : 90);
+    const pdfBreakdownX = pdfTableEndX + 10;
+    const pdfBreakdownMaxWidth = pdfPageWidth - pdfMargin - pdfBreakdownX;
+    const lineHeight = 3;
+    const sectionGap = 2;
+
+    let itemHeaderHeight = 14;
+    if (item.image_url) itemHeaderHeight = pdfThumbSize + pdfThumbPaddingBelow;
+
+    const tableStartY = 0;
+    const notesAnchorY = tableStartY + tableHeight + 5;
+    let breakdownBottomY = tableStartY + tableHeight + 3;
+
+    if (includeBreakdownInPDF) {
+      const stonesArray = convertStonesToArray(item);
+      const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, stonesArray, item.overhead_cost || 0, 'flat', item.multiplier, item.markup_b);
+
+      const metalLines: string[] = item.metals?.map((m: any) => `${m.weight}${m.unit} ${m.type}`) || [];
+      const savedSpotByMetal: Record<string, number> = {};
+      (item.metals || []).forEach((m: any) => {
+        const t = m.type?.toLowerCase() || '';
+        if (m.spotSaved != null && !m.isManual) {
+          if (t.includes('gold') && savedSpotByMetal.Gold == null) savedSpotByMetal.Gold = m.spotSaved;
+          else if (t.includes('silver') && savedSpotByMetal.Silver == null) savedSpotByMetal.Silver = m.spotSaved;
+          else if (t.includes('platinum') && savedSpotByMetal.Platinum == null) savedSpotByMetal.Platinum = m.spotSaved;
+          else if (t.includes('palladium') && savedSpotByMetal.Palladium == null) savedSpotByMetal.Palladium = m.spotSaved;
+        }
+      });
+      const savedSpotParts = Object.entries(savedSpotByMetal)
+        .map(([name, val]) => `${name} $${Number(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
+        .filter(Boolean);
+      if (savedSpotParts.length > 0) metalLines.push(`Saved spot ($/oz): ${savedSpotParts.join(' | ')}`);
+
+      const stoneLines: string[] = [];
+      if (stonesArray.length > 0) {
+        stonesArray.forEach((stone: any) => {
+          const stoneRetail = Number(stone.cost) * Number(stone.markup || 1.5);
+          stoneLines.push(`${stone.name}: $${stoneRetail.toFixed(2)} (${stone.markup.toFixed(1)}× | Cost: $${Number(stone.cost).toFixed(2)})`);
+        });
+      }
+
+      const otherLines: string[] = [];
+      if (item.other_costs_at_making > 0) otherLines.push(`Findings/Other: $${Number(item.other_costs_at_making).toFixed(2)}`);
+      if (item.overhead_cost > 0) {
+        const totalStoneCost = stonesArray.reduce((sum: number, s: any) => sum + (Number(s.cost) || 0), 0);
+        const denominator = Number(item.materials_at_making) + Number(item.labor_at_making) + Number(item.other_costs_at_making) + totalStoneCost;
+        const ovPct = item.overhead_type === 'percent' && denominator > 0 ? ((Number(item.overhead_cost) / denominator) * 100).toFixed(1) : null;
+        otherLines.push(`Overhead: $${Number(item.overhead_cost).toFixed(2)} ${ovPct ? `(${ovPct}%)` : ''}`);
+      }
+      if (current.labor > 0) otherLines.push(`Labor (${item.hours || 0}h): $${Number(current.labor).toFixed(2)}`);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+
+      const countSectionLines = (lines: string[]): number => {
+        if (lines.length === 0) return 0;
+        let count = lineHeight;
+        for (const line of lines) {
+          const wrapped = doc.splitTextToSize(line, pdfBreakdownMaxWidth);
+          count += wrapped.length * lineHeight + 0.4;
+        }
+        return count + sectionGap;
+      };
+
+      breakdownBottomY = 2 + countSectionLines(metalLines) + countSectionLines(stoneLines) + countSectionLines(otherLines) + 1;
+    }
+
+    let notesBottomY = notesAnchorY;
+    if (item.notes) {
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(6);
+      const noteWrapped = doc.splitTextToSize(item.notes, pdfContentWidth - 4);
+      notesBottomY = notesAnchorY + 4.5 + noteWrapped.length * 3 + 3;
+    }
+
+    const nextY = Math.max(breakdownBottomY, notesBottomY);
+    return itemHeaderHeight + nextY + 4;
+  };
+
   const exportDetailedPDF = async () => {
     setLoading(true);
     setShowPDFOptions(false);
@@ -1985,7 +2074,8 @@ export default function Home() {
     currentY += 8;
 
     for (const item of targetItems) {
-      if (currentY + 58 > pdfPageHeight - PDF_FOOTER_HEIGHT) {
+      const itemHeight = computeItemBlockHeight(doc, item, { includeBreakdownInPDF, includeLiveInPDF });
+      if (currentY + itemHeight > pdfPageHeight - PDF_FOOTER_HEIGHT) {
         drawPDFPageFooter(doc, iconData, pageNum);
         doc.addPage();
         pageNum += 1;
