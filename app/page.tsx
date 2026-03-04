@@ -560,14 +560,21 @@ export default function Home() {
             new Promise<any>(r => setTimeout(() => r(null), 2000))
           ]);
           if (!initialSession) {
-            try {
-              const { data } = await supabase.auth.signInAnonymously();
-              setUser(data.user);
-              await fetchInventory();
-            } catch (error: any) {
-              console.warn('Supabase auth error:', error);
-              if (error?.message?.includes('Cannot reach') || error?.message?.includes('timed out') || error?.message === 'Failed to fetch') {
-                setNotification({ title: 'Connection Issue', message: 'Unable to reach the vault service. The calculator works offline—try again when you\'re back online.', type: 'info' });
+            // Double-check localStorage: onAuthStateChange can be delayed; avoid overwriting existing session
+            const { data: { session: storedSession } } = await supabase.auth.getSession();
+            if (storedSession?.user) {
+              setUser(storedSession.user);
+              fetchInventory();
+            } else {
+              try {
+                const { data } = await supabase.auth.signInAnonymously();
+                setUser(data.user);
+                await fetchInventory();
+              } catch (error: any) {
+                console.warn('Supabase auth error:', error);
+                if (error?.message?.includes('Cannot reach') || error?.message?.includes('timed out') || error?.message === 'Failed to fetch') {
+                  setNotification({ title: 'Connection Issue', message: 'Unable to reach the vault service. The calculator works offline—try again when you\'re back online.', type: 'info' });
+                }
               }
             }
           }
