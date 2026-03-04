@@ -56,6 +56,13 @@ export default function Home() {
   const [includeLiveInPDF, setIncludeLiveInPDF] = useState(true);
   const [includeBreakdownInPDF, setIncludeBreakdownInPDF] = useState(true);
 
+  // Shopify
+  const [shopifyConnected, setShopifyConnected] = useState(false);
+  const [shopifyShop, setShopifyShop] = useState<string | null>(null);
+  const [showShopifyConnectModal, setShowShopifyConnectModal] = useState(false);
+  const [shopifyConnectInput, setShopifyConnectInput] = useState('');
+  const [shopifyExporting, setShopifyExporting] = useState(false);
+
   // Form States
   const [manualRetail, setManualRetail] = useState('');
   const [manualWholesale, setManualWholesale] = useState('');
@@ -197,6 +204,25 @@ export default function Home() {
     const stored = localStorage.getItem('price_rounding');
     if (stored === '1' || stored === '5' || stored === '10' || stored === '25') setPriceRounding(Number(stored) as 1 | 5 | 10 | 25);
     else if (stored === 'none') setPriceRounding('none');
+  }, []);
+
+  // Handle Shopify OAuth callback URL params
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const connected = params.get('shopify_connected');
+    const error = params.get('shopify_error');
+    if (connected === '1') {
+      setShopifyConnected(true);
+      setNotification({ title: 'Shopify Connected', message: 'Your store is now connected. You can export items to Shopify.', type: 'success' });
+      window.history.replaceState({}, '', window.location.pathname);
+      setActiveTab('vault');
+      fetchInventory();
+    } else if (error) {
+      const msg = error === 'invalid_state' ? 'Connection expired. Try again.' : error === 'token_exchange_failed' ? 'Could not complete connection.' : `Connection failed: ${error}`;
+      setNotification({ title: 'Shopify Connection Failed', message: msg, type: 'info' });
+      window.history.replaceState({}, '', window.location.pathname);
+    }
   }, []);
 
   // Persist timer to localStorage so it survives refresh, tab close, PWA background
@@ -641,6 +667,17 @@ export default function Home() {
         if (resTime.ok) {
           const timeData = await resTime.json();
           setTimeEntries(Array.isArray(timeData) ? timeData : []);
+        }
+        // Shopify connection status
+        const resShopify = await fetch('/api/shopify/status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessToken, userId: session.user.id }),
+        });
+        if (resShopify.ok) {
+          const shopifyData = await resShopify.json();
+          setShopifyConnected(!!shopifyData.connected);
+          setShopifyShop(shopifyData.shop || null);
         }
       } else {
         const err = await res.json().catch(() => ({}));
@@ -1657,6 +1694,78 @@ export default function Home() {
     document.body.appendChild(link); link.click(); setShowVaultMenu(false);
   };
 
+  const exportToShopify = async () => {
+    const session = (await supabase.auth.getSession()).data.session;
+    const accessToken = (session as any)?.access_token;
+    if (!accessToken || !user?.id) {
+      setNotification({ title: 'Sign in required', message: 'Please sign in to export to Shopify.', type: 'info' });
+      return;
+    }
+    const targetItems = selectedItems.size > 0
+      ? filteredInventory.filter(i => selectedItems.has(i.id))
+      : filteredInventory;
+    if (targetItems.length === 0) {
+      setNotification({ title: 'No items', message: 'Select items or add some to the vault first.', type: 'info' });
+      return;
+    }
+    setShopifyExporting(true);
+    setShowVaultMenu(false);
+    try {
+      const res = await fetch('/api/shopify/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accessToken, itemIds: targetItems.map(i => i.id) }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setNotification({ title: 'Export Failed', message: data?.error || 'Could not export to Shopify.', type: 'info' });
+        return;
+      }
+      const { created, errors } = data;
+      if (errors?.length > 0 && created === 0) {
+        setNotification({ title: 'Export Failed', message: errors.slice(0, 2).join(' '), type: 'info' });
+      } else if (created > 0) {
+        setNotification({ title: 'Exported to Shopify', message: `${created} item${created !== 1 ? 's' : ''} exported.${errors?.length ? ` ${errors.length} error(s).` : ''}`, type: 'success' });
+      }
+    } catch (e: any) {
+      setNotification({ title: 'Export Failed', message: e?.message || 'Could not export.', type: 'info' });
+    } finally {
+      setShopifyExporting(false);
+    }
+  };
+
+  const initiateShopifyConnect = async () => {
+    const shop = shopifyConnectInput.trim().replace(/\.myshopify\.com$/i, '') || '';
+    if (!shop) {
+      setNotification({ title: 'Enter shop name', message: 'Enter your Shopify store name (e.g. mystore).', type: 'info' });
+      return;
+    }
+    const session = (await supabase.auth.getSession()).data.session;
+    const accessToken = (session as any)?.access_token;
+    if (!accessToken || !user?.id) {
+      setNotification({ title: 'Sign in required', message: 'Please sign in to connect Shopify.', type: 'info' });
+      return;
+    }
+    try {
+      const res = await fetch('/api/shopify/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accessToken, shop }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.redirectUrl) {
+        setNotification({ title: 'Connection Failed', message: data?.error || 'Could not start connection.', type: 'info' });
+        return;
+      }
+      setShowShopifyConnectModal(false);
+      setShowVaultMenu(false);
+      setShopifyConnectInput('');
+      window.location.href = data.redirectUrl;
+    } catch (e: any) {
+      setNotification({ title: 'Connection Failed', message: e?.message || 'Could not connect.', type: 'info' });
+    }
+  };
+
   const getImageData = async (url: string): Promise<string | null> => {
     try {
       const response = await fetch(url, { mode: 'cors' });
@@ -2103,6 +2212,27 @@ export default function Home() {
             <div className="flex gap-3">
               <button onClick={() => setShowPDFOptions(false)} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
               <button onClick={exportDetailedPDF} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition shadow-lg">Download PDF</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Connect Shopify Modal */}
+      {showShopifyConnectModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-6">
+            <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Connect Shopify</h3>
+            <p className="text-[10px] text-stone-500 font-bold">Enter your Shopify store name (e.g. mystore or mystore.myshopify.com)</p>
+            <input
+              type="text"
+              placeholder="mystore"
+              value={shopifyConnectInput}
+              onChange={(e) => setShopifyConnectInput(e.target.value)}
+              className="w-full p-4 bg-stone-50 border border-stone-200 rounded-2xl outline-none focus:border-[#A5BEAC] font-bold placeholder:text-stone-300"
+            />
+            <div className="flex gap-3">
+              <button onClick={() => { setShowShopifyConnectModal(false); setShopifyConnectInput(''); }} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
+              <button onClick={initiateShopifyConnect} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition shadow-lg">Connect</button>
             </div>
           </div>
         </div>
@@ -3201,6 +3331,21 @@ export default function Home() {
                         Recalculate {selectedItems.size > 0 ? `Selected (${selectedItems.size})` : 'All'}
                       </button>
 
+                      {/* Shopify */}
+                      <div className="px-4 py-2 border-b border-stone-100">
+                        {shopifyConnected ? (
+                          <p className="text-[9px] font-bold text-[#A5BEAC] uppercase">Connected to {shopifyShop || 'Shopify'}</p>
+                        ) : (
+                          <button onClick={() => { setShowShopifyConnectModal(true); setShowVaultMenu(false); }} className="w-full text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 -mx-4 px-4 py-2 transition-colors">
+                            Connect Shopify
+                          </button>
+                        )}
+                      </div>
+                      {shopifyConnected && (
+                        <button onClick={exportToShopify} disabled={shopifyExporting || filteredInventory.length === 0} className={`w-full px-4 py-3 text-left text-[10px] font-black uppercase transition-colors border-b border-stone-100 ${shopifyExporting || filteredInventory.length === 0 ? 'text-stone-300 cursor-not-allowed' : 'text-slate-700 hover:bg-stone-50'}`}>
+                          {shopifyExporting ? 'Exporting…' : `Export to Shopify ${selectedItems.size > 0 ? `(${selectedItems.size})` : filteredInventory.length > 0 ? `(${filteredInventory.length})` : ''}`}
+                        </button>
+                      )}
                       {/* Export Options */}
                       {filteredInventory.length > 0 ? (
                         <>
