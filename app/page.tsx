@@ -2596,7 +2596,7 @@ export default function Home() {
               onClick={() => setActiveTab('time')}
               className={`py-3.5 md:py-3 px-2 md:px-2 text-[11px] md:text-xs font-black uppercase tracking-tighter transition-all rounded-xl col-span-1 md:flex-1 ${activeTab === 'time' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400'}`}
             >
-              Time
+              Timer
             </button>
           </div>
         </div>
