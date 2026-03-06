@@ -2935,7 +2935,7 @@ export default function Home() {
               <div className="flex items-center justify-center gap-2 mb-2">
                 <h1 className="text-3xl font-black uppercase italic tracking-[0.1em] text-slate-900 leading-none">THE VAULT</h1>
               </div>
-              <a href="https://bearsilverandstone.com" target="_blank" rel="noopener noreferrer" className="text-[9px] font-black uppercase tracking-[0.15em] text-stone-400 hover:text-[#A5BEAC] transition-colors">BY BEAR SILVER AND STONE</a>
+              <a href="https://bearsilverandstone.com" target="_blank" rel="noopener noreferrer" className="text-[9px] font-black uppercase tracking-[0.15em] text-stone-600 hover:text-[#A5BEAC] transition-colors">BY BEAR SILVER AND STONE</a>
             </div>
           </div>
 
@@ -2974,10 +2974,10 @@ export default function Home() {
                   {signUpAwaitingConfirmation ? (
                     <div className="space-y-4">
                       <p className="text-sm text-stone-600 text-center">We&apos;ve sent a verification link to <strong>{email}</strong>. Please confirm your account to get access to your Vault.</p>
-                      <button type="button" onClick={handleResendConfirmation} disabled={resendingConfirmation} className="w-full py-3 rounded-xl text-[10px] font-black uppercase border-2 border-[#A5BEAC] bg-[#A5BEAC] bg-opacity-10 text-[#A5BEAC] hover:bg-[#A5BEAC] hover:text-white transition disabled:opacity-50">
+                      <button type="button" onClick={handleResendConfirmation} disabled={resendingConfirmation} className="w-full py-3 rounded-xl text-[10px] font-black uppercase border-2 border-[#A5BEAC] bg-[#A5BEAC]/10 text-slate-800 hover:bg-[#A5BEAC] hover:text-white transition disabled:opacity-50">
                         {resendingConfirmation ? 'Sending…' : 'Resend confirmation email'}
                       </button>
-                      <button type="button" onClick={() => { setSignUpAwaitingConfirmation(false); setIsSignUp(false); }} className="w-full text-center text-[9px] font-black uppercase text-stone-400 hover:text-[#A5BEAC] transition tracking-widest">Switch to Login</button>
+                      <button type="button" onClick={() => { setSignUpAwaitingConfirmation(false); setIsSignUp(false); }} className="w-full text-center text-[9px] font-black uppercase text-stone-600 hover:text-[#A5BEAC] transition tracking-widest">Switch to Login</button>
                     </div>
                   ) : (
                     <div className="space-y-0">
@@ -3017,7 +3017,7 @@ export default function Home() {
                         </div>
                         <button type="submit" className="w-full bg-[#A5BEAC] text-white py-3 rounded-xl font-black text-xs uppercase hover:bg-slate-900 transition shadow-md">{isSignUp ? 'Create Vault Account' : 'Open The Vault'}</button>
                         {!isSignUp && (
-                          <button type="button" onClick={handleResetPassword} className="w-full text-center text-[9px] font-black uppercase text-stone-400 hover:text-[#A5BEAC] transition mt-2 tracking-widest">Forgot Password?</button>
+                          <button type="button" onClick={handleResetPassword} className="w-full text-center text-[9px] font-black uppercase text-stone-600 hover:text-[#A5BEAC] transition mt-2 tracking-widest">Forgot Password?</button>
                         )}
                       </form>
                     </div>
