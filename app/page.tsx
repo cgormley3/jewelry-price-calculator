@@ -3709,7 +3709,7 @@ export default function Home() {
                                 <button onClick={() => { setShowShopifyConnectModal(true); setShopifyConnectInput(shopifyShop?.replace('.myshopify.com', '') || ''); setShowVaultMenu(false); }} className="flex-1 py-2 rounded-lg text-[9px] font-black uppercase border border-stone-200 bg-white text-slate-700 hover:border-[#A5BEAC] transition">
                                   Change store
                                 </button>
-                                <button onClick={() => { disconnectShopify(); }} className="flex-1 py-2 rounded-lg text-[9px] font-black uppercase border border-stone-200 bg-white text-stone-500 hover:border-red-300 hover:text-red-600 transition">
+                                <button onClick={() => { setNotification({ title: 'Disconnect Shopify', message: 'Are you sure you want to disconnect your Shopify account?', type: 'confirm', onConfirm: () => { disconnectShopify(); setNotification(null); } }); setShowVaultMenu(false); }} className="flex-1 py-2 rounded-lg text-[9px] font-black uppercase border border-stone-200 bg-white text-stone-500 hover:border-red-300 hover:text-red-600 transition">
                                   Disconnect
                                 </button>
                               </div>
