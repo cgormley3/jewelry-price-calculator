@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -82,6 +82,8 @@ function FormulaSlot({
   tokens,
   onTokenRemove,
   onConstantChange,
+  placeholderText = 'Drop blocks here',
+  isMobile,
 }: {
   slot: SlotId;
   label: string;
@@ -90,6 +92,8 @@ function FormulaSlot({
   tokens: FormulaToken[];
   onTokenRemove: (slot: SlotId, idx: number) => void;
   onConstantChange: (slot: SlotId, idx: number, value: number) => void;
+  placeholderText?: string;
+  isMobile?: boolean;
 }) {
   const { isOver, setNodeRef } = useDroppable({
     id: `slot-${slot}`,
@@ -107,7 +111,7 @@ function FormulaSlot({
         `}
       >
         {tokens.length === 0 ? (
-          <span className="text-[9px] text-stone-400 italic">Drop blocks here</span>
+          <span className="text-[9px] text-stone-400 italic">{placeholderText}</span>
         ) : (
           tokens.map((t, idx) => (
             <TokenChip
@@ -115,6 +119,7 @@ function FormulaSlot({
               token={t}
               onRemove={() => onTokenRemove(slot, idx)}
               onConstantChange={t.kind === 'constant' ? (v) => onConstantChange(slot, idx, v) : undefined}
+              isMobile={isMobile}
             />
           ))
         )}
@@ -130,10 +135,12 @@ function TokenChip({
   token,
   onRemove,
   onConstantChange,
+  isMobile,
 }: {
   token: FormulaToken;
   onRemove: () => void;
   onConstantChange?: (v: number) => void;
+  isMobile?: boolean;
 }) {
   const label =
     token.kind === 'value'
@@ -148,7 +155,7 @@ function TokenChip({
         <input
           type="number"
           step="0.1"
-          className="w-10 text-center text-[10px] font-bold border-0 bg-transparent p-0 outline-none"
+          className={`text-center text-[10px] font-bold border-0 bg-transparent p-0 outline-none ${isMobile ? 'min-w-[44px] w-14' : 'w-10'}`}
           value={token.value}
           onChange={(e) => onConstantChange(Number(e.target.value) || 0)}
           onClick={(e) => e.stopPropagation()}
@@ -168,14 +175,35 @@ function TokenChip({
   );
 }
 
+function useIsDesktop() {
+  const [isDesktop, setIsDesktop] = useState(true);
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)');
+    setIsDesktop(mq.matches);
+    const handler = () => setIsDesktop(mq.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+  return isDesktop;
+}
+
 export default function FormulaBuilder({
   model,
   onChange,
   roundForDisplay,
   previewContext,
 }: FormulaBuilderProps) {
+  const isDesktop = useIsDesktop();
+  const [activeSlot, setActiveSlot] = useState<SlotId>('base');
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeToken, setActiveToken] = useState<FormulaToken | null>(null);
+
+  const handleBlockTap = (token: FormulaToken) => {
+    const tokens = getSlotTokens(model, activeSlot);
+    const newTokens = [...tokens, token];
+    const node = parseTokens(newTokens);
+    if (node) setSlotFormula(model, activeSlot, node, onChange);
+  };
 
   const handleDragStart = (e: DragStartEvent) => {
     setActiveId(String(e.active.id));
@@ -275,8 +303,32 @@ export default function FormulaBuilder({
           </p>
         )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="p-3 rounded-xl bg-stone-50 border border-stone-100">
-          <FormulaPalette />
+        <div className="p-3 rounded-xl bg-stone-50 border border-stone-100 space-y-3">
+          {!isDesktop && (
+            <div>
+              <p className="text-[9px] font-black text-stone-400 uppercase tracking-wider mb-2">Adding to</p>
+              <div className="flex flex-wrap gap-2">
+                {(['base', 'wholesale', 'retail'] as SlotId[]).map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setActiveSlot(s)}
+                    className={`min-h-[44px] px-3 py-2 rounded-lg text-[10px] font-bold uppercase border transition-all ${
+                      activeSlot === s
+                        ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]'
+                        : 'bg-white text-slate-700 border-stone-200'
+                    }`}
+                  >
+                    {s === 'base' ? 'Base cost' : s === 'wholesale' ? 'Wholesale' : 'Retail'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <FormulaPalette
+            tapMode={!isDesktop}
+            onBlockTap={!isDesktop ? handleBlockTap : undefined}
+          />
         </div>
         <div className="space-y-4">
           <FormulaSlot
@@ -287,6 +339,8 @@ export default function FormulaBuilder({
             tokens={getSlotTokens(model, 'base')}
             onTokenRemove={handleTokenRemove}
             onConstantChange={handleConstantChange}
+            placeholderText={!isDesktop ? 'Tap blocks to add' : 'Drop blocks here'}
+            isMobile={!isDesktop}
           />
           <FormulaSlot
             slot="wholesale"
@@ -296,6 +350,8 @@ export default function FormulaBuilder({
             tokens={getSlotTokens(model, 'wholesale')}
             onTokenRemove={handleTokenRemove}
             onConstantChange={handleConstantChange}
+            placeholderText={!isDesktop ? 'Tap blocks to add' : 'Drop blocks here'}
+            isMobile={!isDesktop}
           />
           <FormulaSlot
             slot="retail"
@@ -305,6 +361,8 @@ export default function FormulaBuilder({
             tokens={getSlotTokens(model, 'retail')}
             onTokenRemove={handleTokenRemove}
             onConstantChange={handleConstantChange}
+            placeholderText={!isDesktop ? 'Tap blocks to add' : 'Drop blocks here'}
+            isMobile={!isDesktop}
           />
           {preview && (
             <div className="p-3 rounded-xl bg-white border border-stone-200 text-[10px] space-y-1">

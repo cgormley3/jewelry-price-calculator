@@ -58,7 +58,76 @@ function DraggableBlock({ token, id }: DraggableBlockProps) {
   );
 }
 
-export default function FormulaPalette() {
+interface TapBlockProps {
+  token: FormulaToken;
+  label: string;
+  onTap: () => void;
+  isOp?: boolean;
+}
+
+function TapBlock({ token, label, onTap, isOp }: TapBlockProps) {
+  return (
+    <button
+      type="button"
+      onClick={onTap}
+      className={`
+        min-h-[44px] min-w-[44px] px-3 py-2 rounded-lg text-[10px] font-bold uppercase border transition-all
+        ${isOp ? 'bg-stone-100 text-stone-600 border-stone-200' : 'bg-white text-slate-700 border-stone-200 active:border-[#A5BEAC]'}
+      `}
+    >
+      {label}
+    </button>
+  );
+}
+
+interface FormulaPaletteProps {
+  tapMode?: boolean;
+  onBlockTap?: (token: FormulaToken) => void;
+}
+
+export default function FormulaPalette({ tapMode, onBlockTap }: FormulaPaletteProps = {}) {
+  if (tapMode && onBlockTap) {
+    return (
+      <div className="space-y-3">
+        <p className="text-[9px] font-black text-stone-400 uppercase tracking-wider">
+          Value blocks
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {VALUE_BLOCKS.map((v) => (
+            <TapBlock
+              key={`val-${v}`}
+              token={{ kind: 'value', value: v }}
+              label={VALUE_LABELS[v]}
+              onTap={() => onBlockTap({ kind: 'value', value: v })}
+            />
+          ))}
+        </div>
+        <p className="text-[9px] font-black text-stone-400 uppercase tracking-wider mt-2">
+          Operations
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {OP_BLOCKS.map((o) => (
+            <TapBlock
+              key={`op-${o}`}
+              token={{ kind: 'op', op: o }}
+              label={OP_LABELS[o]}
+              onTap={() => onBlockTap({ kind: 'op', op: o })}
+              isOp
+            />
+          ))}
+        </div>
+        <p className="text-[9px] font-black text-stone-400 uppercase tracking-wider mt-2">
+          Constant
+        </p>
+        <TapBlock
+          token={{ kind: 'constant', value: 1 }}
+          label="#"
+          onTap={() => onBlockTap({ kind: 'constant', value: 1 })}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3">
       <p className="text-[9px] font-black text-stone-400 uppercase tracking-wider">
