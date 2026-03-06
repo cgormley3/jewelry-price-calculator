@@ -2373,9 +2373,9 @@ export default function Home() {
           <div className="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl space-y-4">
             <h3 className="text-lg font-black uppercase text-center text-slate-900">Adjust Photo</h3>
 
-            {/* Cropper Container */}
+            {/* Cropper Container - circular preview matches vault display (square crop saved for Shopify) */}
             <div
-              className="relative w-64 h-64 mx-auto rounded-2xl overflow-hidden border-4 border-[#A5BEAC] shadow-inner bg-stone-100 touch-none"
+              className="relative w-64 h-64 mx-auto rounded-full overflow-hidden border-4 border-[#A5BEAC] shadow-inner bg-stone-100 touch-none"
               onPointerDown={handlePointerDown}
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
@@ -3838,7 +3838,7 @@ export default function Home() {
                         <div className="flex flex-col gap-1">
                           <div className="flex items-start flex-nowrap justify-between gap-3 relative">
 
-                            {/* NEW IMAGE SLOT - Circular 64x64 thumbnail */}
+                            {/* Circular 64x64 thumbnail - square crop stored for Shopify export */}
                             {item.image_url && (
                               <div className="shrink-0 w-16 h-16 rounded-full overflow-hidden border border-stone-200 shadow-sm">
                                 <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
