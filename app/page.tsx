@@ -7,7 +7,8 @@ import { Turnstile } from '@marsidev/react-turnstile';
 import { GoogleLogin, CredentialResponse } from '@react-oauth/google';
 import InstallPrompt from './InstallPrompt';
 import FormulaBuilder from '../components/FormulaBuilder';
-import { evaluateCustomModel, formulaToReadableString, PRESET_A, type FormulaNode } from '../lib/formula-engine';
+import { evaluateCustomModel, formulaReferencesBase, formulaToReadableString, formulaToTokens, parseTokensStrict, PRESET_A, type FormulaNode } from '../lib/formula-engine';
+import type { FormulaTokens } from '../components/FormulaBuilder';
 
 const UNIT_TO_GRAMS: { [key: string]: number } = {
   "Grams": 1,
@@ -140,6 +141,8 @@ export default function Home() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
+  const [signUpAwaitingConfirmation, setSignUpAwaitingConfirmation] = useState(false);
+  const [resendingConfirmation, setResendingConfirmation] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [activeTab, setActiveTab] = useState<'calculator' | 'vault' | 'logic' | 'formulas' | 'time'>('calculator');
@@ -149,9 +152,15 @@ export default function Home() {
   const [formulasLoading, setFormulasLoading] = useState(false);
   const [formulaEditorOpen, setFormulaEditorOpen] = useState(false);
   const [editingFormulaId, setEditingFormulaId] = useState<string | null>(null);
-  const [formulaDraft, setFormulaDraft] = useState<{ formula_base: FormulaNode; formula_wholesale: FormulaNode; formula_retail: FormulaNode }>({ formula_base: PRESET_A.base, formula_wholesale: PRESET_A.wholesale, formula_retail: PRESET_A.retail });
+  const [formulaDraftTokens, setFormulaDraftTokens] = useState<FormulaTokens>(() => ({
+    base: formulaToTokens(PRESET_A.base),
+    wholesale: formulaToTokens(PRESET_A.wholesale),
+    retail: formulaToTokens(PRESET_A.retail),
+  }));
   const [formulaDraftName, setFormulaDraftName] = useState('');
+  const [formulaValid, setFormulaValid] = useState(true);
   const [savingFormula, setSavingFormula] = useState(false);
+  const [deletingFormulaId, setDeletingFormulaId] = useState<string | null>(null);
   const [selectedFormulaId, setSelectedFormulaId] = useState<string | null>(null);
   const [savedUserTags, setSavedUserTags] = useState<string[]>([]);
   const [timeEntries, setTimeEntries] = useState<any[]>([]);
@@ -2250,21 +2259,44 @@ export default function Home() {
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    const authRedirectUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || 'https://vault.bearsilverandstone.com';
     let result = isSignUp
-      ? await supabase.auth.signUp({ email, password, options: { data: { is_converted_from_anonymous: true } } })
+      ? await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: { is_converted_from_anonymous: true },
+            emailRedirectTo: authRedirectUrl,
+          },
+        })
       : await supabase.auth.signInWithPassword({ email, password });
 
     if (result.error) {
       setNotification({ title: "Vault Access Error", message: result.error.message, type: 'error' });
-    } else {
-      if (isSignUp) {
-        setShowAuth(false);
-        setNotification({ title: "Check Your Inbox", message: "We've sent a verification link to your email. Please confirm your account to get access to your Vault.", type: 'success' });
+    } else if (isSignUp) {
+      // Detect existing account: Supabase returns empty identities when email already registered
+      if (result.data?.user?.identities?.length === 0) {
+        setNotification({ title: "Already Registered", message: "This email is already registered. Try logging in instead.", type: 'info' });
+        setIsSignUp(false);
       } else {
-        setShowAuth(false);
-        setShowPassword(false);
-        fetchInventory();
+        setSignUpAwaitingConfirmation(true);
       }
+    } else {
+      setShowAuth(false);
+      setShowPassword(false);
+      fetchInventory();
+    }
+  };
+
+  const handleResendConfirmation = async () => {
+    if (!email) return;
+    setResendingConfirmation(true);
+    const { error } = await supabase.auth.resend({ type: 'signup', email });
+    setResendingConfirmation(false);
+    if (error) {
+      setNotification({ title: "Resend Failed", message: error.message, type: 'error' });
+    } else {
+      setNotification({ title: "Email Sent", message: "A new verification link has been sent to your email.", type: 'success' });
     }
   };
 
@@ -2935,51 +2967,63 @@ export default function Home() {
                   {loggingOut ? 'Logging out…' : 'Logout'}
                 </button>
               )}
-              {showAuth && (
+              {showAuth ? (
                 <div className="absolute right-0 mt-12 w-full md:w-80 bg-white p-6 rounded-3xl border-2 border-[#A5BEAC] shadow-2xl z-[100] animate-in fade-in slide-in-from-top-2 mx-auto auth-menu-container">
-                  <button onClick={() => { setShowAuth(false); setShowPassword(false); }} className="absolute top-4 right-4 text-stone-300 hover:text-[#A5BEAC] font-black text-sm">✕</button>
+                  <button onClick={() => { setShowAuth(false); setShowPassword(false); setSignUpAwaitingConfirmation(false); }} className="absolute top-4 right-4 text-stone-300 hover:text-[#A5BEAC] font-black text-sm">✕</button>
                   <h3 className="text-sm font-black uppercase mb-4 text-center text-slate-900">Vault Access</h3>
-                  <div className="w-full flex justify-center mb-4">
-                    <GoogleLogin
-                      onSuccess={handleGoogleHandshake}
-                      onError={() => setNotification({ title: "Error", message: "Google Login Failed", type: 'error' })}
-                      theme="outline"
-                      size="large"
-                      width="300"
-                      shape="pill"
-                      text="continue_with"
-                    />
-                  </div>
-                  <div className="flex border-b border-stone-100 mb-4">
-                    <button onClick={() => { setIsSignUp(false); setShowPassword(false); }} className={`flex-1 py-2 text-[10px] font-black uppercase ${!isSignUp ? 'text-[#A5BEAC] border-b-2 border-[#A5BEAC]' : 'text-stone-300'}`}>Login</button>
-                    <button onClick={() => { setIsSignUp(true); setShowPassword(false); }} className={`flex-1 py-2 text-[10px] font-black uppercase ${isSignUp ? 'text-[#A5BEAC] border-b-2 border-[#A5BEAC]' : 'text-stone-300'}`}>Sign Up</button>
-                  </div>
-                  <form onSubmit={handleAuth} className="space-y-3">
-                    <input type="email" placeholder="Email" className="w-full p-3 border rounded-xl text-sm outline-none focus:border-[#A5BEAC] transition" value={email} onChange={e => setEmail(e.target.value)} required />
-                    <div className="relative">
-                      <input
-                        type={showPassword ? "text" : "password"}
-                        placeholder="Password"
-                        className="w-full p-3 border rounded-xl text-sm outline-none focus:border-[#A5BEAC] transition"
-                        value={password}
-                        onChange={e => setPassword(e.target.value)}
-                        required
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black uppercase text-stone-300 hover:text-[#A5BEAC]"
-                      >
-                        {showPassword ? "Hide" : "Show"}
+                  {signUpAwaitingConfirmation ? (
+                    <div className="space-y-4">
+                      <p className="text-sm text-stone-600 text-center">We&apos;ve sent a verification link to <strong>{email}</strong>. Please confirm your account to get access to your Vault.</p>
+                      <button type="button" onClick={handleResendConfirmation} disabled={resendingConfirmation} className="w-full py-3 rounded-xl text-[10px] font-black uppercase border-2 border-[#A5BEAC] bg-[#A5BEAC] bg-opacity-10 text-[#A5BEAC] hover:bg-[#A5BEAC] hover:text-white transition disabled:opacity-50">
+                        {resendingConfirmation ? 'Sending…' : 'Resend confirmation email'}
                       </button>
+                      <button type="button" onClick={() => { setSignUpAwaitingConfirmation(false); setIsSignUp(false); }} className="w-full text-center text-[9px] font-black uppercase text-stone-400 hover:text-[#A5BEAC] transition tracking-widest">Switch to Login</button>
                     </div>
-                    <button type="submit" className="w-full bg-[#A5BEAC] text-white py-3 rounded-xl font-black text-xs uppercase hover:bg-slate-900 transition shadow-md">{isSignUp ? 'Create Vault Account' : 'Open The Vault'}</button>
-                    {!isSignUp && (
-                      <button type="button" onClick={handleResetPassword} className="w-full text-center text-[9px] font-black uppercase text-stone-400 hover:text-[#A5BEAC] transition mt-2 tracking-widest">Forgot Password?</button>
-                    )}
-                  </form>
+                  ) : (
+                    <div className="space-y-0">
+                      <div className="w-full flex justify-center mb-4">
+                        <GoogleLogin
+                          onSuccess={handleGoogleHandshake}
+                          onError={() => setNotification({ title: "Error", message: "Google Login Failed", type: 'error' })}
+                          theme="outline"
+                          size="large"
+                          width="300"
+                          shape="pill"
+                          text="continue_with"
+                        />
+                      </div>
+                      <div className="flex border-b border-stone-100 mb-4">
+                        <button onClick={() => { setIsSignUp(false); setShowPassword(false); }} className={`flex-1 py-2 text-[10px] font-black uppercase ${!isSignUp ? 'text-[#A5BEAC] border-b-2 border-[#A5BEAC]' : 'text-stone-300'}`}>Login</button>
+                        <button onClick={() => { setIsSignUp(true); setShowPassword(false); }} className={`flex-1 py-2 text-[10px] font-black uppercase ${isSignUp ? 'text-[#A5BEAC] border-b-2 border-[#A5BEAC]' : 'text-stone-300'}`}>Sign Up</button>
+                      </div>
+                      <form onSubmit={handleAuth} className="space-y-3">
+                        <input type="email" placeholder="Email" className="w-full p-3 border rounded-xl text-sm outline-none focus:border-[#A5BEAC] transition" value={email} onChange={e => setEmail(e.target.value)} required />
+                        <div className="relative">
+                          <input
+                            type={showPassword ? "text" : "password"}
+                            placeholder="Password"
+                            className="w-full p-3 border rounded-xl text-sm outline-none focus:border-[#A5BEAC] transition"
+                            value={password}
+                            onChange={e => setPassword(e.target.value)}
+                            required
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black uppercase text-stone-300 hover:text-[#A5BEAC]"
+                          >
+                            {showPassword ? "Hide" : "Show"}
+                          </button>
+                        </div>
+                        <button type="submit" className="w-full bg-[#A5BEAC] text-white py-3 rounded-xl font-black text-xs uppercase hover:bg-slate-900 transition shadow-md">{isSignUp ? 'Create Vault Account' : 'Open The Vault'}</button>
+                        {!isSignUp && (
+                          <button type="button" onClick={handleResetPassword} className="w-full text-center text-[9px] font-black uppercase text-stone-400 hover:text-[#A5BEAC] transition mt-2 tracking-widest">Forgot Password?</button>
+                        )}
+                      </form>
+                    </div>
+                  )}
                 </div>
-              )}
+              ) : null}
             </div>
           </div>
         </div>
@@ -3429,7 +3473,7 @@ export default function Home() {
                         {formulas.length === 0 ? (
                           <button
                             type="button"
-                            onClick={() => { setActiveTab('formulas'); setFormulaEditorOpen(true); setEditingFormulaId(null); setFormulaDraftName(''); setFormulaDraft({ formula_base: PRESET_A.base, formula_wholesale: PRESET_A.wholesale, formula_retail: PRESET_A.retail }); }}
+                            onClick={() => { setActiveTab('formulas'); setFormulaEditorOpen(true); setEditingFormulaId(null); setFormulaDraftName(''); setFormulaDraftTokens({ base: formulaToTokens(PRESET_A.base), wholesale: formulaToTokens(PRESET_A.wholesale), retail: formulaToTokens(PRESET_A.retail) }); }}
                             className="w-full py-2.5 px-3 rounded-xl border-2 border-dashed border-stone-200 bg-stone-50/50 hover:border-[#A5BEAC]/50 text-left text-[10px] font-bold text-stone-500 hover:text-[#A5BEAC] transition"
                           >
                             Create your first formula →
@@ -4190,7 +4234,7 @@ export default function Home() {
                   onClick={() => {
                     setEditingFormulaId(null);
                     setFormulaDraftName('');
-                    setFormulaDraft({ formula_base: PRESET_A.base, formula_wholesale: PRESET_A.wholesale, formula_retail: PRESET_A.retail });
+                    setFormulaDraftTokens({ base: formulaToTokens(PRESET_A.base), wholesale: formulaToTokens(PRESET_A.wholesale), retail: formulaToTokens(PRESET_A.retail) });
                     setFormulaEditorOpen(true);
                   }}
                   className="px-4 py-2 rounded-xl bg-[#A5BEAC] text-white text-xs font-black uppercase hover:bg-slate-900 transition"
@@ -4213,7 +4257,7 @@ export default function Home() {
                     onClick={() => {
                       setEditingFormulaId(null);
                       setFormulaDraftName('');
-                      setFormulaDraft({ formula_base: PRESET_A.base, formula_wholesale: PRESET_A.wholesale, formula_retail: PRESET_A.retail });
+                      setFormulaDraftTokens({ base: formulaToTokens(PRESET_A.base), wholesale: formulaToTokens(PRESET_A.wholesale), retail: formulaToTokens(PRESET_A.retail) });
                       setFormulaEditorOpen(true);
                     }}
                     className="px-4 py-2 rounded-xl bg-[#A5BEAC] text-white text-xs font-black uppercase hover:bg-slate-900 transition"
@@ -4243,8 +4287,9 @@ export default function Home() {
                     />
                   </div>
                   <FormulaBuilder
-                    model={formulaDraft}
-                    onChange={setFormulaDraft}
+                    tokens={formulaDraftTokens}
+                    onChange={setFormulaDraftTokens}
+                    onValidationChange={setFormulaValid}
                     roundForDisplay={roundForDisplay}
                     previewContext={(() => {
                       const a = calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType);
@@ -4259,12 +4304,29 @@ export default function Home() {
                       };
                     })()}
                   />
+                  {!formulaValid && (
+                    <div className="text-red-700 bg-red-50 border-2 border-red-400 rounded-xl px-4 py-3 flex items-center gap-3 shadow-sm">
+                      <span className="text-xl" aria-hidden>⚠</span>
+                      <p className="font-black text-base">Formula is invalid — Save is disabled until you fix it above.</p>
+                    </div>
+                  )}
                   <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={async () => {
                         if (!formulaDraftName.trim()) {
                           setNotification({ title: 'Name required', message: 'Please enter a name for your formula.', type: 'info' });
+                          return;
+                        }
+                        const baseRes = parseTokensStrict(formulaDraftTokens.base);
+                        const wholesaleRes = parseTokensStrict(formulaDraftTokens.wholesale);
+                        const retailRes = parseTokensStrict(formulaDraftTokens.retail);
+                        if (!baseRes.valid || !wholesaleRes.valid || !retailRes.valid) {
+                          setNotification({ title: 'Invalid formula', message: 'Formula must be valid to save. Each slot needs values and operations in a valid pattern (e.g. Metal + Labor).', type: 'error' });
+                          return;
+                        }
+                        if (baseRes.node && formulaReferencesBase(baseRes.node)) {
+                          setNotification({ title: 'Invalid formula', message: 'Base formula cannot reference Base (circular).', type: 'error' });
                           return;
                         }
                         setSavingFormula(true);
@@ -4275,7 +4337,7 @@ export default function Home() {
                             setNotification({ title: 'Session expired', message: 'Please sign in again.', type: 'info' });
                             return;
                           }
-                          const body: any = { accessToken, userId: user.id, formula: { name: formulaDraftName.trim(), formula_base: formulaDraft.formula_base, formula_wholesale: formulaDraft.formula_wholesale, formula_retail: formulaDraft.formula_retail } };
+                          const body: any = { accessToken, userId: user.id, formula: { name: formulaDraftName.trim(), formula_base: baseRes.node, formula_wholesale: wholesaleRes.node, formula_retail: retailRes.node } };
                           if (editingFormulaId) body.formula.id = editingFormulaId;
                           const res = await fetch('/api/save-formula', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
                           if (res.ok) {
@@ -4296,7 +4358,8 @@ export default function Home() {
                           setSavingFormula(false);
                         }
                       }}
-                      disabled={savingFormula}
+                      disabled={savingFormula || !formulaValid}
+                      title={!formulaValid ? 'Formula must be valid to save' : undefined}
                       className="px-4 py-2 rounded-xl bg-[#A5BEAC] text-white text-xs font-black uppercase hover:bg-slate-900 transition disabled:opacity-50"
                     >
                       {savingFormula ? 'Saving…' : 'Save'}
@@ -4333,7 +4396,7 @@ export default function Home() {
                           onClick={() => {
                             setEditingFormulaId(f.id);
                             setFormulaDraftName(f.name);
-                            setFormulaDraft({ formula_base: f.formula_base, formula_wholesale: f.formula_wholesale, formula_retail: f.formula_retail });
+                            setFormulaDraftTokens({ base: formulaToTokens(f.formula_base), wholesale: formulaToTokens(f.formula_wholesale), retail: formulaToTokens(f.formula_retail) });
                             setFormulaEditorOpen(true);
                           }}
                           className="px-2 py-1 rounded-lg text-[10px] font-bold border border-stone-200 hover:border-[#A5BEAC] transition"
@@ -4342,11 +4405,16 @@ export default function Home() {
                         </button>
                         <button
                           type="button"
-                          onClick={async () => {
+                          onClick={async (e) => {
+                            e.stopPropagation();
                             try {
+                              setDeletingFormulaId(f.id);
                               const session = (await supabase.auth.getSession()).data.session;
                               const accessToken = (session as any)?.access_token;
-                              if (!accessToken || !user?.id) return;
+                              if (!accessToken || !user?.id) {
+                                setNotification({ title: 'Session expired', message: 'Please sign in again.', type: 'info' });
+                                return;
+                              }
                               const res = await fetch('/api/delete-formula', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accessToken, userId: user.id, formulaId: f.id }) });
                               if (res.ok) {
                                 setFormulas(prev => prev.filter(x => x.id !== f.id));
@@ -4355,14 +4423,20 @@ export default function Home() {
                                   setCustomFormulaModel({ formula_base: PRESET_A.base, formula_wholesale: PRESET_A.wholesale, formula_retail: PRESET_A.retail });
                                 }
                                 setNotification({ title: 'Formula deleted', message: `"${f.name}" has been removed.`, type: 'success' });
+                              } else {
+                                const err = await res.json().catch(() => ({}));
+                                setNotification({ title: 'Delete failed', message: err?.error || 'Could not delete formula.', type: 'error' });
                               }
-                            } catch (e) {
+                            } catch (err) {
                               setNotification({ title: 'Delete failed', message: 'Could not delete formula.', type: 'error' });
+                            } finally {
+                              setDeletingFormulaId(null);
                             }
                           }}
-                          className="px-2 py-1 rounded-lg text-[10px] font-bold border border-red-200 text-red-600 hover:border-red-400 transition"
+                          disabled={deletingFormulaId === f.id}
+                          className="px-2 py-1 rounded-lg text-[10px] font-bold border border-red-200 text-red-600 hover:border-red-400 transition disabled:opacity-50"
                         >
-                          Delete
+                          {deletingFormulaId === f.id ? 'Deleting…' : 'Delete'}
                         </button>
                       </div>
                     </div>
@@ -4684,6 +4758,43 @@ export default function Home() {
                       </div>
                     </div>
                   </div>
+                </div>
+              </div>
+
+              <div className="p-6 md:p-8 rounded-[2rem] border-2 border-[#A5BEAC] bg-[#A5BEAC]/5 transition-all flex flex-col justify-between">
+                <div>
+                  <h3 className="text-xs font-black text-[#A5BEAC] uppercase tracking-widest mb-2">CUSTOM FORMULAS</h3>
+                  <p className="text-[10px] text-stone-500 leading-relaxed mb-4">Build your own pricing logic. You define three formulas that work together to calculate your prices.</p>
+                  <div className="space-y-4 mb-6">
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-[#A5BEAC] text-white flex items-center justify-center font-black text-xs shrink-0 mt-0.5">B</div>
+                      <div className="flex-1">
+                        <span className="text-xs font-bold text-stone-400 block mb-1">Base Cost</span>
+                        <span className="text-xs text-slate-900 break-words">Your materials + labor + overhead. Combine values with +, −, ×, ÷.</span>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-[#A5BEAC] text-white flex items-center justify-center font-black text-xs shrink-0 mt-0.5">W</div>
+                      <div className="flex-1">
+                        <span className="text-xs font-bold text-stone-400 block mb-1">Wholesale</span>
+                        <span className="text-xs text-slate-900 break-words">Typically Base + Stone cost, or your own markup.</span>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-[#A5BEAC] text-white flex items-center justify-center font-black text-xs shrink-0 mt-0.5">R</div>
+                      <div className="flex-1">
+                        <span className="text-xs font-bold text-stone-400 block mb-1">Retail</span>
+                        <span className="text-xs text-slate-900 break-words">Final price. Can use Base, multipliers, and stone retail.</span>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setActiveTab('formulas'); setFormulaEditorOpen(true); setEditingFormulaId(null); setFormulaDraftName(''); setFormulaDraftTokens({ base: formulaToTokens(PRESET_A.base), wholesale: formulaToTokens(PRESET_A.wholesale), retail: formulaToTokens(PRESET_A.retail) }); }}
+                    className="w-full py-3 rounded-xl text-[10px] font-black uppercase bg-[#A5BEAC] text-white hover:bg-slate-900 transition shadow-sm"
+                  >
+                    Create a formula →
+                  </button>
                 </div>
               </div>
             </div>

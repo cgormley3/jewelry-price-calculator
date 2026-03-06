@@ -229,28 +229,78 @@ export type FormulaToken =
   | { kind: 'constant'; value: number }
   | { kind: 'op'; op: OpType };
 
-/** Parse token list to FormulaNode. Uses precedence: × ÷ % before + −. Left-associative. */
-export function parseTokens(tokens: FormulaToken[]): FormulaNode | null {
-  if (tokens.length === 0) return null;
+/** Result of parsing tokens - node plus optional warning when placeholders were used */
+export interface ParseResult {
+  node: FormulaNode | null;
+  /** True when placeholders were added (trailing op, leading op, op-only) - formula needs completion */
+  hasPlaceholders: boolean;
+}
 
+/** Parse token list to FormulaNode. Always produces a node for non-empty input; uses placeholders when needed. */
+export function parseTokens(tokens: FormulaToken[]): FormulaNode | null {
+  const result = parseTokensWithValidation(tokens);
+  return result.node;
+}
+
+/** Parse tokens and return node plus validation info (e.g. whether placeholders were added). */
+export function parseTokensWithValidation(tokens: FormulaToken[]): ParseResult {
+  if (tokens.length === 0) return { node: null, hasPlaceholders: false };
+
+  let hasPlaceholders = false;
   const terms: FormulaNode[] = [];
   const ops: OpType[] = [];
+
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i];
     if (t.kind === 'value') terms.push({ type: 'value', value: t.value });
     else if (t.kind === 'constant') terms.push({ type: 'constant', value: t.value });
-    else if (t.kind === 'op' && i > 0 && i < tokens.length - 1) ops.push(t.op);
+    else if (t.kind === 'op') {
+      if (i === 0) {
+        // Leading op: add placeholder left operand so user can arrange later
+        terms.push({ type: 'constant', value: 1 });
+        ops.push(t.op);
+        hasPlaceholders = true;
+      } else if (i < tokens.length - 1) {
+        // Op between terms
+        ops.push(t.op);
+      } else if (terms.length >= 2) {
+        // Trailing op with 2+ terms - op applies to last two
+        ops.push(t.op);
+      } else if (terms.length === 1) {
+        // Trailing op after single term: add placeholder so user can edit
+        terms.push({ type: 'constant', value: 1 });
+        ops.push(t.op);
+        hasPlaceholders = true;
+      }
+    }
   }
 
-  if (terms.length === 0) return null;
-  if (terms.length === 1) return terms[0];
+  // Op-only (e.g. [×] or [+]) - add two placeholders
+  if (terms.length === 0 && ops.length > 0) {
+    const op = ops[0];
+    terms.push({ type: 'constant', value: 1 });
+    terms.push({ type: 'constant', value: 1 });
+    ops.length = 0;
+    ops.push(op);
+    hasPlaceholders = true;
+  }
 
-  // If we have n terms and n-1 ops, valid. If we have n terms and fewer ops, assume add between missing
+  if (terms.length === 0) return { node: null, hasPlaceholders: false };
+  // Op-only case: we added 1 term for leading op, need 2nd term for valid formula
+  if (terms.length === 1 && ops.length === 1) {
+    terms.push({ type: 'constant', value: 1 });
+    hasPlaceholders = true;
+  }
+  if (terms.length === 1 && ops.length === 0) return { node: terms[0], hasPlaceholders };
+
+  // If we have n terms and n-1 ops, valid. If fewer ops, assume add between missing.
+  // If MORE ops than terms-1, add placeholder terms (never drop user's operations)
   while (ops.length < terms.length - 1) {
     ops.push('add');
   }
-  if (ops.length >= terms.length) {
-    ops.length = terms.length - 1;
+  while (ops.length > terms.length - 1) {
+    terms.push({ type: 'constant', value: 1 });
+    hasPlaceholders = true;
   }
 
   const precedence = (op: OpType) =>
@@ -267,7 +317,51 @@ export function parseTokens(tokens: FormulaToken[]): FormulaNode | null {
     if (!left || !right) return null;
     return { type: 'op', op: ops[lowest], left, right };
   }
-  return build(0, terms.length - 1);
+  return { node: build(0, terms.length - 1), hasPlaceholders };
+}
+
+/** Strict parse: valid only when tokens form a complete formula with no placeholders. */
+export function parseTokensStrict(tokens: FormulaToken[]): { node: FormulaNode | null; valid: boolean } {
+  if (tokens.length === 0) return { node: null, valid: false };
+  const terms: FormulaNode[] = [];
+  const ops: OpType[] = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i];
+    if (t.kind === 'value') terms.push({ type: 'value', value: t.value });
+    else if (t.kind === 'constant') terms.push({ type: 'constant', value: t.value });
+    else if (t.kind === 'op') {
+      if (i === 0) return { node: null, valid: false }; // leading op
+      if (i === tokens.length - 1) return { node: null, valid: false }; // trailing op
+      ops.push(t.op);
+    }
+  }
+  if (terms.length === 0) return { node: null, valid: false }; // op-only
+  if (terms.length !== ops.length + 1) return { node: null, valid: false };
+  const precedence = (op: OpType) =>
+    op === 'multiply' || op === 'divide' || op === 'percentOf' ? 1 : 0;
+  function build(from: number, to: number): FormulaNode | null {
+    if (from === to) return terms[from] ?? null;
+    let lowest = from;
+    for (let i = from; i < to; i++) {
+      if (precedence(ops[i]) < precedence(ops[lowest])) lowest = i;
+    }
+    const left = build(from, lowest);
+    const right = build(lowest + 1, to);
+    if (!left || !right) return null;
+    return { type: 'op', op: ops[lowest], left, right };
+  }
+  const node = build(0, terms.length - 1);
+  return { node, valid: !!node };
+}
+
+/** Display tokens as readable string (for invalid formulas) */
+export function tokensToReadableString(tokens: FormulaToken[]): string {
+  if (tokens.length === 0) return '—';
+  return tokens
+    .map(t =>
+      t.kind === 'value' ? (VALUE_LABELS[t.value] ?? t.value) : t.kind === 'constant' ? String(t.value) : OP_LABELS[t.op]
+    )
+    .join(' ');
 }
 
 /** Convert FormulaNode to token list (for editing in builder) */

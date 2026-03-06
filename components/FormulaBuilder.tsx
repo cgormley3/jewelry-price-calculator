@@ -1,11 +1,14 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { SortableContext, useSortable, horizontalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import type { FormulaNode, FormulaToken } from '@/lib/formula-engine';
 import {
-  parseTokens,
+  parseTokensStrict,
   formulaToTokens,
-  formulaToReadableString,
+  tokensToReadableString,
   evaluateCustomModel,
   formulaReferencesBase,
   VALUE_LABELS,
@@ -17,14 +20,19 @@ import BlockPicker from './BlockPicker';
 
 type SlotId = 'base' | 'wholesale' | 'retail';
 
+export type FormulaTokens = {
+  base: FormulaToken[];
+  wholesale: FormulaToken[];
+  retail: FormulaToken[];
+};
+
 interface FormulaBuilderProps {
-  model: {
-    formula_base: FormulaNode;
-    formula_wholesale: FormulaNode;
-    formula_retail: FormulaNode;
-  };
-  onChange: (model: { formula_base: FormulaNode; formula_wholesale: FormulaNode; formula_retail: FormulaNode }) => void;
-  /** Optional: round prices for preview display (e.g. to nearest $1, $5) */
+  /** Raw tokens per slot - no parsing, no rules during editing */
+  tokens: FormulaTokens;
+  onChange: (tokens: FormulaTokens) => void;
+  /** Called when validation state changes. valid=false when formula can't be saved. */
+  onValidationChange?: (valid: boolean) => void;
+  /** Optional: round prices for preview display */
   roundForDisplay?: (num: number) => number;
   /** Optional: computed context for live preview */
   previewContext?: {
@@ -38,35 +46,26 @@ interface FormulaBuilderProps {
   };
 }
 
-function getSlotTokens(
-  model: { formula_base: FormulaNode; formula_wholesale: FormulaNode; formula_retail: FormulaNode },
-  slot: SlotId
-): FormulaToken[] {
-  const node = slot === 'base' ? model.formula_base : slot === 'wholesale' ? model.formula_wholesale : model.formula_retail;
-  return formulaToTokens(node);
-}
-
-function setSlotFormula(
-  model: { formula_base: FormulaNode; formula_wholesale: FormulaNode; formula_retail: FormulaNode },
+function setSlotTokens(
+  tokens: FormulaTokens,
   slot: SlotId,
-  node: FormulaNode | null,
-  onChange: (m: typeof model) => void
+  newSlotTokens: FormulaToken[],
+  onChange: (t: FormulaTokens) => void
 ) {
   if (slot === 'base') {
-    onChange({ ...model, formula_base: node ?? PRESET_A.base });
+    onChange({ ...tokens, base: newSlotTokens });
   } else if (slot === 'wholesale') {
-    onChange({ ...model, formula_wholesale: node ?? PRESET_A.wholesale });
+    onChange({ ...tokens, wholesale: newSlotTokens });
   } else {
-    onChange({ ...model, formula_retail: node ?? PRESET_A.retail });
+    onChange({ ...tokens, retail: newSlotTokens });
   }
 }
 
 function FormulaSlot({
   slot,
   label,
-  model,
-  onChange,
   tokens,
+  slotTokens,
   onTokenRemove,
   onConstantChange,
   onTokenMove,
@@ -81,9 +80,8 @@ function FormulaSlot({
 }: {
   slot: SlotId;
   label: string;
-  model: { formula_base: FormulaNode; formula_wholesale: FormulaNode; formula_retail: FormulaNode };
-  onChange: (m: typeof model) => void;
-  tokens: FormulaToken[];
+  tokens: FormulaTokens;
+  slotTokens: FormulaToken[];
   onTokenRemove: (slot: SlotId, idx: number) => void;
   onConstantChange: (slot: SlotId, idx: number, value: number) => void;
   onTokenMove?: (slot: SlotId, fromIdx: number, toIdx: number) => void;
@@ -96,6 +94,11 @@ function FormulaSlot({
   onPickerClose?: () => void;
   addButtonRef?: React.RefObject<HTMLButtonElement | null>;
 }) {
+  const slotSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
+  );
+
   return (
     <div className="space-y-1">
       <div className="relative">
@@ -125,24 +128,44 @@ function FormulaSlot({
       <div
         className="min-h-[44px] p-2 rounded-xl border-2 border-dashed border-stone-200 bg-stone-50/50 flex flex-wrap items-center gap-1.5"
       >
-        {tokens.length === 0 ? (
+        {slotTokens.length === 0 ? (
           <span className="text-[9px] text-stone-400 italic">{placeholderText}</span>
         ) : (
-          tokens.map((t, idx) => (
-            <TokenChip
-              key={`${slot}-${idx}`}
-              token={t}
-              onRemove={() => onTokenRemove(slot, idx)}
-              onConstantChange={t.kind === 'constant' ? (v) => onConstantChange(slot, idx, v) : undefined}
-              onMoveLeft={onTokenMove && idx > 0 ? () => onTokenMove(slot, idx, idx - 1) : undefined}
-              onMoveRight={onTokenMove && idx < tokens.length - 1 ? () => onTokenMove(slot, idx, idx + 1) : undefined}
-              isMobile={isMobile}
-            />
-          ))
+          <DndContext
+            sensors={slotSensors}
+            collisionDetection={closestCenter}
+            onDragEnd={(event) => {
+              const { active, over } = event;
+              if (!over || active.id === over.id || !onTokenMove) return;
+              const itemIds = slotTokens.map((_, i) => `${slot}-${i}`);
+              const oldIndex = itemIds.indexOf(String(active.id));
+              const newIndex = itemIds.indexOf(String(over.id));
+              if (oldIndex !== -1 && newIndex !== -1) {
+                onTokenMove(slot, oldIndex, newIndex);
+              }
+            }}
+          >
+            <SortableContext items={slotTokens.map((_, i) => `${slot}-${i}`)} strategy={horizontalListSortingStrategy}>
+              {slotTokens.map((t, idx) => (
+                <SortableTokenChip
+                  key={`${slot}-${idx}`}
+                  id={`${slot}-${idx}`}
+                  slot={slot}
+                  idx={idx}
+                  token={t}
+                  onRemove={() => onTokenRemove(slot, idx)}
+                  onConstantChange={t.kind === 'constant' ? (v) => onConstantChange(slot, idx, v) : undefined}
+                  onTokenMove={onTokenMove!}
+                  tokens={slotTokens}
+                  isMobile={!!isMobile}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
         )}
       </div>
-      <p className="text-[8px] text-stone-400 truncate" title={formulaToReadableString(slot === 'base' ? model.formula_base : slot === 'wholesale' ? model.formula_wholesale : model.formula_retail)}>
-        {formulaToReadableString(slot === 'base' ? model.formula_base : slot === 'wholesale' ? model.formula_wholesale : model.formula_retail)}
+      <p className="text-[8px] text-stone-400 truncate" title={tokensToReadableString(slotTokens)}>
+        {tokensToReadableString(slotTokens)}
       </p>
     </div>
   );
@@ -152,16 +175,14 @@ function TokenChip({
   token,
   onRemove,
   onConstantChange,
-  onMoveLeft,
-  onMoveRight,
   isMobile,
+  embedded,
 }: {
   token: FormulaToken;
   onRemove: () => void;
   onConstantChange?: (v: number) => void;
-  onMoveLeft?: () => void;
-  onMoveRight?: () => void;
   isMobile?: boolean;
+  embedded?: boolean;
 }) {
   const label =
     token.kind === 'value'
@@ -170,20 +191,8 @@ function TokenChip({
         ? String(token.value)
         : OP_LABELS[token.op];
 
-  const showMoveButtons = isMobile && (onMoveLeft || onMoveRight);
-
   return (
-    <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md bg-white border border-stone-200 text-[10px] font-bold">
-      {showMoveButtons && onMoveLeft && (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onMoveLeft(); }}
-          className="min-h-[44px] min-w-[44px] flex items-center justify-center text-stone-400 hover:text-[#A5BEAC] active:text-[#A5BEAC] -ml-0.5 touch-manipulation"
-          aria-label="Move earlier"
-        >
-          ←
-        </button>
-      )}
+    <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 text-[10px] font-bold ${embedded ? '' : 'rounded-md bg-white border border-stone-200'}`}>
       {token.kind === 'constant' && onConstantChange ? (
         <input
           type="number"
@@ -196,24 +205,75 @@ function TokenChip({
       ) : (
         label
       )}
-      {showMoveButtons && onMoveRight && (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onMoveRight(); }}
-          className="min-h-[44px] min-w-[44px] flex items-center justify-center text-stone-400 hover:text-[#A5BEAC] active:text-[#A5BEAC] touch-manipulation"
-          aria-label="Move later"
-        >
-          →
-        </button>
-      )}
       <button
         type="button"
-        onClick={(e) => { e.stopPropagation(); onRemove(); }}
-        className="text-stone-400 hover:text-red-500 text-[10px] leading-none"
+        onPointerDownCapture={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          onRemove();
+        }}
+        className="text-stone-400 hover:text-red-500 text-[10px] leading-none min-w-[22px] min-h-[22px] flex items-center justify-center -mr-0.5 p-0.5 rounded hover:bg-red-50 touch-manipulation"
         aria-label="Remove"
       >
         ×
       </button>
+    </span>
+  );
+}
+
+function SortableTokenChip({
+  id,
+  slot,
+  idx,
+  token,
+  onRemove,
+  onConstantChange,
+  onTokenMove,
+  tokens,
+  isMobile,
+}: {
+  id: string;
+  slot: SlotId;
+  idx: number;
+  token: FormulaToken;
+  onRemove: () => void;
+  onConstantChange?: (v: number) => void;
+  onTokenMove: (slot: SlotId, fromIdx: number, toIdx: number) => void;
+  tokens: FormulaToken[];
+  isMobile: boolean;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <span
+      ref={setNodeRef}
+      style={style}
+      className={`inline-flex items-center gap-0.5 rounded-md bg-white border text-[10px] font-bold touch-manipulation ${isDragging ? 'opacity-60 border-[#A5BEAC] shadow-lg z-50' : 'border-stone-200'}`}
+    >
+      <span
+        {...attributes}
+        {...listeners}
+        className={`flex items-center justify-center text-stone-400 hover:text-[#A5BEAC] cursor-grab active:cursor-grabbing -ml-0.5 ${isMobile ? 'min-w-[36px] min-h-[44px]' : 'min-w-[20px] min-h-[28px]'}`}
+        aria-label="Drag to reorder"
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" className="opacity-60">
+          <circle cx="2" cy="2" r="1" />
+          <circle cx="5" cy="2" r="1" />
+          <circle cx="8" cy="2" r="1" />
+          <circle cx="2" cy="5" r="1" />
+          <circle cx="5" cy="5" r="1" />
+          <circle cx="8" cy="5" r="1" />
+          <circle cx="2" cy="8" r="1" />
+          <circle cx="5" cy="8" r="1" />
+          <circle cx="8" cy="8" r="1" />
+        </svg>
+      </span>
+      <TokenChip token={token} onRemove={onRemove} onConstantChange={onConstantChange} isMobile={isMobile} />
     </span>
   );
 }
@@ -231,8 +291,9 @@ function useIsDesktop() {
 }
 
 export default function FormulaBuilder({
-  model,
+  tokens,
   onChange,
+  onValidationChange,
   roundForDisplay,
   previewContext,
 }: FormulaBuilderProps) {
@@ -243,52 +304,64 @@ export default function FormulaBuilder({
   const retailAddRef = useRef<HTMLButtonElement>(null);
 
   const handleBlockSelectForSlot = (slot: SlotId, token: FormulaToken) => {
-    const tokens = getSlotTokens(model, slot);
-    const newTokens = [...tokens, token];
-    const node = parseTokens(newTokens);
-    if (node) setSlotFormula(model, slot, node, onChange);
+    const slotTokens = slot === 'base' ? tokens.base : slot === 'wholesale' ? tokens.wholesale : tokens.retail;
+    setSlotTokens(tokens, slot, [...slotTokens, token], onChange);
     setPickerSlot(null);
   };
 
   const handleTokenRemove = (slot: SlotId, idx: number) => {
-    const tokens = getSlotTokens(model, slot);
-    const copy = tokens.filter((_, i) => i !== idx);
-    const node = copy.length > 0 ? parseTokens(copy) : null;
-    setSlotFormula(model, slot, node, onChange);
+    const slotTokens = slot === 'base' ? tokens.base : slot === 'wholesale' ? tokens.wholesale : tokens.retail;
+    const newTokens = slotTokens.filter((_, i) => i !== idx);
+    setSlotTokens(tokens, slot, newTokens, onChange);
   };
 
   const handleConstantChange = (slot: SlotId, idx: number, value: number) => {
-    const tokens = getSlotTokens(model, slot);
-    const copy = [...tokens];
+    const slotTokens = slot === 'base' ? tokens.base : slot === 'wholesale' ? tokens.wholesale : tokens.retail;
+    const copy = [...slotTokens];
     if (copy[idx]?.kind === 'constant') {
       copy[idx] = { kind: 'constant', value };
-      const node = parseTokens(copy);
-      if (node) setSlotFormula(model, slot, node, onChange);
+      setSlotTokens(tokens, slot, copy, onChange);
     }
   };
 
   const handleTokenMove = (slot: SlotId, fromIdx: number, toIdx: number) => {
-    const tokens = getSlotTokens(model, slot);
-    if (fromIdx < 0 || fromIdx >= tokens.length || toIdx < 0 || toIdx >= tokens.length || fromIdx === toIdx) return;
-    const copy = [...tokens];
+    const slotTokens = slot === 'base' ? tokens.base : slot === 'wholesale' ? tokens.wholesale : tokens.retail;
+    if (fromIdx < 0 || fromIdx >= slotTokens.length || toIdx < 0 || toIdx >= slotTokens.length || fromIdx === toIdx) return;
+    const copy = [...slotTokens];
     const [removed] = copy.splice(fromIdx, 1);
     copy.splice(toIdx, 0, removed);
-    const node = parseTokens(copy);
-    if (node) setSlotFormula(model, slot, node, onChange);
+    setSlotTokens(tokens, slot, copy, onChange);
   };
+
+  const baseResult = parseTokensStrict(tokens.base);
+  const wholesaleResult = parseTokensStrict(tokens.wholesale);
+  const retailResult = parseTokensStrict(tokens.retail);
+  const allValid = baseResult.valid && wholesaleResult.valid && retailResult.valid;
+  const baseRefsBase = baseResult.node ? formulaReferencesBase(baseResult.node) : false;
+  const isValid = allValid && !baseRefsBase;
 
   const preview =
     previewContext &&
+    isValid &&
+    baseResult.node &&
+    wholesaleResult.node &&
+    retailResult.node &&
     (() => {
       try {
-        const r = evaluateCustomModel(model, previewContext);
-        return r;
+        const model = {
+          formula_base: baseResult.node!,
+          formula_wholesale: wholesaleResult.node!,
+          formula_retail: retailResult.node!,
+        };
+        return evaluateCustomModel(model, previewContext);
       } catch {
         return null;
       }
     })();
 
-  const baseRefsBase = formulaReferencesBase(model.formula_base);
+  useEffect(() => {
+    onValidationChange?.(isValid);
+  }, [tokens, isValid, onValidationChange]);
 
   return (
     <div className="space-y-4">
@@ -296,9 +369,9 @@ export default function FormulaBuilder({
           <button
             type="button"
             onClick={() => onChange({
-              formula_base: PRESET_A.base,
-              formula_wholesale: PRESET_A.wholesale,
-              formula_retail: PRESET_A.retail,
+              base: formulaToTokens(PRESET_A.base),
+              wholesale: formulaToTokens(PRESET_A.wholesale),
+              retail: formulaToTokens(PRESET_A.retail),
             })}
             className="px-2 py-1 rounded-lg text-[9px] font-bold border border-stone-200 bg-white hover:border-[#A5BEAC]"
           >
@@ -307,27 +380,30 @@ export default function FormulaBuilder({
           <button
             type="button"
             onClick={() => onChange({
-              formula_base: PRESET_B.base,
-              formula_wholesale: PRESET_B.wholesale,
-              formula_retail: PRESET_B.retail,
+              base: formulaToTokens(PRESET_B.base),
+              wholesale: formulaToTokens(PRESET_B.wholesale),
+              retail: formulaToTokens(PRESET_B.retail),
             })}
             className="px-2 py-1 rounded-lg text-[9px] font-bold border border-stone-200 bg-white hover:border-[#A5BEAC]"
           >
             Load Preset B
           </button>
         </div>
-        {baseRefsBase && (
-          <p className="text-[9px] text-amber-600 font-medium">
-            Base formula cannot reference Base (circular).
-          </p>
+        {!isValid && (
+          <div className="text-red-700 bg-red-50 border-2 border-red-400 rounded-xl px-4 py-3 flex items-start gap-3 shadow-sm">
+            <span className="text-xl leading-none" aria-hidden>⚠</span>
+            <div>
+              <p className="font-black text-base">Formula is invalid — can&apos;t save</p>
+              <p className="text-sm font-medium text-red-600 mt-0.5">Each slot needs values and operations in a valid pattern (e.g. Metal + Labor). Fix the formula above before saving.</p>
+            </div>
+          </div>
         )}
       <div className="space-y-4 max-w-4xl">
           <FormulaSlot
             slot="base"
             label="Base cost"
-            model={model}
-            onChange={onChange}
-            tokens={getSlotTokens(model, 'base')}
+            tokens={tokens}
+            slotTokens={tokens.base}
             onTokenRemove={handleTokenRemove}
             onConstantChange={handleConstantChange}
             onTokenMove={handleTokenMove}
@@ -343,9 +419,8 @@ export default function FormulaBuilder({
           <FormulaSlot
             slot="wholesale"
             label="Wholesale"
-            model={model}
-            onChange={onChange}
-            tokens={getSlotTokens(model, 'wholesale')}
+            tokens={tokens}
+            slotTokens={tokens.wholesale}
             onTokenRemove={handleTokenRemove}
             onConstantChange={handleConstantChange}
             onTokenMove={handleTokenMove}
@@ -361,9 +436,8 @@ export default function FormulaBuilder({
           <FormulaSlot
             slot="retail"
             label="Retail"
-            model={model}
-            onChange={onChange}
-            tokens={getSlotTokens(model, 'retail')}
+            tokens={tokens}
+            slotTokens={tokens.retail}
             onTokenRemove={handleTokenRemove}
             onConstantChange={handleConstantChange}
             onTokenMove={handleTokenMove}
