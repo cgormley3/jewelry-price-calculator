@@ -4544,21 +4544,21 @@ export default function Home() {
           </div>
 
           {/* LOGIC PANEL */}
-          <div className={`flex flex-col flex-1 min-h-0 min-h-[50vh] lg:min-h-0 lg:max-h-[calc(100vh-5rem)] overflow-y-auto ${activeTab !== 'logic' ? 'hidden' : ''}`}>
-            <div className="grid grid-cols-1 gap-8 pt-6 mt-0 md:pt-4 lg:max-h-[calc(100vh-5rem)]">
-          <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC] min-h-[400px] md:min-h-0">
+          <div className={`flex flex-col flex-1 min-h-0 min-h-[50vh] lg:min-h-0 lg:max-h-[calc(100vh-5rem)] overflow-y-auto overflow-x-hidden custom-scrollbar scrollbar-gutter-stable ${activeTab !== 'logic' ? 'hidden' : ''}`}>
+            <div className="grid grid-cols-1 gap-8 pt-6 mt-0 md:pt-4 px-4 md:px-6 lg:px-8 pb-8 min-w-0">
+          <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC] min-h-[400px] md:min-h-0 min-w-0">
             <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">1. MATERIAL CALCULATION DETAIL</h2>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 text-left">
-              <div className="space-y-6">
+              <div className="space-y-6 min-w-0">
                 <div className="bg-stone-50 p-6 md:p-8 rounded-[2rem] border border-stone-100 text-left">
                   <h3 className="text-xs font-black text-[#A5BEAC] uppercase tracking-widest mb-6">THE LOGIC</h3>
                   <div className="font-mono text-sm bg-white p-6 rounded-2xl border border-stone-100 text-center shadow-sm">
                     <p className="text-slate-900 font-bold break-words">Cost = (Spot ÷ 31.1035) × Grams × Purity</p>
                   </div>
                 </div>
-                <p className="text-xs text-stone-500 leading-relaxed italic px-2">Spot prices are quoted per Troy Ounce. We divide by 31.1035 to get the price per gram, then multiply by the specific metal purity.</p>
+                <p className="text-xs text-stone-500 leading-relaxed italic px-2 pb-2 overflow-visible">Spot prices are quoted per Troy Ounce. We divide by 31.1035 to get the price per gram, then multiply by the specific metal purity.</p>
               </div>
-              <div className="bg-stone-50 p-6 md:p-8 rounded-[2rem] border border-stone-100 text-left">
+              <div className="bg-stone-50 p-6 md:p-8 rounded-[2rem] border border-stone-100 text-left min-w-0">
                 <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6">PURITY CONSTANTS:</h3>
                 <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-[10px] font-bold text-stone-400 uppercase tracking-tighter">
                   <div className="flex justify-between border-b border-stone-200 pb-1"><span>24K Gold</span><span>99.9%</span></div>
@@ -4575,7 +4575,7 @@ export default function Home() {
           </div>
 
           {/* New Logic Explanation for Stones & Overhead */}
-          <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC] min-h-[400px] md:min-h-0">
+          <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC] min-h-[400px] md:min-h-0 min-w-0">
             <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">2. ADVANCED PRICING LOGIC</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
               <div className="p-6 md:p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all flex flex-col justify-between">
@@ -4610,7 +4610,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC] min-h-[400px] md:min-h-0">
+          <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC] min-h-[400px] md:min-h-0 min-w-0">
             <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">3. PRICE FORMULA DETAIL</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 text-left">
               <div className="p-6 md:p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all flex flex-col justify-between">

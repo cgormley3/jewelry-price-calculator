@@ -42,6 +42,11 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 
+/* Reserve space for scrollbar so content doesn't overlap */
+.scrollbar-gutter-stable {
+  scrollbar-gutter: stable;
+}
+
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -27,6 +27,7 @@ import {
   PRESET_B,
 } from '@/lib/formula-engine';
 import FormulaPalette from './FormulaPalette';
+import BlockPicker from './BlockPicker';
 
 type SlotId = 'base' | 'wholesale' | 'retail';
 
@@ -84,6 +85,12 @@ function FormulaSlot({
   onConstantChange,
   placeholderText = 'Drop blocks here',
   isMobile,
+  showAddButton,
+  isPickerOpen,
+  onAddClick,
+  onBlockSelect,
+  onPickerClose,
+  addButtonRef,
 }: {
   slot: SlotId;
   label: string;
@@ -94,6 +101,12 @@ function FormulaSlot({
   onConstantChange: (slot: SlotId, idx: number, value: number) => void;
   placeholderText?: string;
   isMobile?: boolean;
+  showAddButton?: boolean;
+  isPickerOpen?: boolean;
+  onAddClick?: () => void;
+  onBlockSelect?: (token: FormulaToken) => void;
+  onPickerClose?: () => void;
+  addButtonRef?: React.RefObject<HTMLButtonElement | null>;
 }) {
   const { isOver, setNodeRef } = useDroppable({
     id: `slot-${slot}`,
@@ -102,7 +115,30 @@ function FormulaSlot({
 
   return (
     <div className="space-y-1">
-      <p className="text-[9px] font-black text-stone-400 uppercase">{label}</p>
+      <div className="relative">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[9px] font-black text-stone-400 uppercase">{label}</p>
+          {showAddButton && onAddClick && (
+            <button
+              ref={addButtonRef}
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onAddClick(); }}
+              className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg text-lg font-bold border-2 border-[#A5BEAC] bg-[#A5BEAC]/10 text-[#A5BEAC] active:bg-[#A5BEAC] active:text-white transition-all"
+              aria-label={`Add block to ${label}`}
+            >
+              +
+            </button>
+          )}
+        </div>
+        {isPickerOpen && onBlockSelect && onPickerClose && addButtonRef && (
+          <BlockPicker
+            onSelect={onBlockSelect}
+            onClose={onPickerClose}
+            excludeBase={slot === 'base'}
+            anchorRef={addButtonRef}
+          />
+        )}
+      </div>
       <div
         ref={setNodeRef}
         className={`
@@ -194,15 +230,19 @@ export default function FormulaBuilder({
   previewContext,
 }: FormulaBuilderProps) {
   const isDesktop = useIsDesktop();
-  const [activeSlot, setActiveSlot] = useState<SlotId>('base');
+  const [pickerSlot, setPickerSlot] = useState<SlotId | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeToken, setActiveToken] = useState<FormulaToken | null>(null);
+  const baseAddRef = useRef<HTMLButtonElement>(null);
+  const wholesaleAddRef = useRef<HTMLButtonElement>(null);
+  const retailAddRef = useRef<HTMLButtonElement>(null);
 
-  const handleBlockTap = (token: FormulaToken) => {
-    const tokens = getSlotTokens(model, activeSlot);
+  const handleBlockSelectForSlot = (slot: SlotId, token: FormulaToken) => {
+    const tokens = getSlotTokens(model, slot);
     const newTokens = [...tokens, token];
     const node = parseTokens(newTokens);
-    if (node) setSlotFormula(model, activeSlot, node, onChange);
+    if (node) setSlotFormula(model, slot, node, onChange);
+    setPickerSlot(null);
   };
 
   const handleDragStart = (e: DragStartEvent) => {
@@ -303,32 +343,8 @@ export default function FormulaBuilder({
           </p>
         )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="p-3 rounded-xl bg-stone-50 border border-stone-100 space-y-3">
-          {!isDesktop && (
-            <div>
-              <p className="text-[9px] font-black text-stone-400 uppercase tracking-wider mb-2">Adding to</p>
-              <div className="flex flex-wrap gap-2">
-                {(['base', 'wholesale', 'retail'] as SlotId[]).map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => setActiveSlot(s)}
-                    className={`min-h-[44px] px-3 py-2 rounded-lg text-[10px] font-bold uppercase border transition-all ${
-                      activeSlot === s
-                        ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]'
-                        : 'bg-white text-slate-700 border-stone-200'
-                    }`}
-                  >
-                    {s === 'base' ? 'Base cost' : s === 'wholesale' ? 'Wholesale' : 'Retail'}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          <FormulaPalette
-            tapMode={!isDesktop}
-            onBlockTap={!isDesktop ? handleBlockTap : undefined}
-          />
+        <div className="hidden md:block p-3 rounded-xl bg-stone-50 border border-stone-100 space-y-3">
+          <FormulaPalette />
         </div>
         <div className="space-y-4">
           <FormulaSlot
@@ -339,8 +355,14 @@ export default function FormulaBuilder({
             tokens={getSlotTokens(model, 'base')}
             onTokenRemove={handleTokenRemove}
             onConstantChange={handleConstantChange}
-            placeholderText={!isDesktop ? 'Tap blocks to add' : 'Drop blocks here'}
+            placeholderText={!isDesktop ? 'Tap + to add blocks' : 'Drop blocks here'}
             isMobile={!isDesktop}
+            showAddButton={!isDesktop}
+            isPickerOpen={pickerSlot === 'base'}
+            onAddClick={() => setPickerSlot('base')}
+            onBlockSelect={(token) => handleBlockSelectForSlot('base', token)}
+            onPickerClose={() => setPickerSlot(null)}
+            addButtonRef={baseAddRef}
           />
           <FormulaSlot
             slot="wholesale"
@@ -350,8 +372,14 @@ export default function FormulaBuilder({
             tokens={getSlotTokens(model, 'wholesale')}
             onTokenRemove={handleTokenRemove}
             onConstantChange={handleConstantChange}
-            placeholderText={!isDesktop ? 'Tap blocks to add' : 'Drop blocks here'}
+            placeholderText={!isDesktop ? 'Tap + to add blocks' : 'Drop blocks here'}
             isMobile={!isDesktop}
+            showAddButton={!isDesktop}
+            isPickerOpen={pickerSlot === 'wholesale'}
+            onAddClick={() => setPickerSlot('wholesale')}
+            onBlockSelect={(token) => handleBlockSelectForSlot('wholesale', token)}
+            onPickerClose={() => setPickerSlot(null)}
+            addButtonRef={wholesaleAddRef}
           />
           <FormulaSlot
             slot="retail"
@@ -361,8 +389,14 @@ export default function FormulaBuilder({
             tokens={getSlotTokens(model, 'retail')}
             onTokenRemove={handleTokenRemove}
             onConstantChange={handleConstantChange}
-            placeholderText={!isDesktop ? 'Tap blocks to add' : 'Drop blocks here'}
+            placeholderText={!isDesktop ? 'Tap + to add blocks' : 'Drop blocks here'}
             isMobile={!isDesktop}
+            showAddButton={!isDesktop}
+            isPickerOpen={pickerSlot === 'retail'}
+            onAddClick={() => setPickerSlot('retail')}
+            onBlockSelect={(token) => handleBlockSelectForSlot('retail', token)}
+            onPickerClose={() => setPickerSlot(null)}
+            addButtonRef={retailAddRef}
           />
           {preview && (
             <div className="p-3 rounded-xl bg-white border border-stone-200 text-[10px] space-y-1">
