@@ -2130,7 +2130,7 @@ export default function Home() {
       }
 
       doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(dark[0], dark[1], dark[2]);
-      doc.text(item.name, titleX, currentY + (itemHeaderHeight > 14 ? 4 : 5));
+      doc.text((item.name || '').toUpperCase(), titleX, currentY + (itemHeaderHeight > 14 ? 4 : 5));
       doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(muted[0], muted[1], muted[2]);
       const meta = `${item.status === 'archived' || item.status === 'sold' ? 'Archived' : 'Active'}  ·  ${item.location || 'Main Vault'}  ·  Saved ${new Date(item.created_at).toLocaleDateString()}`;
       doc.text(meta, titleX, currentY + (itemHeaderHeight > 14 ? 11 : 10));
