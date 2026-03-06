@@ -1,20 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import {
-  DndContext,
-  DragOverlay,
-  useDroppable,
-  useDraggable,
-  pointerWithin,
-  type DragEndEvent,
-  type DragStartEvent,
-} from '@dnd-kit/core';
-import { CSS } from '@dnd-kit/utilities';
-import type {
-  FormulaNode,
-  FormulaToken,
-} from '@/lib/formula-engine';
+import type { FormulaNode, FormulaToken } from '@/lib/formula-engine';
 import {
   parseTokens,
   formulaToTokens,
@@ -26,7 +13,6 @@ import {
   PRESET_A,
   PRESET_B,
 } from '@/lib/formula-engine';
-import FormulaPalette from './FormulaPalette';
 import BlockPicker from './BlockPicker';
 
 type SlotId = 'base' | 'wholesale' | 'retail';
@@ -83,6 +69,7 @@ function FormulaSlot({
   tokens,
   onTokenRemove,
   onConstantChange,
+  onTokenMove,
   placeholderText = 'Drop blocks here',
   isMobile,
   showAddButton,
@@ -99,6 +86,7 @@ function FormulaSlot({
   tokens: FormulaToken[];
   onTokenRemove: (slot: SlotId, idx: number) => void;
   onConstantChange: (slot: SlotId, idx: number, value: number) => void;
+  onTokenMove?: (slot: SlotId, fromIdx: number, toIdx: number) => void;
   placeholderText?: string;
   isMobile?: boolean;
   showAddButton?: boolean;
@@ -108,11 +96,6 @@ function FormulaSlot({
   onPickerClose?: () => void;
   addButtonRef?: React.RefObject<HTMLButtonElement | null>;
 }) {
-  const { isOver, setNodeRef } = useDroppable({
-    id: `slot-${slot}`,
-    data: { slot },
-  });
-
   return (
     <div className="space-y-1">
       <div className="relative">
@@ -123,7 +106,7 @@ function FormulaSlot({
               ref={addButtonRef}
               type="button"
               onClick={(e) => { e.stopPropagation(); onAddClick(); }}
-              className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg text-lg font-bold border-2 border-[#A5BEAC] bg-[#A5BEAC]/10 text-[#A5BEAC] active:bg-[#A5BEAC] active:text-white transition-all"
+              className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg text-lg font-bold border-2 border-[#A5BEAC] bg-[#A5BEAC]/10 text-[#A5BEAC] hover:bg-[#A5BEAC] hover:text-white active:bg-[#A5BEAC] active:text-white transition-all"
               aria-label={`Add block to ${label}`}
             >
               +
@@ -140,11 +123,7 @@ function FormulaSlot({
         )}
       </div>
       <div
-        ref={setNodeRef}
-        className={`
-          min-h-[44px] p-2 rounded-xl border-2 border-dashed flex flex-wrap items-center gap-1.5
-          ${isOver ? 'border-[#A5BEAC] bg-[#A5BEAC]/5' : 'border-stone-200 bg-stone-50/50'}
-        `}
+        className="min-h-[44px] p-2 rounded-xl border-2 border-dashed border-stone-200 bg-stone-50/50 flex flex-wrap items-center gap-1.5"
       >
         {tokens.length === 0 ? (
           <span className="text-[9px] text-stone-400 italic">{placeholderText}</span>
@@ -155,6 +134,8 @@ function FormulaSlot({
               token={t}
               onRemove={() => onTokenRemove(slot, idx)}
               onConstantChange={t.kind === 'constant' ? (v) => onConstantChange(slot, idx, v) : undefined}
+              onMoveLeft={onTokenMove && idx > 0 ? () => onTokenMove(slot, idx, idx - 1) : undefined}
+              onMoveRight={onTokenMove && idx < tokens.length - 1 ? () => onTokenMove(slot, idx, idx + 1) : undefined}
               isMobile={isMobile}
             />
           ))
@@ -171,11 +152,15 @@ function TokenChip({
   token,
   onRemove,
   onConstantChange,
+  onMoveLeft,
+  onMoveRight,
   isMobile,
 }: {
   token: FormulaToken;
   onRemove: () => void;
   onConstantChange?: (v: number) => void;
+  onMoveLeft?: () => void;
+  onMoveRight?: () => void;
   isMobile?: boolean;
 }) {
   const label =
@@ -185,8 +170,20 @@ function TokenChip({
         ? String(token.value)
         : OP_LABELS[token.op];
 
+  const showMoveButtons = isMobile && (onMoveLeft || onMoveRight);
+
   return (
     <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md bg-white border border-stone-200 text-[10px] font-bold">
+      {showMoveButtons && onMoveLeft && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onMoveLeft(); }}
+          className="min-h-[44px] min-w-[44px] flex items-center justify-center text-stone-400 hover:text-[#A5BEAC] active:text-[#A5BEAC] -ml-0.5 touch-manipulation"
+          aria-label="Move earlier"
+        >
+          ←
+        </button>
+      )}
       {token.kind === 'constant' && onConstantChange ? (
         <input
           type="number"
@@ -198,6 +195,16 @@ function TokenChip({
         />
       ) : (
         label
+      )}
+      {showMoveButtons && onMoveRight && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onMoveRight(); }}
+          className="min-h-[44px] min-w-[44px] flex items-center justify-center text-stone-400 hover:text-[#A5BEAC] active:text-[#A5BEAC] touch-manipulation"
+          aria-label="Move later"
+        >
+          →
+        </button>
       )}
       <button
         type="button"
@@ -231,8 +238,6 @@ export default function FormulaBuilder({
 }: FormulaBuilderProps) {
   const isDesktop = useIsDesktop();
   const [pickerSlot, setPickerSlot] = useState<SlotId | null>(null);
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [activeToken, setActiveToken] = useState<FormulaToken | null>(null);
   const baseAddRef = useRef<HTMLButtonElement>(null);
   const wholesaleAddRef = useRef<HTMLButtonElement>(null);
   const retailAddRef = useRef<HTMLButtonElement>(null);
@@ -243,37 +248,6 @@ export default function FormulaBuilder({
     const node = parseTokens(newTokens);
     if (node) setSlotFormula(model, slot, node, onChange);
     setPickerSlot(null);
-  };
-
-  const handleDragStart = (e: DragStartEvent) => {
-    setActiveId(String(e.active.id));
-    const data = e.active.data.current;
-    if (data?.token) {
-      setActiveToken(data.token);
-      if (data.token.kind === 'constant' && data.isConstantPlaceholder) {
-        setActiveToken({ kind: 'constant', value: 1 });
-      }
-    } else {
-      setActiveToken(null);
-    }
-  };
-
-  const handleDragEnd = (e: DragEndEvent) => {
-    setActiveId(null);
-    setActiveToken(null);
-    const { active, over } = e;
-    if (!over) return;
-    const overId = String(over.id);
-    const data = active.data.current;
-    if (!data?.token || !overId.startsWith('slot-')) return;
-    const slot = overId.replace('slot-', '') as SlotId;
-    const tokens = getSlotTokens(model, slot);
-    const token = data.token.kind === 'constant' && data.isConstantPlaceholder
-      ? { kind: 'constant' as const, value: 1 }
-      : data.token;
-    const newTokens = [...tokens, token];
-    const node = parseTokens(newTokens);
-    if (node) setSlotFormula(model, slot, node, onChange);
   };
 
   const handleTokenRemove = (slot: SlotId, idx: number) => {
@@ -293,6 +267,16 @@ export default function FormulaBuilder({
     }
   };
 
+  const handleTokenMove = (slot: SlotId, fromIdx: number, toIdx: number) => {
+    const tokens = getSlotTokens(model, slot);
+    if (fromIdx < 0 || fromIdx >= tokens.length || toIdx < 0 || toIdx >= tokens.length || fromIdx === toIdx) return;
+    const copy = [...tokens];
+    const [removed] = copy.splice(fromIdx, 1);
+    copy.splice(toIdx, 0, removed);
+    const node = parseTokens(copy);
+    if (node) setSlotFormula(model, slot, node, onChange);
+  };
+
   const preview =
     previewContext &&
     (() => {
@@ -307,12 +291,7 @@ export default function FormulaBuilder({
   const baseRefsBase = formulaReferencesBase(model.formula_base);
 
   return (
-    <DndContext
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-      collisionDetection={pointerWithin}
-    >
-      <div className="space-y-4">
+    <div className="space-y-4">
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
@@ -342,11 +321,7 @@ export default function FormulaBuilder({
             Base formula cannot reference Base (circular).
           </p>
         )}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="hidden md:block p-3 rounded-xl bg-stone-50 border border-stone-100 space-y-3">
-          <FormulaPalette />
-        </div>
-        <div className="space-y-4">
+      <div className="space-y-4 max-w-4xl">
           <FormulaSlot
             slot="base"
             label="Base cost"
@@ -355,9 +330,10 @@ export default function FormulaBuilder({
             tokens={getSlotTokens(model, 'base')}
             onTokenRemove={handleTokenRemove}
             onConstantChange={handleConstantChange}
-            placeholderText={!isDesktop ? 'Tap + to add blocks' : 'Drop blocks here'}
+            onTokenMove={handleTokenMove}
+            placeholderText="Click + to add blocks"
             isMobile={!isDesktop}
-            showAddButton={!isDesktop}
+            showAddButton={true}
             isPickerOpen={pickerSlot === 'base'}
             onAddClick={() => setPickerSlot('base')}
             onBlockSelect={(token) => handleBlockSelectForSlot('base', token)}
@@ -372,9 +348,10 @@ export default function FormulaBuilder({
             tokens={getSlotTokens(model, 'wholesale')}
             onTokenRemove={handleTokenRemove}
             onConstantChange={handleConstantChange}
-            placeholderText={!isDesktop ? 'Tap + to add blocks' : 'Drop blocks here'}
+            onTokenMove={handleTokenMove}
+            placeholderText="Click + to add blocks"
             isMobile={!isDesktop}
-            showAddButton={!isDesktop}
+            showAddButton={true}
             isPickerOpen={pickerSlot === 'wholesale'}
             onAddClick={() => setPickerSlot('wholesale')}
             onBlockSelect={(token) => handleBlockSelectForSlot('wholesale', token)}
@@ -389,9 +366,10 @@ export default function FormulaBuilder({
             tokens={getSlotTokens(model, 'retail')}
             onTokenRemove={handleTokenRemove}
             onConstantChange={handleConstantChange}
-            placeholderText={!isDesktop ? 'Tap + to add blocks' : 'Drop blocks here'}
+            onTokenMove={handleTokenMove}
+            placeholderText="Click + to add blocks"
             isMobile={!isDesktop}
-            showAddButton={!isDesktop}
+            showAddButton={true}
             isPickerOpen={pickerSlot === 'retail'}
             onAddClick={() => setPickerSlot('retail')}
             onBlockSelect={(token) => handleBlockSelectForSlot('retail', token)}
@@ -408,19 +386,5 @@ export default function FormulaBuilder({
           )}
         </div>
       </div>
-      </div>
-
-      <DragOverlay>
-        {activeToken ? (
-          <span className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase border bg-white text-slate-700 border-stone-200 shadow-lg">
-            {activeToken.kind === 'value'
-              ? VALUE_LABELS[activeToken.value]
-              : activeToken.kind === 'constant'
-                ? String(activeToken.value)
-                : OP_LABELS[activeToken.op]}
-          </span>
-        ) : null}
-      </DragOverlay>
-    </DndContext>
   );
 }

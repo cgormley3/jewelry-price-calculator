@@ -1046,7 +1046,7 @@ export default function Home() {
           item.other_costs_at_making || 0,
           stonesArray,
           item.overhead_cost || 0,
-          'flat', // Force flat to use the saved dollar amount
+          (item.overhead_type as 'flat' | 'percent') || 'flat',
           item.multiplier,
           item.markup_b
         );
@@ -1105,7 +1105,7 @@ export default function Home() {
             item.other_costs_at_making || 0,
             stonesArray,
             item.overhead_cost || 0,
-            'flat', // Force flat
+            (item.overhead_type as 'flat' | 'percent') || 'flat',
             item.multiplier,
             item.markup_b
           );
@@ -1168,7 +1168,7 @@ export default function Home() {
             item.other_costs_at_making || 0,
             stonesArray,
             item.overhead_cost || 0,
-            'flat', // Force flat for global recalc unless logic changes
+            (item.overhead_type as 'flat' | 'percent') || 'flat',
             item.multiplier,
             item.markup_b,
             recalcParams
@@ -1239,7 +1239,7 @@ export default function Home() {
           recalcItem.other_costs_at_making,
           stonesArray,
           recalcItem.overhead_cost || 0,
-          'flat',
+          (recalcItem.overhead_type as 'flat' | 'percent') || 'flat',
           recalcItem.multiplier,
           recalcItem.markup_b,
           recalcParams
@@ -1370,7 +1370,7 @@ export default function Home() {
         other_costs_at_making: Number(otherCosts) || 0,
         stone_cost: a.stones,
         stone_markup: (stoneList.length > 0 && a.stones > 0) ? stoneList.reduce((sum, s) => sum + (s.cost * s.markup), 0) / a.stones : 1.5,
-        overhead_cost: a.overhead,
+        overhead_cost: overheadType === 'percent' ? (Number(overheadCost) || 0) : a.overhead,
         overhead_type: overheadType,
         strategy: strategy,
         multiplier: retailMultA,
@@ -1393,7 +1393,7 @@ export default function Home() {
         other_costs_at_making: Number(otherCosts) || 0,
         stone_cost: a.stones,
         stone_markup: (stoneList.length > 0 && a.stones > 0) ? stoneList.reduce((sum, s) => sum + (s.cost * s.markup), 0) / a.stones : 1.5,
-        overhead_cost: a.overhead,
+        overhead_cost: overheadType === 'percent' ? (Number(overheadCost) || 0) : a.overhead,
         overhead_type: overheadType,
         strategy: strategy,
         multiplier: retailMultA,
@@ -1635,10 +1635,8 @@ export default function Home() {
       }
 
       if (filterMinPrice || filterMaxPrice) {
-        // FIX: Force overhead_type to 'flat' here to correctly calculate Live Retail using the stored Dollar value
-        // FIX: Pass labor cost so live price includes labor
         const stonesArray = convertStonesToArray(item);
-        const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, stonesArray, item.overhead_cost || 0, 'flat', item.multiplier, item.markup_b);
+        const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, stonesArray, item.overhead_cost || 0, (item.overhead_type as 'flat' | 'percent') || 'flat', item.multiplier, item.markup_b);
         const itemPrices = getItemPrices(item, current);
         const liveRetail = itemPrices.retail;
 
@@ -1713,10 +1711,8 @@ export default function Home() {
   const totalVaultValue = useMemo(() => {
     return inventory.reduce((acc, item) => {
       if (item.status === 'archived' || item.status === 'sold' || item.status === 'draft') return acc;
-      // FIX: Force overhead_type to 'flat' here to correctly calculate Live Retail using the stored Dollar value
-      // FIX: Pass labor cost so live price includes labor
       const stonesArray = convertStonesToArray(item);
-      const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, stonesArray, item.overhead_cost || 0, 'flat', item.multiplier, item.markup_b);
+      const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, stonesArray, item.overhead_cost || 0, (item.overhead_type as 'flat' | 'percent') || 'flat', item.multiplier, item.markup_b);
       const itemPrices = getItemPrices(item, current);
       return acc + itemPrices.retail;
     }, 0);
@@ -1729,10 +1725,8 @@ export default function Home() {
 
     const headers = ["Item Name", "Status", "Tag", "Location", "Live Retail", "Live Wholesale", "Saved Retail", "Saved Wholesale", "Labor Hours", "Labor Cost", "Materials Cost", "Other Costs", "Stone Retail", "Stone Cost", "Stone Markup", "Overhead Cost", "Overhead Type", "Notes", "Date Created", "Formula", "Metals", "Image URL"];
     const rows = targetItems.map(item => {
-      // FIX: Force overhead_type to 'flat' for live calc
-      // FIX: Pass labor cost
       const stonesArray = convertStonesToArray(item);
-      const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, stonesArray, item.overhead_cost || 0, 'flat', item.multiplier, item.markup_b);
+      const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, stonesArray, item.overhead_cost || 0, (item.overhead_type as 'flat' | 'percent') || 'flat', item.multiplier, item.markup_b);
       const itemPrices = getItemPrices(item, current);
       const liveWholesale = itemPrices.wholesale;
       const liveRetail = itemPrices.retail;
@@ -1877,6 +1871,30 @@ export default function Home() {
     }
   };
 
+  const disconnectShopify = async () => {
+    const session = (await supabase.auth.getSession()).data.session;
+    const accessToken = (session as any)?.access_token;
+    if (!accessToken || !user?.id) return;
+    try {
+      const res = await fetch('/api/shopify/disconnect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accessToken }),
+      });
+      if (res.ok) {
+        setShopifyConnected(false);
+        setShopifyShop(null);
+        setShowVaultMenu(false);
+        setNotification({ title: 'Shopify Disconnected', message: 'Your store has been disconnected.', type: 'success' });
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setNotification({ title: 'Disconnect Failed', message: data?.error || 'Could not disconnect.', type: 'info' });
+      }
+    } catch (e: any) {
+      setNotification({ title: 'Disconnect Failed', message: e?.message || 'Could not disconnect.', type: 'info' });
+    }
+  };
+
   const getImageData = async (url: string): Promise<string | null> => {
     try {
       const response = await fetch(url, { mode: 'cors' });
@@ -1970,7 +1988,7 @@ export default function Home() {
 
     if (includeBreakdownInPDF) {
       const stonesArray = convertStonesToArray(item);
-      const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, stonesArray, item.overhead_cost || 0, 'flat', item.multiplier, item.markup_b);
+      const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, stonesArray, item.overhead_cost || 0, (item.overhead_type as 'flat' | 'percent') || 'flat', item.multiplier, item.markup_b);
 
       const metalLines: string[] = item.metals?.map((m: any) => `${m.weight}${m.unit} ${m.type}`) || [];
       const savedSpotByMetal: Record<string, number> = {};
@@ -1999,10 +2017,8 @@ export default function Home() {
       const otherLines: string[] = [];
       if (item.other_costs_at_making > 0) otherLines.push(`Findings/Other: $${Number(item.other_costs_at_making).toFixed(2)}`);
       if (item.overhead_cost > 0) {
-        const totalStoneCost = stonesArray.reduce((sum: number, s: any) => sum + (Number(s.cost) || 0), 0);
-        const denominator = Number(item.materials_at_making) + Number(item.labor_at_making) + Number(item.other_costs_at_making) + totalStoneCost;
-        const ovPct = item.overhead_type === 'percent' && denominator > 0 ? ((Number(item.overhead_cost) / denominator) * 100).toFixed(1) : null;
-        otherLines.push(`Overhead: $${Number(item.overhead_cost).toFixed(2)} ${ovPct ? `(${ovPct}%)` : ''}`);
+        const ovPct = item.overhead_type === 'percent' ? `${Number(item.overhead_cost).toFixed(0)}%` : null;
+        otherLines.push(`Overhead: $${Number(current.overhead).toFixed(2)} ${ovPct ? `(${ovPct})` : ''}`);
       }
       if (current.labor > 0) otherLines.push(`Labor (${item.hours || 0}h): $${Number(current.labor).toFixed(2)}`);
 
@@ -2084,7 +2100,7 @@ export default function Home() {
       }
 
       const stonesArray = convertStonesToArray(item);
-      const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, stonesArray, item.overhead_cost || 0, 'flat', item.multiplier, item.markup_b);
+      const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, stonesArray, item.overhead_cost || 0, (item.overhead_type as 'flat' | 'percent') || 'flat', item.multiplier, item.markup_b);
       const itemPrices = getItemPrices(item, current);
       const liveWholesale = itemPrices.wholesale;
       const liveRetail = itemPrices.retail;
@@ -2166,11 +2182,9 @@ export default function Home() {
 
         const otherLines: string[] = [];
         if (item.other_costs_at_making > 0) otherLines.push(`Findings/Other: $${Number(item.other_costs_at_making).toFixed(2)}`);
-        if (item.overhead_cost > 0) {
-          const totalStoneCost = stonesArray.reduce((sum: number, s: any) => sum + (Number(s.cost) || 0), 0);
-          const denominator = Number(item.materials_at_making) + Number(item.labor_at_making) + Number(item.other_costs_at_making) + totalStoneCost;
-          const ovPct = item.overhead_type === 'percent' && denominator > 0 ? ((Number(item.overhead_cost) / denominator) * 100).toFixed(1) : null;
-          otherLines.push(`Overhead: $${Number(item.overhead_cost).toFixed(2)} ${ovPct ? `(${ovPct}%)` : ''}`);
+      if (item.overhead_cost > 0) {
+        const ovPct = item.overhead_type === 'percent' ? `${Number(item.overhead_cost).toFixed(0)}%` : null;
+        otherLines.push(`Overhead: $${Number(current.overhead).toFixed(2)} ${ovPct ? `(${ovPct})` : ''}`);
         }
         if (current.labor > 0) otherLines.push(`Labor (${item.hours || 0}h): $${Number(current.labor).toFixed(2)}`);
 
@@ -2622,7 +2636,7 @@ export default function Home() {
                   recalcItem.other_costs_at_making ?? 0,
                   stonesArray,
                   recalcItem.overhead_cost ?? 0,
-                  'flat', // Force flat for recalc to avoid % of old dollar value issue
+                  (recalcItem.overhead_type as 'flat' | 'percent') || 'flat',
                   recalcItem.multiplier,
                   recalcItem.markup_b,
                   recalcParams
@@ -3645,8 +3659,16 @@ export default function Home() {
                             </button>
                           </div>
                           {shopifyConnected ? (
-                            <div className="px-4 py-2 border-b border-stone-100">
+                            <div className="px-4 py-2 border-b border-stone-100 space-y-2">
                               <p className="text-[9px] font-bold text-[#A5BEAC] uppercase">Connected to {shopifyShop || 'Shopify'}</p>
+                              <div className="flex gap-2">
+                                <button onClick={() => { setShowShopifyConnectModal(true); setShopifyConnectInput(shopifyShop?.replace('.myshopify.com', '') || ''); setShowVaultMenu(false); }} className="flex-1 py-2 rounded-lg text-[9px] font-black uppercase border border-stone-200 bg-white text-slate-700 hover:border-[#A5BEAC] transition">
+                                  Change store
+                                </button>
+                                <button onClick={() => { disconnectShopify(); }} className="flex-1 py-2 rounded-lg text-[9px] font-black uppercase border border-stone-200 bg-white text-stone-500 hover:border-red-300 hover:text-red-600 transition">
+                                  Disconnect
+                                </button>
+                              </div>
                             </div>
                           ) : (
                             <button onClick={() => { setShowShopifyConnectModal(true); setShowVaultMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
@@ -3703,10 +3725,8 @@ export default function Home() {
               ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {filteredInventory.map(item => {
-                  // FIX: Force overhead_type to 'flat' here to correctly calculate Live Retail using the stored Dollar value
-                  // FIX: Pass labor cost
                   const stonesArray = convertStonesToArray(item);
-                  const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, stonesArray, item.overhead_cost || 0, 'flat', item.multiplier, item.markup_b);
+                  const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, stonesArray, item.overhead_cost || 0, (item.overhead_type as 'flat' | 'percent') || 'flat', item.multiplier, item.markup_b);
                   const labor = item.labor_at_making || 0;
                   const itemPrices = getItemPrices(item, current);
                   const liveWholesale = itemPrices.wholesale;
@@ -4137,17 +4157,10 @@ export default function Home() {
                                   </div>
                                 );
                               })()}
-                              {item.overhead_cost > 0 && (
+                              {(item.overhead_cost > 0 || current.overhead > 0) && (
                                 <div className="flex justify-between text-[10px] font-bold border-b border-stone-100 pb-1.5 uppercase">
-                                  <span>Overhead {(() => {
-                                    const stonesArray = convertStonesToArray(item);
-                                    const totalStoneCost = stonesArray.reduce((sum, s) => sum + (Number(s.cost) || 0), 0);
-                                    const denominator = Number(item.materials_at_making) + Number(item.labor_at_making) + Number(item.other_costs_at_making) + totalStoneCost;
-                                    return item.overhead_type === 'percent' && denominator > 0
-                                      ? `(${((Number(item.overhead_cost) / denominator) * 100).toFixed(1)}%)`
-                                      : '';
-                                  })()}</span>
-                                  <span>${Number(item.overhead_cost).toFixed(2)}</span>
+                                  <span>Overhead {item.overhead_type === 'percent' ? `(${Number(item.overhead_cost).toFixed(0)}%)` : ''}</span>
+                                  <span>${Number(current.overhead).toFixed(2)}</span>
                                 </div>
                               )}
                             </div>
