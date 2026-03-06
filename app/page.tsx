@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { supabase, hasValidSupabaseCredentials } from '../lib/supabase';
@@ -288,6 +289,8 @@ export default function Home() {
   const fetchInProgressRef = useRef(false);
   const fetchVersionRef = useRef(0);
   const wakeUpTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const filterButtonRef = useRef<HTMLButtonElement>(null);
+  const [filterDropdownRect, setFilterDropdownRect] = useState<{ top: number; left: number } | null>(null);
 
   const [notification, setNotification] = useState<{
     title: string;
@@ -302,7 +305,7 @@ export default function Home() {
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
-      if (showFilterMenu && !target.closest('.filter-menu-container')) setShowFilterMenu(false);
+      if (showFilterMenu && !target.closest('.filter-menu-container') && !target.closest('.filter-menu-dropdown')) setShowFilterMenu(false);
       if (showVaultMenu && !target.closest('.vault-menu-container')) setShowVaultMenu(false);
       if (openMenuId && !target.closest('.item-menu-container')) setOpenMenuId(null);
       if (showLocationMenuId && !target.closest('.location-menu-container')) setShowLocationMenuId(null);
@@ -312,6 +315,16 @@ export default function Home() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showFilterMenu, showVaultMenu, openMenuId, showLocationMenuId, showTagMenuId, showAuth]);
+
+  // Compute filter dropdown position for portal (avoids overflow clipping when vault has no items)
+  useEffect(() => {
+    if (showFilterMenu && filterButtonRef.current) {
+      const rect = filterButtonRef.current.getBoundingClientRect();
+      setFilterDropdownRect({ top: rect.bottom + 8, left: rect.left });
+    } else {
+      setFilterDropdownRect(null);
+    }
+  }, [showFilterMenu]);
 
   const fetchPrices = useCallback(async (force = false) => {
     const cachedData = sessionStorage.getItem('vault_prices');
@@ -3569,15 +3582,19 @@ export default function Home() {
                   {/* NEW: Filter Button (Fixed w-12 h-12) */}
                   <div className="relative filter-menu-container shrink-0 min-h-[48px] sm:h-full w-12"> {/* Explicit w-12 with min-height */}
                     <button
+                      ref={filterButtonRef}
                       onClick={() => setShowFilterMenu(!showFilterMenu)}
                       className={`filter-menu-trigger w-full h-full min-h-[48px] sm:min-h-0 flex items-center justify-center rounded-xl border transition-all ${showFilterMenu ? 'bg-slate-900 text-white border-slate-900' : 'bg-stone-50 border-stone-200 text-stone-400 hover:border-[#A5BEAC]'}`}
                     >
                       <span className="text-lg">⚡</span>
                     </button>
 
-                    {/* Filter Menu Dropdown */}
-                    {showFilterMenu && (
-                      <div className="filter-menu-dropdown absolute top-full left-0 mt-2 w-72 bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[100] p-4 animate-in fade-in slide-in-from-top-2 space-y-4">
+                    {/* Filter Menu Dropdown - rendered via portal to avoid overflow clipping when vault has no items */}
+                    {showFilterMenu && filterDropdownRect && typeof document !== 'undefined' && createPortal(
+                      <div
+                        className="filter-menu-dropdown fixed w-72 bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[9999] p-4 animate-in fade-in slide-in-from-top-2 space-y-4"
+                        style={{ top: filterDropdownRect.top, left: filterDropdownRect.left }}
+                      >
                         <div className="flex justify-between items-center">
                           <h4 className="text-xs font-black uppercase text-slate-900">Filters</h4>
                           <button onClick={() => {
@@ -3644,7 +3661,8 @@ export default function Home() {
                             <input type="number" placeholder="Max" value={filterMaxPrice} onChange={e => setFilterMaxPrice(e.target.value)} className="w-full p-2 bg-stone-50 border rounded-lg text-xs font-bold" />
                           </div>
                         </div>
-                      </div>
+                      </div>,
+                      document.body
                     )}
                   </div>
 
