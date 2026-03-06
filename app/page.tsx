@@ -915,9 +915,6 @@ export default function Home() {
     ctx.clearRect(0, 0, size, size);
     ctx.save();
     ctx.translate(size / 2, size / 2);
-    ctx.beginPath();
-    ctx.arc(0, 0, size / 2, 0, Math.PI * 2);
-    ctx.clip();
     ctx.translate(offset.x, offset.y);
     ctx.rotate((rotation * Math.PI) / 180);
     ctx.scale(zoom, zoom);
@@ -2378,7 +2375,7 @@ export default function Home() {
 
             {/* Cropper Container */}
             <div
-              className="relative w-64 h-64 mx-auto rounded-full overflow-hidden border-4 border-[#A5BEAC] shadow-inner bg-stone-100 touch-none"
+              className="relative w-64 h-64 mx-auto rounded-2xl overflow-hidden border-4 border-[#A5BEAC] shadow-inner bg-stone-100 touch-none"
               onPointerDown={handlePointerDown}
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
