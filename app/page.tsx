@@ -33,6 +33,7 @@ export default function Home() {
   // Menus
   const [showVaultMenu, setShowVaultMenu] = useState(false);
   const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const [showAccountMenu, setShowAccountMenu] = useState(false);
 
   // Filter States
   const [filterLocation, setFilterLocation] = useState('All');
@@ -230,14 +231,16 @@ export default function Home() {
     else if (stored === 'none') setPriceRounding('none');
   }, []);
 
-  // Refetch subscription when returning from Stripe (vaultplus=1)
+  // Refetch when returning from Stripe (vaultplus=1) — delay + retry to allow webhook to sync subscription
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || !user?.id) return;
     const params = new URLSearchParams(window.location.search);
-    if (params.get('vaultplus') === '1') {
-      window.history.replaceState({}, '', window.location.pathname);
-      if (user?.id) fetchInventory();
-    }
+    if (params.get('vaultplus') !== '1') return;
+    window.history.replaceState({}, '', window.location.pathname);
+    setActiveTab('vault');
+    const t1 = setTimeout(() => fetchInventory(), 1500);
+    const t2 = setTimeout(() => fetchInventory(), 5000);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [user?.id]);
 
   // Handle Shopify OAuth callback URL params
@@ -323,6 +326,7 @@ export default function Home() {
       const target = event.target as HTMLElement;
       if (showFilterMenu && !target.closest('.filter-menu-container') && !target.closest('.filter-menu-dropdown')) setShowFilterMenu(false);
       if (showVaultMenu && !target.closest('.vault-menu-container')) setShowVaultMenu(false);
+      if (showAccountMenu && !target.closest('.account-menu-container')) setShowAccountMenu(false);
       if (openMenuId && !target.closest('.item-menu-container')) setOpenMenuId(null);
       if (showLocationMenuId && !target.closest('.location-menu-container')) setShowLocationMenuId(null);
       if (showTagMenuId && !target.closest('.tag-menu-container')) { setShowTagMenuId(null); setNewTagInput(''); }
@@ -330,7 +334,7 @@ export default function Home() {
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showFilterMenu, showVaultMenu, openMenuId, showLocationMenuId, showTagMenuId, showAuth]);
+  }, [showFilterMenu, showVaultMenu, showAccountMenu, openMenuId, showLocationMenuId, showTagMenuId, showAuth]);
 
   // Compute filter dropdown position for portal (avoids overflow clipping when vault has no items)
   useEffect(() => {
@@ -3122,24 +3126,47 @@ export default function Home() {
               {(!user || user.is_anonymous) ? (
                 <button onClick={() => { setShowAuth(!showAuth); setShowPassword(false); }} className="text-[10px] font-black uppercase bg-slate-900 text-white px-8 py-3 rounded-xl hover:bg-[#A5BEAC] transition shadow-sm">Login / Sign Up</button>
               ) : (
-                <button
-                  type="button"
-                  disabled={loggingOut}
-                  onClick={async () => {
-                    if (loggingOut) return;
-                    setLoggingOut(true);
-                    try {
-                      await Promise.race([
-                        supabase.auth.signOut(),
-                        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
-                      ]);
-                    } catch (_) { /* ignore - we still reload */ }
-                    window.location.reload();
-                  }}
-                  className={`text-[10px] font-black uppercase px-8 py-3 rounded-xl transition ${loggingOut ? 'bg-stone-200 text-stone-400 cursor-wait' : 'bg-stone-100 text-slate-900 hover:bg-stone-200'}`}
-                >
-                  {loggingOut ? 'Logging out…' : 'Logout'}
-                </button>
+                <div className="relative account-menu-container">
+                  <button
+                    type="button"
+                    onClick={() => setShowAccountMenu(!showAccountMenu)}
+                    className="text-[10px] font-black uppercase px-8 py-3 rounded-xl transition bg-stone-100 text-slate-900 hover:bg-stone-200 flex items-center gap-1.5"
+                  >
+                    {user.email?.split('@')[0] || 'Account'} {showAccountMenu ? '▲' : '▼'}
+                  </button>
+                  {showAccountMenu && (
+                    <div className="absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[100] overflow-hidden animate-in fade-in slide-in-from-top-2">
+                      {subscriptionStatus?.subscribed ? (
+                        <button onClick={() => { initiateManageSubscription(); setShowAccountMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
+                          Manage Subscription
+                        </button>
+                      ) : (
+                        <button onClick={() => { setShowVaultPlusModal(true); setShowAccountMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
+                          Upgrade to Vault+
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        disabled={loggingOut}
+                        onClick={async () => {
+                          if (loggingOut) return;
+                          setLoggingOut(true);
+                          setShowAccountMenu(false);
+                          try {
+                            await Promise.race([
+                              supabase.auth.signOut(),
+                              new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
+                            ]);
+                          } catch (_) { /* ignore */ }
+                          window.location.reload();
+                        }}
+                        className={`w-full px-4 py-3 text-left text-[10px] font-black uppercase transition-colors ${loggingOut ? 'text-stone-400 cursor-wait' : 'text-slate-700 hover:bg-stone-50'} border-t border-stone-100`}
+                      >
+                        {loggingOut ? 'Logging out…' : 'Logout'}
+                      </button>
+                    </div>
+                  )}
+                </div>
               )}
               {showAuth ? (
                 <div className="absolute right-0 mt-12 w-full md:w-80 bg-white p-6 rounded-3xl border-2 border-[#A5BEAC] shadow-2xl z-[100] animate-in fade-in slide-in-from-top-2 mx-auto auth-menu-container">
@@ -3967,9 +3994,12 @@ export default function Home() {
                   {subscriptionStatus && !subscriptionStatus.subscribed && vaultPaywallHasItems ? (
                     <>
                       <p className="text-stone-600 font-bold uppercase text-xs tracking-wider">To see your items upgrade to Vault+</p>
-                      <button onClick={() => setShowVaultPlusModal(true)} className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-[#A5BEAC] text-white hover:bg-slate-900 transition shadow-sm">
-                        Upgrade to Vault+
-                      </button>
+                      <div className="flex flex-col sm:flex-row gap-2 items-center justify-center">
+                        <button onClick={() => setShowVaultPlusModal(true)} className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-[#A5BEAC] text-white hover:bg-slate-900 transition shadow-sm">
+                          Upgrade to Vault+
+                        </button>
+                        <button onClick={() => { setLoading(true); fetchInventory(); }} className="text-[10px] font-bold uppercase text-stone-400 hover:text-[#A5BEAC] transition">Just upgraded? Refresh</button>
+                      </div>
                     </>
                   ) : (
                     <p className="text-stone-500 font-bold uppercase text-xs tracking-wider">No items yet</p>
