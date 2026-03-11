@@ -188,6 +188,8 @@ export default function Home() {
   const [logTimeHours, setLogTimeHours] = useState<string>('');
   const [logTimeNote, setLogTimeNote] = useState('');
   const [logTimeAllowItemSelect, setLogTimeAllowItemSelect] = useState(false);
+  const [editingTimeEntryId, setEditingTimeEntryId] = useState<string | null>(null);
+  const [deletingTimeEntryId, setDeletingTimeEntryId] = useState<string | null>(null);
   const [timeFilterDateFrom, setTimeFilterDateFrom] = useState('');
   const [timeFilterDateTo, setTimeFilterDateTo] = useState('');
   const [timeFilterItemId, setTimeFilterItemId] = useState<string>('');
@@ -1767,6 +1769,100 @@ export default function Home() {
     }
   };
 
+  const updateTimeEntry = async () => {
+    if (!editingTimeEntryId) return;
+    const hrs = parseFloat(logTimeHours);
+    if (!Number.isFinite(hrs) || hrs <= 0) {
+      setNotification({ title: "Invalid Time", message: "Enter a valid number of hours (e.g. 2.5).", type: 'info' });
+      return;
+    }
+    const currentUser = user || (await supabase.auth.getUser()).data?.user;
+    if (!currentUser) { setShowAuth(true); return; }
+    if (subscriptionStatus && !subscriptionStatus.subscribed) {
+      setShowVaultPlusModal(true);
+      return;
+    }
+    const { data: { session } } = await supabase.auth.getSession();
+    const accessToken = session?.access_token;
+    if (!accessToken) {
+      setNotification({ title: "Session Error", message: "Please sign in again.", type: 'info' });
+      return;
+    }
+    const duration_minutes = Math.round(hrs * 60);
+    try {
+      const res = await fetch('/api/update-time-entry', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accessToken,
+          userId: currentUser.id,
+          entryId: editingTimeEntryId,
+          inventory_id: logTimeItemId || null,
+          duration_minutes,
+          note: logTimeNote.trim() || null,
+        }),
+      });
+      const data = res.ok ? await res.json() : null;
+      const errBody = !res.ok ? await res.json().catch(() => ({})) : {};
+      if (res.status === 402 && errBody?.code === 'PAYWALL_TIME') {
+        setShowVaultPlusModal(true);
+      } else if (res.ok && data) {
+        setTimeEntries(prev => prev.map(t => t.id === data.id ? data : t));
+        setShowLogTimeModal(false);
+        setEditingTimeEntryId(null);
+        setLogTimeItemId(null);
+        setLogTimeHours('');
+        setLogTimeNote('');
+        setLogTimeAllowItemSelect(false);
+        setNotification({ title: "Time Updated", message: `${hrs}h updated successfully.`, type: 'success' });
+      } else {
+        setNotification({ title: "Update Failed", message: errBody?.error || 'Could not update time.', type: 'error' });
+      }
+    } catch (e: any) {
+      setNotification({ title: "Failed", message: e?.message || 'Could not update time.', type: 'error' });
+    }
+  };
+
+  const deleteTimeEntry = async (entryId: string) => {
+    if (!confirm('Delete this time entry?')) return;
+    const currentUser = user || (await supabase.auth.getUser()).data?.user;
+    if (!currentUser) { setShowAuth(true); return; }
+    const { data: { session } } = await supabase.auth.getSession();
+    const accessToken = session?.access_token;
+    if (!accessToken) {
+      setNotification({ title: "Session Error", message: "Please sign in again.", type: 'info' });
+      return;
+    }
+    setDeletingTimeEntryId(entryId);
+    try {
+      const res = await fetch('/api/delete-time-entry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accessToken, entryId }),
+      });
+      const errBody = !res.ok ? await res.json().catch(() => ({})) : {};
+      if (res.ok) {
+        setTimeEntries(prev => prev.filter(t => t.id !== entryId));
+        setNotification({ title: "Entry Deleted", message: "Time entry removed.", type: 'success' });
+      } else {
+        setNotification({ title: "Delete Failed", message: errBody?.error || 'Could not delete entry.', type: 'error' });
+      }
+    } catch (e: any) {
+      setNotification({ title: "Failed", message: e?.message || 'Could not delete entry.', type: 'error' });
+    } finally {
+      setDeletingTimeEntryId(null);
+    }
+  };
+
+  const openEditTimeModal = (e: any) => {
+    setEditingTimeEntryId(e.id);
+    setLogTimeItemId(e.inventory_id || null);
+    setLogTimeHours((Number(e.duration_minutes) / 60).toFixed(2));
+    setLogTimeNote(e.note || '');
+    setLogTimeAllowItemSelect(true);
+    setShowLogTimeModal(true);
+  };
+
   const filteredInventory = useMemo(() => {
     return inventory.filter(item => {
       const lowerTerm = searchTerm.toLowerCase();
@@ -3334,9 +3430,9 @@ export default function Home() {
       {showLogTimeModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-5">
-            <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Log Time</h3>
+            <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">{editingTimeEntryId ? 'Edit Time Entry' : 'Log Time'}</h3>
             <p className="text-[10px] text-stone-400 font-bold uppercase">
-              {logTimeItemId ? `Add time to: ${inventory.find(i => i.id === logTimeItemId)?.name || 'Piece'}` : 'Log general shop time (unassigned)'}
+              {editingTimeEntryId ? (logTimeItemId ? `Assigned to: ${inventory.find(i => i.id === logTimeItemId)?.name || 'Piece'}` : 'General / unassigned') : (logTimeItemId ? `Add time to: ${inventory.find(i => i.id === logTimeItemId)?.name || 'Piece'}` : 'Log general shop time (unassigned)')}
             </p>
             {logTimeAllowItemSelect && (
               <div>
@@ -3376,8 +3472,12 @@ export default function Home() {
               />
             </div>
             <div className="flex gap-3">
-              <button onClick={() => { setShowLogTimeModal(false); setLogTimeItemId(null); setLogTimeHours(''); setLogTimeNote(''); setLogTimeAllowItemSelect(false); }} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
-              <button onClick={saveTimeEntry} disabled={!logTimeHours || parseFloat(logTimeHours) <= 0} className={`flex-1 py-4 rounded-2xl font-black text-[10px] uppercase transition shadow-lg ${!logTimeHours || parseFloat(logTimeHours) <= 0 ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-[#A5BEAC] text-white hover:bg-slate-900'}`}>Add time</button>
+              <button onClick={() => { setShowLogTimeModal(false); setEditingTimeEntryId(null); setLogTimeItemId(null); setLogTimeHours(''); setLogTimeNote(''); setLogTimeAllowItemSelect(false); }} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
+              {editingTimeEntryId ? (
+                <button onClick={updateTimeEntry} disabled={!logTimeHours || parseFloat(logTimeHours) <= 0} className={`flex-1 py-4 rounded-2xl font-black text-[10px] uppercase transition shadow-lg ${!logTimeHours || parseFloat(logTimeHours) <= 0 ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-[#A5BEAC] text-white hover:bg-slate-900'}`}>Update</button>
+              ) : (
+                <button onClick={saveTimeEntry} disabled={!logTimeHours || parseFloat(logTimeHours) <= 0} className={`flex-1 py-4 rounded-2xl font-black text-[10px] uppercase transition shadow-lg ${!logTimeHours || parseFloat(logTimeHours) <= 0 ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-[#A5BEAC] text-white hover:bg-slate-900'}`}>Add time</button>
+              )}
             </div>
           </div>
         </div>
@@ -4823,7 +4923,7 @@ export default function Home() {
                               )}
                               <button
                                 type="button"
-                                onClick={() => { setLogTimeItemId(item.id); setLogTimeAllowItemSelect(false); setLogTimeHours(''); setLogTimeNote(''); setShowLogTimeModal(true); }}
+                                onClick={() => { setEditingTimeEntryId(null); setLogTimeItemId(item.id); setLogTimeAllowItemSelect(false); setLogTimeHours(''); setLogTimeNote(''); setShowLogTimeModal(true); }}
                                 className="mt-1.5 py-1 px-2 rounded-lg text-[8px] font-black uppercase bg-[#A5BEAC]/20 text-[#A5BEAC] hover:bg-[#A5BEAC]/30 transition"
                               >
                                 Log time
@@ -5166,6 +5266,7 @@ export default function Home() {
                   onClick={() => {
                     setLogTimeItemId(null);
                     setLogTimeAllowItemSelect(true);
+                    setEditingTimeEntryId(null);
                     setLogTimeHours('');
                     setLogTimeNote('');
                     setShowLogTimeModal(true);
@@ -5224,6 +5325,7 @@ export default function Home() {
                             <button
                               type="button"
                               onClick={() => {
+                                setEditingTimeEntryId(null);
                                 setLogTimeItemId(null);
                                 setLogTimeAllowItemSelect(true);
                                 setLogTimeHours((timerPausedElapsed / 3600).toFixed(2));
@@ -5321,14 +5423,34 @@ export default function Home() {
                           const date = new Date(e.created_at);
                           const itemName = e.inventory_id ? (inventory.find((i: any) => i.id === e.inventory_id)?.name || 'Piece') : 'General';
                           const hrs = (Number(e.duration_minutes) / 60).toFixed(2);
+                          const isDeleting = deletingTimeEntryId === e.id;
                           return (
                             <div key={e.id} className="flex items-center justify-between gap-4 py-3 px-4 rounded-xl border border-stone-200 bg-white hover:border-[#A5BEAC]/50 transition">
-                              <div className="min-w-0">
+                              <div className="min-w-0 flex-1">
                                 <p className="font-bold text-slate-900 truncate">{itemName}</p>
                                 <p className="text-[10px] text-stone-500">{date.toLocaleDateString()} {date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                                 {e.note && <p className="text-[10px] text-stone-400 mt-0.5 truncate">{e.note}</p>}
                               </div>
-                              <span className="text-sm font-black text-[#A5BEAC] shrink-0">{hrs}h</span>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span className="text-sm font-black text-[#A5BEAC]">{hrs}h</span>
+                                <button
+                                  type="button"
+                                  onClick={() => openEditTimeModal(e)}
+                                  className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 hover:bg-stone-100 hover:text-[#A5BEAC] transition"
+                                  title="Edit"
+                                >
+                                  <span className="text-xs">✎</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => deleteTimeEntry(e.id)}
+                                  disabled={isDeleting}
+                                  className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 hover:bg-red-50 hover:text-red-600 transition disabled:opacity-50"
+                                  title="Delete"
+                                >
+                                  {isDeleting ? <span className="text-[10px] animate-pulse">…</span> : <span className="text-xs">🗑</span>}
+                                </button>
+                              </div>
                             </div>
                           );
                         })}
