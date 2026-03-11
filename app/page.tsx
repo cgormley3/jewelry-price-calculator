@@ -71,6 +71,7 @@ export default function Home() {
   // Vault+ subscription
   const [subscriptionStatus, setSubscriptionStatus] = useState<{ subscribed: boolean } | null>(null);
   const [showVaultPlusModal, setShowVaultPlusModal] = useState(false);
+  const [pendingVaultPlusAfterAuth, setPendingVaultPlusAfterAuth] = useState(false);
   const [vaultPaywallHasItems, setVaultPaywallHasItems] = useState(false);
   const [vaultDiagnostic, setVaultDiagnostic] = useState<string | null>(null);
 
@@ -364,7 +365,10 @@ export default function Home() {
       if (openMenuId && !target.closest('.item-menu-container')) setOpenMenuId(null);
       if (showLocationMenuId && !target.closest('.location-menu-container')) setShowLocationMenuId(null);
       if (showTagMenuId && !target.closest('.tag-menu-container')) { setShowTagMenuId(null); setNewTagInput(''); }
-      if (showAuth && !target.closest('.auth-menu-container')) setShowAuth(false);
+      if (showAuth && !target.closest('.auth-menu-container')) {
+        setShowAuth(false);
+        setPendingVaultPlusAfterAuth(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -820,7 +824,7 @@ export default function Home() {
         setLocations(['Main Vault']);
         setVaultPaywallHasItems(!!err?.hasItems);
         if (err?.code !== 'PAYWALL_VAULT') {
-          setNotification({ title: 'Vault Load Failed', message: err?.error || 'Upgrade to Vault+ to access your vault.', type: 'info' });
+          setNotification({ title: 'Vault Load Failed', message: err?.error || 'Upgrade to Vault+ ($20 flat for the year) to access your vault.', type: 'info' });
         }
         const resProfile = await fetch(`/api/profile?accessToken=${encodeURIComponent(accessToken)}`);
         if (resProfile.ok) {
@@ -2046,7 +2050,7 @@ export default function Home() {
     const { data: { session } } = await supabase.auth.getSession();
     let accessToken = (session as any)?.access_token;
     if (!accessToken) {
-      setNotification({ title: 'Sign in required', message: 'Please sign in to upgrade to Vault+.', type: 'info' });
+      setNotification({ title: 'Sign in required', message: 'Please sign in to upgrade to Vault+ ($20 flat for the year).', type: 'info' });
       setShowAuth(true);
       setShowVaultPlusModal(false);
       return;
@@ -2054,7 +2058,7 @@ export default function Home() {
     const { data: { session: refreshed } } = await supabase.auth.refreshSession();
     accessToken = (refreshed as any)?.access_token ?? accessToken;
     if (!accessToken || !user?.id) {
-      setNotification({ title: 'Sign in required', message: 'Please sign in to upgrade to Vault+.', type: 'info' });
+      setNotification({ title: 'Sign in required', message: 'Please sign in to upgrade to Vault+ ($20 flat for the year).', type: 'info' });
       setShowAuth(true);
       setShowVaultPlusModal(false);
       return;
@@ -2583,6 +2587,10 @@ export default function Home() {
       setShowAuth(false);
       setShowPassword(false);
       fetchInventory();
+      if (pendingVaultPlusAfterAuth) {
+        setPendingVaultPlusAfterAuth(false);
+        setShowVaultPlusModal(true);
+      }
     }
   };
 
@@ -2622,6 +2630,10 @@ export default function Home() {
       }
       setShowAuth(false);
       fetchInventory();
+      if (pendingVaultPlusAfterAuth) {
+        setPendingVaultPlusAfterAuth(false);
+        setShowVaultPlusModal(true);
+      }
       setNotification({ title: "Welcome to the Vault", message: "Your Google account is now linked. Your items are preserved.", type: 'success' });
       return;
     }
@@ -2636,6 +2648,10 @@ export default function Home() {
     } else {
       setShowAuth(false);
       fetchInventory();
+      if (pendingVaultPlusAfterAuth) {
+        setPendingVaultPlusAfterAuth(false);
+        setShowVaultPlusModal(true);
+      }
       setNotification({ title: "Welcome to the Vault", message: "Successfully logged in via Google.", type: 'success' });
     }
   };
@@ -2902,18 +2918,48 @@ export default function Home() {
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-6">
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Upgrade to Vault+</h3>
-            <p className="text-sm text-stone-600 font-medium">
-              Save vault items, log time, and use custom formulas. Vault+ unlocks everything.
-            </p>
-            <ul className="text-[10px] font-bold text-stone-500 uppercase tracking-wider space-y-2">
-              <li className="flex items-center gap-2"><span className="text-[#A5BEAC]">✓</span> Unlimited vault items</li>
-              <li className="flex items-center gap-2"><span className="text-[#A5BEAC]">✓</span> Time tracking</li>
-              <li className="flex items-center gap-2"><span className="text-[#A5BEAC]">✓</span> Custom price formulas</li>
-            </ul>
-            <div className="flex gap-3">
-              <button onClick={() => setShowVaultPlusModal(false)} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Maybe later</button>
-              <button onClick={initiateVaultPlusCheckout} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition shadow-lg">Get Vault+</button>
-            </div>
+            {(!user || user.is_anonymous) ? (
+              <>
+                <p className="text-sm text-stone-600 font-medium">
+                  Create your free Vault account first. Then upgrade for $20 flat for the year and unlock everything.
+                </p>
+                <ul className="text-[10px] font-bold text-stone-500 uppercase tracking-wider space-y-2">
+                  <li className="flex items-center gap-2"><span className="text-[#A5BEAC]">✓</span> Unlimited vault items</li>
+                  <li className="flex items-center gap-2"><span className="text-[#A5BEAC]">✓</span> Time tracking</li>
+                  <li className="flex items-center gap-2"><span className="text-[#A5BEAC]">✓</span> Custom price formulas</li>
+                </ul>
+                <div className="flex gap-3">
+                  <button onClick={() => setShowVaultPlusModal(false)} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Maybe later</button>
+                  <button
+                    onClick={() => {
+                      setPendingVaultPlusAfterAuth(true);
+                      setShowVaultPlusModal(false);
+                      setShowAuth(true);
+                      setIsSignUp(true);
+                      setShowPassword(false);
+                    }}
+                    className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition shadow-lg"
+                  >
+                    Sign Up to Continue
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-stone-600 font-medium">
+                  Save vault items, log time, and use custom formulas. Vault+ unlocks everything—$20 flat for the year.
+                </p>
+                <ul className="text-[10px] font-bold text-stone-500 uppercase tracking-wider space-y-2">
+                  <li className="flex items-center gap-2"><span className="text-[#A5BEAC]">✓</span> Unlimited vault items</li>
+                  <li className="flex items-center gap-2"><span className="text-[#A5BEAC]">✓</span> Time tracking</li>
+                  <li className="flex items-center gap-2"><span className="text-[#A5BEAC]">✓</span> Custom price formulas</li>
+                </ul>
+                <div className="flex gap-3">
+                  <button onClick={() => setShowVaultPlusModal(false)} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Maybe later</button>
+                  <button onClick={initiateVaultPlusCheckout} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition shadow-lg">Get Vault+</button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -3419,8 +3465,8 @@ export default function Home() {
       <div className="max-w-7xl mx-auto flex flex-col min-h-[calc(100dvh-2rem)] gap-6 md:min-h-0 md:space-y-6 md:gap-0">
         {/* HEADER */}
         <div className="flex flex-col md:flex-row justify-between items-center bg-white px-6 py-8 rounded-[2rem] border-2 shadow-sm gap-8 shrink-0 relative border-[#A5BEAC]">
-          {/* Upgrade to Vault+ - left on desktop, top on mobile */}
-          {user && !user.is_anonymous && subscriptionStatus && !subscriptionStatus.subscribed && (
+          {/* Upgrade to Vault+ - left on desktop, top on mobile. Show when not subscribed (incl. not logged in) */}
+          {(!user || user.is_anonymous || !subscriptionStatus?.subscribed) && (
             <>
               <div className="hidden md:flex md:w-1/4 items-center">
                 <button
@@ -3440,7 +3486,7 @@ export default function Home() {
               </div>
             </>
           )}
-          {(!user || user.is_anonymous || !subscriptionStatus || subscriptionStatus.subscribed) && (
+          {user && !user.is_anonymous && subscriptionStatus?.subscribed && (
             <div className="hidden md:block md:w-1/4"></div>
           )}
           <div className="flex flex-col items-center justify-center text-center w-full md:w-2/4">
@@ -3512,7 +3558,7 @@ export default function Home() {
               )}
               {showAuth ? (
                 <div className="absolute right-0 mt-12 w-full md:w-80 bg-white p-6 rounded-3xl border-2 border-[#A5BEAC] shadow-2xl z-[100] animate-in fade-in slide-in-from-top-2 mx-auto auth-menu-container">
-                  <button onClick={() => { setShowAuth(false); setShowPassword(false); setSignUpAwaitingConfirmation(false); }} className="absolute top-4 right-4 text-stone-300 hover:text-[#A5BEAC] font-black text-sm">✕</button>
+                  <button onClick={() => { setShowAuth(false); setShowPassword(false); setSignUpAwaitingConfirmation(false); setPendingVaultPlusAfterAuth(false); }} className="absolute top-4 right-4 text-stone-300 hover:text-[#A5BEAC] font-black text-sm">✕</button>
                   <h3 className="text-sm font-black uppercase mb-4 text-center text-slate-900">Vault Access</h3>
                   {signUpAwaitingConfirmation ? (
                     <div className="space-y-4">
@@ -4327,7 +4373,7 @@ export default function Home() {
                 <div className="p-12 text-center space-y-4">
                   {subscriptionStatus && !subscriptionStatus.subscribed && vaultPaywallHasItems ? (
                     <>
-                      <p className="text-stone-600 font-bold uppercase text-xs tracking-wider">To see your items upgrade to Vault+</p>
+                      <p className="text-stone-600 font-bold uppercase text-xs tracking-wider">To see your items upgrade to Vault+ ($20 flat for the year)</p>
                       <div className="flex flex-col sm:flex-row gap-2 items-center justify-center">
                         <button onClick={() => setShowVaultPlusModal(true)} className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-[#A5BEAC] text-white hover:bg-slate-900 transition shadow-sm">
                           Upgrade to Vault+
