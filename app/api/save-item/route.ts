@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || '';
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() || '';
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || '';
   if (!supabaseUrl || !supabaseServiceKey) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
@@ -12,13 +13,30 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { newItem, itemId } = body;
+    const { newItem, itemId, accessToken } = body;
 
     if (!newItem?.name) {
       return NextResponse.json({ error: 'Missing name' }, { status: 400 });
     }
 
+    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey);
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    if (!accessToken) {
+      return NextResponse.json({ error: 'Missing access token' }, { status: 400 });
+    }
+    const { data: { user }, error: userError } = await supabaseAuth.auth.getUser(accessToken);
+    if (userError || !user?.id) {
+      return NextResponse.json({ error: userError?.message || 'Invalid or expired session' }, { status: 401 });
+    }
+    if (newItem.user_id && newItem.user_id !== user.id) {
+      return NextResponse.json({ error: 'Session mismatch' }, { status: 403 });
+    }
+    const { data: sub } = await supabase.from('subscriptions').select('status, current_period_end').eq('user_id', user.id).single();
+    const subscribed = !!(sub && sub.status === 'active' && sub.current_period_end && new Date(sub.current_period_end) > new Date());
+    if (!subscribed) {
+      return NextResponse.json({ error: 'Upgrade to Vault+ to save items', code: 'PAYWALL_VAULT' }, { status: 402 });
+    }
 
     if (itemId) {
       const updatePayload: Record<string, unknown> = {

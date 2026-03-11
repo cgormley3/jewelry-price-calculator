@@ -59,7 +59,13 @@ export default function Home() {
   const [includeLiveInPDF, setIncludeLiveInPDF] = useState(true);
   const [includeBreakdownInPDF, setIncludeBreakdownInPDF] = useState(true);
 
-  // Shopify
+  // Vault+ subscription
+  const [subscriptionStatus, setSubscriptionStatus] = useState<{ subscribed: boolean } | null>(null);
+  const [showVaultPlusModal, setShowVaultPlusModal] = useState(false);
+  const [vaultPaywallHasItems, setVaultPaywallHasItems] = useState(false);
+
+  // Shopify – set SHOPIFY_FEATURE_ENABLED = true when app is published
+  const SHOPIFY_FEATURE_ENABLED = false;
   const [shopifyConnected, setShopifyConnected] = useState(false);
   const [shopifyShop, setShopifyShop] = useState<string | null>(null);
   const [showShopifyConnectModal, setShowShopifyConnectModal] = useState(false);
@@ -224,9 +230,19 @@ export default function Home() {
     else if (stored === 'none') setPriceRounding('none');
   }, []);
 
-  // Handle Shopify OAuth callback URL params
+  // Refetch subscription when returning from Stripe (vaultplus=1)
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('vaultplus') === '1') {
+      window.history.replaceState({}, '', window.location.pathname);
+      if (user?.id) fetchInventory();
+    }
+  }, [user?.id]);
+
+  // Handle Shopify OAuth callback URL params
+  useEffect(() => {
+    if (typeof window === 'undefined' || !SHOPIFY_FEATURE_ENABLED) return;
     const params = new URLSearchParams(window.location.search);
     const connected = params.get('shopify_connected');
     const error = params.get('shopify_error');
@@ -672,6 +688,7 @@ export default function Home() {
       if (res.ok) {
         const data = await res.json();
         setInventory(Array.isArray(data) ? data : []);
+        setVaultPaywallHasItems(false);
         const items = Array.isArray(data) ? data : [];
         const uniqueLocs = Array.from(new Set(items.map((i: any) => i.location).filter(Boolean)));
         setLocations(prev => Array.from(new Set([...prev, ...uniqueLocs])));
@@ -705,16 +722,39 @@ export default function Home() {
           const timeData = await resTime.json();
           setTimeEntries(Array.isArray(timeData) ? timeData : []);
         }
-        // Shopify connection status
-        const resShopify = await fetch('/api/shopify/status', {
+        if (SHOPIFY_FEATURE_ENABLED) {
+          const resShopify = await fetch('/api/shopify/status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accessToken, userId: session.user.id }),
+          });
+          if (resShopify.ok) {
+            const shopifyData = await resShopify.json();
+            setShopifyConnected(!!shopifyData.connected);
+            setShopifyShop(shopifyData.shop || null);
+          }
+        }
+        const resSub = await fetch('/api/subscription/status', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ accessToken, userId: session.user.id }),
         });
-        if (resShopify.ok) {
-          const shopifyData = await resShopify.json();
-          setShopifyConnected(!!shopifyData.connected);
-          setShopifyShop(shopifyData.shop || null);
+        if (resSub.ok) {
+          const subData = await resSub.json();
+          setSubscriptionStatus({ subscribed: !!subData.subscribed });
+        } else {
+          setSubscriptionStatus({ subscribed: false });
+        }
+      } else if (res.status === 402) {
+        const err = await res.json().catch(() => ({}));
+        setSubscriptionStatus({ subscribed: false });
+        setInventory([]);
+        setLocations(['Main Vault']);
+        setVaultPaywallHasItems(!!err?.hasItems);
+        if (err?.code === 'PAYWALL_VAULT') {
+          setShowVaultPlusModal(true);
+        } else {
+          setNotification({ title: 'Vault Load Failed', message: err?.error || 'Upgrade to Vault+ to access your vault.', type: 'info' });
         }
       } else {
         const err = await res.json().catch(() => ({}));
@@ -1332,6 +1372,10 @@ export default function Home() {
       }
     }
     if (!currentUser) { setShowAuth(true); return; }
+    if (subscriptionStatus && !subscriptionStatus.subscribed) {
+      setShowVaultPlusModal(true);
+      return;
+    }
     // Only require Turnstile verification if site key is configured (production)
     if (isGuest && !token && hasTurnstile) {
       setNotification({ title: "Verification Required", message: "Please complete the human verification to save items as a guest.", type: 'info' });
@@ -1429,13 +1473,19 @@ export default function Home() {
 
     setSavingToVault(true);
     try {
-      // Use API route (service role) - bypasses client RLS/connection issues
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = (session as any)?.access_token;
+      if (!accessToken) {
+        setNotification({ title: 'Session Error', message: 'Could not get access token. Try signing in again.', type: 'error' });
+        setSavingToVault(false);
+        return;
+      }
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15000);
       const res = await fetch('/api/save-item', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ newItem, itemId: editingItemId || undefined }),
+        body: JSON.stringify({ newItem, itemId: editingItemId || undefined, accessToken }),
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
@@ -1446,7 +1496,9 @@ export default function Home() {
       } else {
         errBody = await res.json().catch(() => ({}));
       }
-      if (res.ok && data) {
+      if (res.status === 402 && errBody?.code === 'PAYWALL_VAULT') {
+        setShowVaultPlusModal(true);
+      } else if (res.ok && data) {
         if (editingItemId) {
           setInventory(prev => prev.map(i => i.id === editingItemId ? { ...i, ...data } : i));
           setNotification({ title: "Item Updated", message: `"${newItem.name}" now has metals and pricing.`, type: 'success' });
@@ -1519,6 +1571,11 @@ export default function Home() {
       } catch (_) {}
       if (!currentUser) { setShowAuth(true); setShowQuickAddPiece(false); return; }
     }
+    if (subscriptionStatus && !subscriptionStatus.subscribed) {
+      setShowVaultPlusModal(true);
+      setShowQuickAddPiece(false);
+      return;
+    }
     if (isGuest && !token && hasTurnstile) {
       setNotification({ title: "Verification Required", message: "Please complete verification to save.", type: 'info' });
       return;
@@ -1549,14 +1606,24 @@ export default function Home() {
     };
     setSavingToVault(true);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = (session as any)?.access_token;
+      if (!accessToken) {
+        setNotification({ title: "Session Error", message: "Please sign in again.", type: 'error' });
+        setSavingToVault(false);
+        return;
+      }
       const res = await fetch('/api/save-item', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ newItem }),
+        body: JSON.stringify({ newItem, accessToken }),
       });
       const data = res.ok ? await res.json() : null;
       const errBody = !res.ok ? await res.json().catch(() => ({})) : {};
-      if (res.ok && data) {
+      if (res.status === 402 && errBody?.code === 'PAYWALL_VAULT') {
+        setShowVaultPlusModal(true);
+        setShowQuickAddPiece(false);
+      } else if (res.ok && data) {
         setInventory(prev => [data, ...prev]);
         setQuickAddPieceName('');
         setShowQuickAddPiece(false);
@@ -1579,6 +1646,10 @@ export default function Home() {
     }
     const currentUser = user || (await supabase.auth.getUser()).data?.user;
     if (!currentUser) { setShowAuth(true); return; }
+    if (subscriptionStatus && !subscriptionStatus.subscribed) {
+      setShowVaultPlusModal(true);
+      return;
+    }
     const { data: { session } } = await supabase.auth.getSession();
     const accessToken = session?.access_token;
     if (!accessToken) {
@@ -1600,7 +1671,9 @@ export default function Home() {
       });
       const data = res.ok ? await res.json() : null;
       const errBody = !res.ok ? await res.json().catch(() => ({})) : {};
-      if (res.ok && data) {
+      if (res.status === 402 && errBody?.code === 'PAYWALL_TIME') {
+        setShowVaultPlusModal(true);
+      } else if (res.ok && data) {
         setTimeEntries(prev => [data, ...prev]);
         setShowLogTimeModal(false);
         setLogTimeItemId(null);
@@ -1887,6 +1960,63 @@ export default function Home() {
       window.location.href = data.redirectUrl;
     } catch (e: any) {
       setNotification({ title: 'Connection Failed', message: e?.message || 'Could not connect.', type: 'info' });
+    }
+  };
+
+  const initiateVaultPlusCheckout = async () => {
+    const session = (await supabase.auth.getSession()).data.session;
+    const accessToken = (session as any)?.access_token;
+    if (!accessToken || !user?.id) {
+      setNotification({ title: 'Sign in required', message: 'Please sign in to upgrade to Vault+.', type: 'info' });
+      setShowAuth(true);
+      setShowVaultPlusModal(false);
+      return;
+    }
+    try {
+      const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+      const res = await fetch('/api/stripe/create-checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accessToken,
+          userId: user.id,
+          successUrl: `${origin}?vaultplus=1`,
+          cancelUrl: origin,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data?.url) {
+        window.location.href = data.url;
+      } else {
+        setNotification({ title: 'Checkout error', message: data?.error || 'Could not start checkout.', type: 'error' });
+      }
+    } catch (e: any) {
+      setNotification({ title: 'Checkout error', message: e?.message || 'Could not start checkout.', type: 'error' });
+    }
+  };
+
+  const initiateManageSubscription = async () => {
+    const session = (await supabase.auth.getSession()).data.session;
+    const accessToken = (session as any)?.access_token;
+    if (!accessToken) {
+      setNotification({ title: 'Sign in required', message: 'Please sign in to manage your subscription.', type: 'info' });
+      setShowAuth(true);
+      return;
+    }
+    try {
+      const res = await fetch('/api/stripe/create-portal-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accessToken }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data?.url) {
+        window.location.href = data.url;
+      } else {
+        setNotification({ title: 'Manage subscription', message: data?.error || 'Could not open subscription settings.', type: 'error' });
+      }
+    } catch (e: any) {
+      setNotification({ title: 'Manage subscription', message: e?.message || 'Could not open subscription settings.', type: 'error' });
     }
   };
 
@@ -2437,6 +2567,27 @@ export default function Home() {
         </div>
       )}
 
+      {/* Vault+ Upgrade Modal */}
+      {showVaultPlusModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-6">
+            <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Upgrade to Vault+</h3>
+            <p className="text-sm text-stone-600 font-medium">
+              Save vault items, log time, and use custom formulas. Vault+ unlocks everything.
+            </p>
+            <ul className="text-[10px] font-bold text-stone-500 uppercase tracking-wider space-y-2">
+              <li className="flex items-center gap-2"><span className="text-[#A5BEAC]">✓</span> Unlimited vault items</li>
+              <li className="flex items-center gap-2"><span className="text-[#A5BEAC]">✓</span> Time tracking</li>
+              <li className="flex items-center gap-2"><span className="text-[#A5BEAC]">✓</span> Custom price formulas</li>
+            </ul>
+            <div className="flex gap-3">
+              <button onClick={() => setShowVaultPlusModal(false)} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Maybe later</button>
+              <button onClick={initiateVaultPlusCheckout} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition shadow-lg">Get Vault+</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* PDF Options Modal */}
       {showPDFOptions && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
@@ -2474,8 +2625,8 @@ export default function Home() {
         </div>
       )}
 
-      {/* Connect Shopify Modal */}
-      {showShopifyConnectModal && (
+      {/* Connect Shopify Modal – hidden when SHOPIFY_FEATURE_ENABLED is false */}
+      {SHOPIFY_FEATURE_ENABLED && showShopifyConnectModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-6">
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Connect Shopify</h3>
@@ -2495,8 +2646,8 @@ export default function Home() {
         </div>
       )}
 
-      {/* Export to Shopify Options Modal */}
-      {showShopifyExportOptions && (
+      {/* Export to Shopify Options Modal – hidden when SHOPIFY_FEATURE_ENABLED is false */}
+      {SHOPIFY_FEATURE_ENABLED && showShopifyExportOptions && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-6">
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Export to Shopify</h3>
@@ -2548,8 +2699,8 @@ export default function Home() {
         </div>
       )}
 
-      {/* Shopify Export Progress Modal */}
-      {shopifyExportProgress === 'exporting' && (
+      {/* Shopify Export Progress Modal – hidden when SHOPIFY_FEATURE_ENABLED is false */}
+      {SHOPIFY_FEATURE_ENABLED && shopifyExportProgress === 'exporting' && (
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[400] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] border-2 border-[#A5BEAC] p-10 space-y-6 shadow-2xl animate-in zoom-in-95 text-center">
             <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto bg-[#A5BEAC]/20 animate-pulse">
@@ -2561,8 +2712,8 @@ export default function Home() {
         </div>
       )}
 
-      {/* Shopify Export Confirmation Modal */}
-      {shopifyExportProgress && shopifyExportProgress !== 'exporting' && (
+      {/* Shopify Export Confirmation Modal – hidden when SHOPIFY_FEATURE_ENABLED is false */}
+      {SHOPIFY_FEATURE_ENABLED && shopifyExportProgress && shopifyExportProgress !== 'exporting' && (
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[400] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] border-2 border-[#A5BEAC] p-10 space-y-6 shadow-2xl animate-in zoom-in-95 text-center">
             <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto bg-[#A5BEAC]/10 text-[#A5BEAC]">
@@ -3435,7 +3586,14 @@ export default function Home() {
                   {!customStrategyExpanded ? (
                     <button
                       type="button"
-                      onClick={() => { setCustomStrategyExpanded(true); setStrategy('custom'); }}
+                      onClick={() => {
+                        if (subscriptionStatus && !subscriptionStatus.subscribed) {
+                          setShowVaultPlusModal(true);
+                          return;
+                        }
+                        setCustomStrategyExpanded(true);
+                        setStrategy('custom');
+                      }}
                       className="w-full flex items-center justify-between gap-2 py-3 px-4 rounded-xl border-2 border-dashed border-stone-200 bg-stone-50/50 hover:border-[#A5BEAC]/50 hover:bg-stone-50 text-left transition-colors group"
                     >
                       <span className="text-[10px] font-black uppercase tracking-wider text-stone-500 group-hover:text-[#A5BEAC]">Add Custom Price Formula</span>
@@ -3448,7 +3606,13 @@ export default function Home() {
                     <div className="w-full p-5">
                       <button
                         type="button"
-                        onClick={() => setStrategy('custom')}
+                        onClick={() => {
+                          if (subscriptionStatus && !subscriptionStatus.subscribed) {
+                            setShowVaultPlusModal(true);
+                            return;
+                          }
+                          setStrategy('custom');
+                        }}
                         className="w-full text-left"
                       >
                         <div className="flex items-center justify-between gap-2 mb-1">
@@ -3682,12 +3846,20 @@ export default function Home() {
                   >
                     Quick add piece
                   </button>
+                  {subscriptionStatus?.subscribed && (
+                    <button
+                      onClick={() => { initiateManageSubscription(); setShowVaultMenu(false); }}
+                      className="min-h-[48px] sm:min-h-0 px-4 rounded-xl text-[10px] font-black uppercase bg-white text-slate-700 border-2 border-stone-200 hover:border-[#A5BEAC] hover:bg-stone-50 transition shadow-sm flex items-center justify-center"
+                    >
+                      Manage Subscription
+                    </button>
+                  )}
                   {filteredInventory.length > 0 ? (
                     <div className="relative vault-menu-container min-h-[48px] sm:h-full">
                       <button
                         onClick={() => setShowVaultMenu(!showVaultMenu)}
                         className="vault-menu-trigger w-full h-full min-h-[48px] sm:min-h-0 sm:w-auto px-4 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 transition shadow-sm bg-stone-100 text-slate-700 hover:bg-stone-200 border border-stone-200"
-                        title="Select All, Connect Shopify"
+                        title={SHOPIFY_FEATURE_ENABLED ? "Select All, Connect Shopify" : "Select All, Export options"}
                       >
                         More {showVaultMenu ? '▲' : '▼'}
                       </button>
@@ -3705,7 +3877,7 @@ export default function Home() {
                             <button onClick={() => { setShowGlobalRecalc(true); setShowVaultMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
                               Recalculate {selectedItems.size > 0 ? `Selected (${selectedItems.size})` : 'All'}
                             </button>
-                            {shopifyConnected && (
+                            {SHOPIFY_FEATURE_ENABLED && shopifyConnected && (
                               <button onClick={() => { setShowShopifyExportOptions(true); setShowVaultMenu(false); }} disabled={shopifyExporting} className={`w-full px-4 py-3 text-left text-[10px] font-black uppercase border-b border-stone-100 transition-colors ${shopifyExporting ? 'text-stone-400 cursor-not-allowed' : 'text-slate-700 hover:bg-stone-50'}`}>
                                 {shopifyExporting ? 'Exporting…' : `Export to Shopify ${selectedItems.size > 0 ? `(${selectedItems.size})` : `(${filteredInventory.length})`}`}
                               </button>
@@ -3717,7 +3889,7 @@ export default function Home() {
                               Export CSV {selectedItems.size > 0 && `(${selectedItems.size})`}
                             </button>
                           </div>
-                          {shopifyConnected ? (
+                          {SHOPIFY_FEATURE_ENABLED && (shopifyConnected ? (
                             <div className="px-4 py-2 border-b border-stone-100 space-y-2">
                               <p className="text-[9px] font-bold text-[#A5BEAC] uppercase">Connected to {shopifyShop || 'Shopify'}</p>
                               <div className="flex gap-2">
@@ -3733,7 +3905,7 @@ export default function Home() {
                             <button onClick={() => { setShowShopifyConnectModal(true); setShowVaultMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
                               Connect Shopify
                             </button>
-                          )}
+                          ))}
                         </div>
                       )}
                     </div>
@@ -3741,7 +3913,7 @@ export default function Home() {
                     <button
                       disabled
                       className="min-h-[48px] sm:min-h-0 px-4 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 bg-stone-100 text-stone-400 cursor-not-allowed border border-stone-200"
-                      title="Add items to unlock Sync, Export, and Shopify"
+                      title={SHOPIFY_FEATURE_ENABLED ? "Add items to unlock Sync, Export, and Shopify" : "Add items to unlock Sync and Export"}
                     >
                       Vault Options
                     </button>
@@ -3758,7 +3930,7 @@ export default function Home() {
                       <button onClick={() => { setShowGlobalRecalc(true); }} className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase bg-white text-slate-700 border-2 border-stone-200 hover:border-[#A5BEAC] hover:bg-stone-50 transition shadow-sm">
                         Recalculate {selectedItems.size > 0 ? `Selected (${selectedItems.size})` : 'All'}
                       </button>
-                      {shopifyConnected && (
+                      {SHOPIFY_FEATURE_ENABLED && shopifyConnected && (
                         <button onClick={() => { setShowShopifyExportOptions(true); }} disabled={shopifyExporting} className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase transition shadow-sm ${shopifyExporting ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-white text-slate-700 border-2 border-stone-200 hover:border-[#A5BEAC] hover:bg-stone-50'}`}>
                           {shopifyExporting ? 'Exporting…' : `Export to Shopify ${selectedItems.size > 0 ? `(${selectedItems.size})` : `(${filteredInventory.length})`}`}
                         </button>
@@ -3778,8 +3950,17 @@ export default function Home() {
               {loading ? (
                 <div className="p-20 text-center text-stone-400 font-bold uppercase text-xs tracking-widest animate-pulse">Opening Vault...</div>
               ) : inventory.length === 0 && hasValidSupabaseCredentials ? (
-                <div className="p-12 text-center">
-                  <p className="text-stone-500 font-bold uppercase text-xs tracking-wider">No items yet</p>
+                <div className="p-12 text-center space-y-4">
+                  {subscriptionStatus && !subscriptionStatus.subscribed && vaultPaywallHasItems ? (
+                    <>
+                      <p className="text-stone-600 font-bold uppercase text-xs tracking-wider">To see your items upgrade to Vault+</p>
+                      <button onClick={() => setShowVaultPlusModal(true)} className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-[#A5BEAC] text-white hover:bg-slate-900 transition shadow-sm">
+                        Upgrade to Vault+
+                      </button>
+                    </>
+                  ) : (
+                    <p className="text-stone-500 font-bold uppercase text-xs tracking-wider">No items yet</p>
+                  )}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -4329,6 +4510,10 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={async () => {
+                        if (subscriptionStatus && !subscriptionStatus.subscribed) {
+                          setShowVaultPlusModal(true);
+                          return;
+                        }
                         if (!formulaDraftName.trim()) {
                           setNotification({ title: 'Name required', message: 'Please enter a name for your formula.', type: 'info' });
                           return;
@@ -4365,6 +4550,10 @@ export default function Home() {
                             setEditingFormulaId(null);
                             setFormulaDraftName('');
                             setNotification({ title: 'Formula saved', message: `"${formulaDraftName}" has been saved.`, type: 'success' });
+                          } else if (res.status === 402) {
+                            const err = await res.json().catch(() => ({}));
+                            if (err?.code === 'PAYWALL_FORMULAS') setShowVaultPlusModal(true);
+                            else setNotification({ title: 'Save failed', message: err?.error || 'Could not save formula.', type: 'error' });
                           } else {
                             const err = await res.json().catch(() => ({}));
                             setNotification({ title: 'Save failed', message: err?.error || 'Could not save formula.', type: 'error' });

@@ -13,13 +13,9 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { accessToken, userId, inventory_id, duration_minutes, note } = body;
+    const { accessToken, userId } = body;
     if (!accessToken) {
       return NextResponse.json({ error: 'Missing access token' }, { status: 400 });
-    }
-    const dur = Number(duration_minutes);
-    if (!Number.isFinite(dur) || dur <= 0) {
-      return NextResponse.json({ error: 'Invalid duration_minutes' }, { status: 400 });
     }
 
     const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey);
@@ -33,30 +29,22 @@ export async function POST(request: Request) {
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    const { data: sub } = await supabase.from('subscriptions').select('status, current_period_end').eq('user_id', resolvedUserId).single();
-    const subscribed = !!(sub && sub.status === 'active' && sub.current_period_end && new Date(sub.current_period_end) > new Date());
-    if (!subscribed) {
-      return NextResponse.json({ error: 'Upgrade to Vault+ to log time', code: 'PAYWALL_TIME' }, { status: 402 });
-    }
-
-    const { data, error } = await supabase
-      .from('time_entries')
-      .insert({
-        user_id: resolvedUserId,
-        inventory_id: inventory_id || null,
-        duration_minutes: dur,
-        note: (note || '').trim() || null,
-      })
-      .select()
+    const { data: sub } = await supabase
+      .from('subscriptions')
+      .select('status, current_period_end')
+      .eq('user_id', resolvedUserId)
       .single();
 
-    if (error) {
-      console.error('Save time entry error:', error);
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-    return NextResponse.json(data);
+    const subscribed = !!(
+      sub &&
+      sub.status === 'active' &&
+      sub.current_period_end &&
+      new Date(sub.current_period_end) > new Date()
+    );
+
+    return NextResponse.json({ subscribed });
   } catch (e: any) {
-    console.error('Save time entry exception:', e);
+    console.error('Subscription status error:', e);
     return NextResponse.json({ error: e?.message || 'Server error' }, { status: 500 });
   }
 }

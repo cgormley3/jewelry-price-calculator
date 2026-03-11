@@ -29,6 +29,18 @@ export async function POST(request: Request) {
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    const { data: sub } = await supabase.from('subscriptions').select('status, current_period_end').eq('user_id', resolvedUserId).single();
+    const subscribed = !!(sub && sub.status === 'active' && sub.current_period_end && new Date(sub.current_period_end) > new Date());
+
+    if (!subscribed) {
+      const { count } = await supabase.from('inventory').select('*', { count: 'exact', head: true }).eq('user_id', resolvedUserId);
+      return NextResponse.json(
+        { error: 'Upgrade to Vault+ to access your vault', code: 'PAYWALL_VAULT', hasItems: (count ?? 0) > 0 },
+        { status: 402 }
+      );
+    }
+
     const { data, error } = await supabase
       .from('inventory')
       .select('*')
