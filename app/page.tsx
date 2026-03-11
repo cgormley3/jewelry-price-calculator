@@ -3467,30 +3467,7 @@ export default function Home() {
       <div className="max-w-7xl mx-auto flex flex-col min-h-[calc(100dvh-2rem)] gap-6 md:min-h-0 md:space-y-6 md:gap-0">
         {/* HEADER */}
         <div className="flex flex-col md:flex-row justify-between items-center bg-white px-6 py-8 rounded-[2rem] border-2 shadow-sm gap-8 shrink-0 relative border-[#A5BEAC]">
-          {/* Upgrade to Vault+ - left on desktop, top on mobile. Show when not subscribed (incl. not logged in) */}
-          {(!user || user.is_anonymous || !subscriptionStatus?.subscribed) && (
-            <>
-              <div className="hidden md:flex md:w-1/4 items-center">
-                <button
-                  onClick={() => setShowVaultPlusModal(true)}
-                  className="text-[10px] font-black uppercase bg-[#A5BEAC] text-white px-6 py-2.5 rounded-xl hover:bg-slate-900 transition shadow-sm"
-                >
-                  Upgrade to Vault+
-                </button>
-              </div>
-              <div className="md:hidden w-full flex justify-center">
-                <button
-                  onClick={() => setShowVaultPlusModal(true)}
-                  className="text-[10px] font-black uppercase bg-[#A5BEAC] text-white px-6 py-2.5 rounded-xl hover:bg-slate-900 transition shadow-sm"
-                >
-                  Upgrade to Vault+
-                </button>
-              </div>
-            </>
-          )}
-          {user && !user.is_anonymous && subscriptionStatus?.subscribed && (
-            <div className="hidden md:block md:w-1/4"></div>
-          )}
+          <div className="hidden md:block md:w-1/4" />
           <div className="flex flex-col items-center justify-center text-center w-full md:w-2/4">
             <img src="/icon.png?v=2" alt="Logo" className="w-12 h-12 object-contain bg-transparent block brightness-110 contrast-125 mb-3" style={{ mixBlendMode: 'multiply' }} />
             <div className="flex flex-col items-center leading-none">
@@ -3501,20 +3478,23 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="flex flex-col items-center md:items-end justify-center gap-4 w-full md:w-1/4">
-            <div className="flex items-center gap-2">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400">{!user ? 'Vault Locked' : (user.is_anonymous ? 'Guest Mode' : `Vault: ${user.email?.split('@')[0]}`)}</p>
-              <div className={`w-2 h-2 rounded-full ${user ? 'bg-[#A5BEAC] animate-pulse' : 'bg-stone-300'}`}></div>
-            </div>
-            <div className="relative flex gap-2 w-full justify-center md:justify-end">
+          <div className="flex flex-col items-center md:items-end justify-center gap-3 w-full md:w-1/4">
+            <div className="relative flex flex-col items-center md:items-end gap-2 w-full">
               {(!user || user.is_anonymous) ? (
-                <button onClick={() => { setShowAuth(!showAuth); setShowPassword(false); }} className="text-[10px] font-black uppercase bg-slate-900 text-white px-8 py-3 rounded-xl hover:bg-[#A5BEAC] transition shadow-sm">Login / Sign Up</button>
+                <>
+                  <button onClick={() => { setShowAuth(!showAuth); setShowPassword(false); }} className="w-48 text-[10px] font-black uppercase bg-slate-900 text-white px-8 py-3 rounded-xl hover:bg-[#A5BEAC] transition shadow-sm">Login / Sign Up</button>
+                  {(!user || user.is_anonymous || !subscriptionStatus?.subscribed) && (
+                    <button onClick={() => setShowVaultPlusModal(true)} className="w-48 text-[10px] font-black uppercase bg-slate-900 text-white px-8 py-3 rounded-xl hover:bg-[#A5BEAC] transition shadow-sm">
+                      Upgrade to Vault+
+                    </button>
+                  )}
+                </>
               ) : (
                 <div className="relative account-menu-container">
                   <button
                     type="button"
                     onClick={() => setShowAccountMenu(!showAccountMenu)}
-                    className="text-[10px] font-black uppercase px-8 py-3 rounded-xl transition bg-stone-100 text-slate-900 hover:bg-stone-200 flex items-center gap-1.5"
+                    className="w-48 text-[10px] font-black uppercase px-8 py-3 rounded-xl transition bg-stone-100 text-slate-900 hover:bg-stone-200 flex items-center justify-center gap-1.5"
                   >
                     {profile?.logo_url ? (
                       <img src={profile.logo_url} alt="" className="w-6 h-6 rounded-full object-cover shrink-0" />
@@ -3523,13 +3503,15 @@ export default function Home() {
                   </button>
                   {showAccountMenu && (
                     <div className="absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[100] overflow-hidden animate-in fade-in slide-in-from-top-2">
-                      {subscriptionStatus?.subscribed ? (
+                      <div className="px-4 py-3 border-b border-stone-100 flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full shrink-0 ${user ? 'bg-[#A5BEAC] animate-pulse' : 'bg-stone-300'}`} />
+                        <span className="text-[10px] font-black uppercase text-slate-700 truncate">
+                          {profile?.company_name || profile?.display_name || user.email?.split('@')[0] || 'Account'}
+                        </span>
+                      </div>
+                      {subscriptionStatus?.subscribed && (
                         <button onClick={() => { initiateManageSubscription(); setShowAccountMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
                           Manage Subscription
-                        </button>
-                      ) : (
-                        <button onClick={() => { setShowVaultPlusModal(true); setShowAccountMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
-                          Upgrade to Vault+
                         </button>
                       )}
                       <button onClick={() => { setShowProfileModal(true); setShowAccountMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
@@ -3557,6 +3539,11 @@ export default function Home() {
                     </div>
                   )}
                 </div>
+              )}
+              {user && !user.is_anonymous && !subscriptionStatus?.subscribed && (
+                <button onClick={() => setShowVaultPlusModal(true)} className="w-48 text-[10px] font-black uppercase bg-slate-900 text-white px-8 py-3 rounded-xl hover:bg-[#A5BEAC] transition shadow-sm">
+                  Upgrade to Vault+
+                </button>
               )}
               {showAuth ? (
                 <div className="absolute right-0 mt-12 w-full md:w-80 bg-white p-6 rounded-3xl border-2 border-[#A5BEAC] shadow-2xl z-[100] animate-in fade-in slide-in-from-top-2 mx-auto auth-menu-container">
