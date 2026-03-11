@@ -34,7 +34,8 @@ export async function POST(request: Request) {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const { data: sub } = await supabase.from('subscriptions').select('status, current_period_end').eq('user_id', resolvedUserId).single();
-    const subscribed = !!(sub && sub.status === 'active' && sub.current_period_end && new Date(sub.current_period_end) > new Date());
+    const periodValid = !sub?.current_period_end || new Date(sub.current_period_end) > new Date();
+    const subscribed = !!(sub && String(sub.status).toLowerCase() === 'active' && periodValid);
     if (!subscribed) {
       return NextResponse.json({ error: 'Upgrade to Vault+ to log time', code: 'PAYWALL_TIME' }, { status: 402 });
     }

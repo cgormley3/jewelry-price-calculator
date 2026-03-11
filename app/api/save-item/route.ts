@@ -33,7 +33,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Session mismatch' }, { status: 403 });
     }
     const { data: sub } = await supabase.from('subscriptions').select('status, current_period_end').eq('user_id', user.id).single();
-    const subscribed = !!(sub && sub.status === 'active' && sub.current_period_end && new Date(sub.current_period_end) > new Date());
+    const periodValid = !sub?.current_period_end || new Date(sub.current_period_end) > new Date();
+    const subscribed = !!(sub && String(sub.status).toLowerCase() === 'active' && periodValid);
     if (!subscribed) {
       return NextResponse.json({ error: 'Upgrade to Vault+ to save items', code: 'PAYWALL_VAULT' }, { status: 402 });
     }
