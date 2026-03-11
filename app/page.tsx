@@ -2431,11 +2431,13 @@ export default function Home() {
         }
       }
 
+      const titleMetaGap = 5;
+      const titleY = currentY + (itemHeaderHeight > 14 ? 4 : 5);
       doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(dark[0], dark[1], dark[2]);
-      doc.text((item.name || '').toUpperCase(), titleX, currentY + (itemHeaderHeight > 14 ? 4 : 5));
+      doc.text((item.name || '').toUpperCase(), titleX, titleY);
       doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(muted[0], muted[1], muted[2]);
       const meta = `${item.status === 'archived' || item.status === 'sold' ? 'Archived' : 'Active'}  ·  ${item.location || 'Main Vault'}  ·  Saved ${new Date(item.created_at).toLocaleDateString()}`;
-      doc.text(meta, titleX, currentY + (itemHeaderHeight > 14 ? 11 : 10));
+      doc.text(meta, titleX, titleY + titleMetaGap);
       currentY += itemHeaderHeight;
 
       const tableStartY = currentY;
@@ -4275,15 +4277,25 @@ export default function Home() {
                     Quick add piece
                   </button>
                   {filteredInventory.length > 0 ? (
-                    <div className="relative vault-menu-container min-h-[48px] sm:h-full">
+                    <>
+                      {/* Desktop: Select All as standalone button */}
                       <button
-                        onClick={() => setShowVaultMenu(!showVaultMenu)}
-                        className="vault-menu-trigger w-full h-full min-h-[48px] sm:min-h-0 sm:w-auto px-4 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 transition shadow-sm bg-stone-100 text-slate-700 hover:bg-stone-200 border border-stone-200"
-                        title={SHOPIFY_FEATURE_ENABLED ? "Select All, Connect Shopify" : "Select All, Export options"}
+                        onClick={toggleSelectAll}
+                        className="hidden md:flex px-4 rounded-xl text-[10px] font-black uppercase items-center justify-center gap-2 transition shadow-sm bg-stone-100 text-slate-700 hover:bg-stone-200 border border-stone-200"
+                        title={selectedItems.size === filteredInventory.length && filteredInventory.length > 0 ? 'Deselect all' : 'Select all items'}
                       >
-                        More {showVaultMenu ? '▲' : '▼'}
+                        {selectedItems.size === filteredInventory.length && filteredInventory.length > 0 ? 'Deselect All' : 'Select All'}
                       </button>
-                      {showVaultMenu && (
+                      {/* Mobile: More dropdown with Select All + actions */}
+                      <div className="md:hidden relative vault-menu-container min-h-[48px] sm:h-full">
+                        <button
+                          onClick={() => setShowVaultMenu(!showVaultMenu)}
+                          className="vault-menu-trigger w-full h-full min-h-[48px] sm:min-h-0 sm:w-auto px-4 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 transition shadow-sm bg-stone-100 text-slate-700 hover:bg-stone-200 border border-stone-200"
+                          title="Select All, Export options"
+                        >
+                          More {showVaultMenu ? '▲' : '▼'}
+                        </button>
+                        {showVaultMenu && (
                         <div className="vault-menu-dropdown absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[50] overflow-hidden animate-in fade-in max-h-[80vh] overflow-y-auto">
                           <div className="px-4 py-3 border-b border-stone-100 flex items-center justify-between">
                             <span className="text-[10px] font-black uppercase text-slate-900">Select All</span>
@@ -4309,26 +4321,10 @@ export default function Home() {
                               Export CSV {selectedItems.size > 0 && `(${selectedItems.size})`}
                             </button>
                           </div>
-                          {SHOPIFY_FEATURE_ENABLED && (shopifyConnected ? (
-                            <div className="px-4 py-2 border-b border-stone-100 space-y-2">
-                              <p className="text-[9px] font-bold text-[#A5BEAC] uppercase">Connected to {shopifyShop || 'Shopify'}</p>
-                              <div className="flex gap-2">
-                                <button onClick={() => { setShowShopifyConnectModal(true); setShopifyConnectInput(shopifyShop?.replace('.myshopify.com', '') || ''); setShowVaultMenu(false); }} className="flex-1 py-2 rounded-lg text-[9px] font-black uppercase border border-stone-200 bg-white text-slate-700 hover:border-[#A5BEAC] transition">
-                                  Change store
-                                </button>
-                                <button onClick={() => { setNotification({ title: 'Disconnect Shopify', message: 'Are you sure you want to disconnect your Shopify account?', type: 'confirm', onConfirm: () => { disconnectShopify(); setNotification(null); } }); setShowVaultMenu(false); }} className="flex-1 py-2 rounded-lg text-[9px] font-black uppercase border border-stone-200 bg-white text-stone-500 hover:border-red-300 hover:text-red-600 transition">
-                                  Disconnect
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <button onClick={() => { setShowShopifyConnectModal(true); setShowVaultMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
-                              Connect Shopify
-                            </button>
-                          ))}
                         </div>
                       )}
-                    </div>
+                      </div>
+                    </>
                   ) : (
                     <button
                       disabled
