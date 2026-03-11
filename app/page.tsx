@@ -3496,6 +3496,7 @@ export default function Home() {
                     onClick={() => setShowAccountMenu(!showAccountMenu)}
                     className="w-48 text-[10px] font-black uppercase px-8 py-3 rounded-xl transition bg-stone-100 text-slate-900 hover:bg-stone-200 flex items-center justify-center gap-1.5"
                   >
+                    <div className={`w-2 h-2 rounded-full shrink-0 ${user ? 'bg-[#A5BEAC] animate-pulse' : 'bg-stone-300'}`} />
                     {profile?.logo_url ? (
                       <img src={profile.logo_url} alt="" className="w-6 h-6 rounded-full object-cover shrink-0" />
                     ) : null}
@@ -3503,12 +3504,6 @@ export default function Home() {
                   </button>
                   {showAccountMenu && (
                     <div className="absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[100] overflow-hidden animate-in fade-in slide-in-from-top-2">
-                      <div className="px-4 py-3 border-b border-stone-100 flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full shrink-0 ${user ? 'bg-[#A5BEAC] animate-pulse' : 'bg-stone-300'}`} />
-                        <span className="text-[10px] font-black uppercase text-slate-700 truncate">
-                          {profile?.company_name || profile?.display_name || user.email?.split('@')[0] || 'Account'}
-                        </span>
-                      </div>
                       {subscriptionStatus?.subscribed && (
                         <button onClick={() => { initiateManageSubscription(); setShowAccountMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
                           Manage Subscription
