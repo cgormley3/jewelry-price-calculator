@@ -59,6 +59,7 @@ export default function Home() {
   const [showPDFOptions, setShowPDFOptions] = useState(false);
   const [includeLiveInPDF, setIncludeLiveInPDF] = useState(true);
   const [includeBreakdownInPDF, setIncludeBreakdownInPDF] = useState(true);
+  const [includeNotesInPDF, setIncludeNotesInPDF] = useState(true);
 
   // Profile (display name, company, logo for PDF/CSV/account)
   const [profile, setProfile] = useState<{ display_name: string | null; company_name: string | null; logo_url: string | null } | null>(null);
@@ -2158,6 +2159,31 @@ export default function Home() {
     }
   };
 
+  const getImageAsCircle = async (dataUrl: string, sizePx: number): Promise<string | null> => {
+    return new Promise((resolve) => {
+      const img = new window.Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = sizePx;
+        canvas.height = sizePx;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(null);
+          return;
+        }
+        const r = sizePx / 2;
+        ctx.beginPath();
+        ctx.arc(r, r, r, 0, 2 * Math.PI);
+        ctx.closePath();
+        ctx.clip();
+        ctx.drawImage(img, 0, 0, sizePx, sizePx);
+        resolve(canvas.toDataURL('image/png'));
+      };
+      img.onerror = () => resolve(null);
+      img.src = dataUrl;
+    });
+  };
+
   const getImageWithRoundedCorners = async (dataUrl: string, sizePx: number, cornerRadiusPct = 0.15): Promise<string | null> => {
     return new Promise((resolve) => {
       const img = new window.Image();
@@ -2262,9 +2288,9 @@ export default function Home() {
   const computeItemBlockHeight = (
     doc: jsPDF,
     item: any,
-    opts: { includeBreakdownInPDF: boolean; includeLiveInPDF: boolean }
+    opts: { includeBreakdownInPDF: boolean; includeLiveInPDF: boolean; includeNotesInPDF: boolean }
   ): number => {
-    const { includeBreakdownInPDF } = opts;
+    const { includeBreakdownInPDF, includeNotesInPDF } = opts;
     const pdfThumbSize = 18;
     const pdfThumbPaddingBelow = 4;
     const tableHeight = 22;
@@ -2334,7 +2360,7 @@ export default function Home() {
     }
 
     let notesBottomY = notesAnchorY;
-    if (item.notes) {
+    if (includeNotesInPDF && item.notes) {
       doc.setFont('helvetica', 'italic');
       doc.setFontSize(6);
       const noteWrapped = doc.splitTextToSize(item.notes, pdfContentWidth - 4);
@@ -2401,7 +2427,7 @@ export default function Home() {
     currentY += 8;
 
     for (const item of targetItems) {
-      const itemHeight = computeItemBlockHeight(doc, item, { includeBreakdownInPDF, includeLiveInPDF });
+      const itemHeight = computeItemBlockHeight(doc, item, { includeBreakdownInPDF, includeLiveInPDF, includeNotesInPDF });
       if (currentY + itemHeight > pdfPageHeight - PDF_FOOTER_HEIGHT) {
         drawPDFPageFooter(doc, iconData, pageNum);
         doc.addPage();
@@ -2425,7 +2451,9 @@ export default function Home() {
       if (item.image_url) {
         const imgData = await getImageData(item.image_url);
         if (imgData) {
-          doc.addImage(imgData, 'PNG', pdfMargin, currentY, pdfThumbSize, pdfThumbSize);
+          const circularImg = await getImageAsCircle(imgData, 72);
+          const finalImg = circularImg || imgData;
+          doc.addImage(finalImg, 'PNG', pdfMargin, currentY, pdfThumbSize, pdfThumbSize);
           titleX = pdfMargin + pdfThumbSize + pdfThumbGap;
           itemHeaderHeight = pdfThumbSize + pdfThumbPaddingBelow;
         }
@@ -2529,13 +2557,13 @@ export default function Home() {
       }
 
       let notesBottomY = notesAnchorY;
-      if (item.notes) {
+      if (includeNotesInPDF && item.notes) {
         let drawNotesY = notesAnchorY;
         if (notesAnchorY > pdfPageHeight - PDF_FOOTER_HEIGHT - 10) {
           drawPDFPageFooter(doc, iconData, pageNum);
           doc.addPage();
           pageNum += 1;
-          drawPDFPageHeader(doc, user);
+          await drawPDFPageHeader(doc, user, profileForPDF ?? null);
           drawNotesY = 28;
         }
         doc.setDrawColor(230, 230, 230);
@@ -3012,6 +3040,17 @@ export default function Home() {
                 <div>
                   <p className="text-xs font-black uppercase text-slate-900">Include Breakdown</p>
                   <p className="text-[10px] text-stone-400 font-bold">Show list of metals and labor costs</p>
+                </div>
+              </div>
+
+              {/* Notes Toggle */}
+              <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setIncludeNotesInPDF(!includeNotesInPDF)}>
+                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${includeNotesInPDF ? 'bg-[#A5BEAC] border-[#A5BEAC] text-white' : 'bg-white border-stone-300'}`}>
+                  {includeNotesInPDF && '✓'}
+                </div>
+                <div>
+                  <p className="text-xs font-black uppercase text-slate-900">Include Notes</p>
+                  <p className="text-[10px] text-stone-400 font-bold">Show item notes if present</p>
                 </div>
               </div>
             </div>
@@ -4757,6 +4796,9 @@ export default function Home() {
                             </p>
                           </div>
                         </div>
+                        <p className="text-[8px] text-stone-400 font-medium mt-1.5">
+                          {priceRounding === 'none' ? 'No rounding' : `Rounded to $${priceRounding}`}
+                        </p>
                       </div>
 
                       <details className="group border-t border-stone-50 text-left">
