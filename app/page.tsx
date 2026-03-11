@@ -2616,18 +2616,35 @@ export default function Home() {
       return;
     }
 
-    // When anonymous (guest), link Google identity to keep same user_id and preserve vault items
-    if (user?.is_anonymous) {
+    // Login tab: always sign in (don't try to link guest account)
+    // Sign Up tab + anonymous: try to link to preserve guest vault items
+    const shouldLink = user?.is_anonymous && isSignUp;
+    if (shouldLink) {
       const { error: linkError } = await supabase.auth.linkIdentity({
         provider: 'google',
         token: idToken,
       });
       if (linkError) {
         if (linkError.message?.toLowerCase().includes('already linked') || linkError.message?.toLowerCase().includes('another user')) {
-          setNotification({ title: "Account exists", message: "This Google account is already used elsewhere. Sign in with that account, or use a different Google account.", type: 'info' });
-        } else {
-          setNotification({ title: "Link Failed", message: linkError.message, type: 'error' });
+          await supabase.auth.signOut();
+          const { error: signInError } = await supabase.auth.signInWithIdToken({
+            provider: 'google',
+            token: idToken,
+          });
+          if (signInError) {
+            setNotification({ title: "Sign in failed", message: signInError.message, type: 'error' });
+            return;
+          }
+          setShowAuth(false);
+          fetchInventory();
+          if (pendingVaultPlusAfterAuth) {
+            setPendingVaultPlusAfterAuth(false);
+            setShowVaultPlusModal(true);
+          }
+          setNotification({ title: "Welcome back", message: "Signed in with your existing Google account.", type: 'success' });
+          return;
         }
+        setNotification({ title: "Link Failed", message: linkError.message, type: 'error' });
         return;
       }
       setShowAuth(false);
@@ -2640,6 +2657,10 @@ export default function Home() {
       return;
     }
 
+    // Sign in with Google (Login tab, or not anonymous, or link not applicable)
+    if (user?.is_anonymous) {
+      await supabase.auth.signOut();
+    }
     const { data, error } = await supabase.auth.signInWithIdToken({
       provider: 'google',
       token: idToken,
