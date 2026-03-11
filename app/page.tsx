@@ -60,10 +60,19 @@ export default function Home() {
   const [includeLiveInPDF, setIncludeLiveInPDF] = useState(true);
   const [includeBreakdownInPDF, setIncludeBreakdownInPDF] = useState(true);
 
+  // Profile (display name, company, logo for PDF/CSV/account)
+  const [profile, setProfile] = useState<{ display_name: string | null; company_name: string | null; logo_url: string | null } | null>(null);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileLogoUploading, setProfileLogoUploading] = useState(false);
+  const [profileDraft, setProfileDraft] = useState<{ display_name: string; company_name: string; logo_url: string | null }>({ display_name: '', company_name: '', logo_url: null });
+  const profileLogoInputRef = useRef<HTMLInputElement>(null);
+
   // Vault+ subscription
   const [subscriptionStatus, setSubscriptionStatus] = useState<{ subscribed: boolean } | null>(null);
   const [showVaultPlusModal, setShowVaultPlusModal] = useState(false);
   const [vaultPaywallHasItems, setVaultPaywallHasItems] = useState(false);
+  const [vaultDiagnostic, setVaultDiagnostic] = useState<string | null>(null);
 
   // Shopify – set SHOPIFY_FEATURE_ENABLED = true when app is published
   const SHOPIFY_FEATURE_ENABLED = false;
@@ -226,10 +235,35 @@ export default function Home() {
   const [priceRounding, setPriceRounding] = useState<PriceRoundingOption>(1);
 
   useEffect(() => {
+    if (showProfileModal) {
+      setProfileDraft({
+        display_name: profile?.display_name ?? '',
+        company_name: profile?.company_name ?? '',
+        logo_url: profile?.logo_url ?? null,
+      });
+    }
+  }, [showProfileModal, profile?.display_name, profile?.company_name, profile?.logo_url]);
+
+  useEffect(() => {
     const stored = localStorage.getItem('price_rounding');
     if (stored === '1' || stored === '5' || stored === '10' || stored === '25') setPriceRounding(Number(stored) as 1 | 5 | 10 | 25);
     else if (stored === 'none') setPriceRounding('none');
   }, []);
+
+  // Fetch profile when we have a logged-in user but profile wasn't loaded (e.g. 402 paywall, timing)
+  useEffect(() => {
+    if (!user?.id || user.is_anonymous || profile !== null || !hasValidSupabaseCredentials) return;
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = (session as any)?.access_token;
+      if (!token) return;
+      const res = await fetch(`/api/profile?accessToken=${encodeURIComponent(token)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setProfile({ display_name: data.display_name ?? null, company_name: data.company_name ?? null, logo_url: data.logo_url ?? null });
+      }
+    })();
+  }, [user?.id, user?.is_anonymous, profile, hasValidSupabaseCredentials]);
 
   // Refetch when returning from Stripe (vaultplus=1) — delay + retry to allow webhook to sync subscription
   useEffect(() => {
@@ -597,11 +631,16 @@ export default function Home() {
           subscription = authSub;
           const initialSession = await Promise.race([
             authReady,
-            new Promise<any>(r => setTimeout(() => r(null), 2000))
+            new Promise<any>(r => setTimeout(() => r(null), 4000))
           ]);
           if (!initialSession) {
             // Double-check localStorage: onAuthStateChange can be delayed; avoid overwriting existing session
-            const { data: { session: storedSession } } = await supabase.auth.getSession();
+            let storedSession = (await supabase.auth.getSession()).data.session;
+            if (!storedSession?.user) {
+              // Try refresh – often fixes "auth session missing" when refresh token exists but access token expired
+              const { data: { session: refreshed } } = await supabase.auth.refreshSession();
+              storedSession = refreshed;
+            }
             if (storedSession?.user) {
               setUser(storedSession.user);
               fetchInventory();
@@ -614,6 +653,8 @@ export default function Home() {
                 console.warn('Supabase auth error:', error);
                 if (error?.message?.includes('Cannot reach') || error?.message?.includes('timed out') || error?.message === 'Failed to fetch') {
                   setNotification({ title: 'Connection Issue', message: 'Unable to reach the vault service. The calculator works offline—try again when you\'re back online.', type: 'info' });
+                } else if (error?.message?.toLowerCase().includes('session') || error?.message?.toLowerCase().includes('auth')) {
+                  setNotification({ title: 'Session Error', message: 'Auth session expired or missing. Try refreshing the page or sign in again.', type: 'info' });
                 }
               }
             }
@@ -671,10 +712,14 @@ export default function Home() {
         session = (await supabase.auth.getSession()).data.session;
       }
       if (!session?.user?.id) {
+        const { data: { session: refreshed } } = await supabase.auth.refreshSession();
+        session = refreshed;
+      }
+      if (!session?.user?.id) {
         setLoading(false);
         return;
       }
-      const accessToken = (session as any).access_token;
+      let accessToken = (session as any).access_token;
       if (!accessToken) {
         setNotification({ title: 'Session Error', message: 'Could not get access token. Try signing in again.', type: 'info' });
         setLoading(false);
@@ -682,7 +727,7 @@ export default function Home() {
       }
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 12000);
-      const res = await fetch('/api/fetch-inventory', {
+      let res = await fetch('/api/fetch-inventory', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ accessToken, userId: session.user.id }),
@@ -749,6 +794,25 @@ export default function Home() {
         } else {
           setSubscriptionStatus({ subscribed: false });
         }
+        const resProfile = await fetch(`/api/profile?accessToken=${encodeURIComponent(accessToken)}`);
+        if (resProfile.ok) {
+          const profileData = await resProfile.json();
+          setProfile({
+            display_name: profileData.display_name ?? null,
+            company_name: profileData.company_name ?? null,
+            logo_url: profileData.logo_url ?? null,
+          });
+        }
+      } else if (res.status === 401) {
+        const err = await res.json().catch(() => ({}));
+        const { data: { session: refreshed } } = await supabase.auth.refreshSession();
+        if (refreshed?.user && (refreshed as any).access_token) {
+          setUser(refreshed.user);
+          setLoading(true);
+          fetchInventory();
+          return;
+        }
+        setNotification({ title: 'Session expired', message: err?.error || 'Please sign in again.', type: 'info', onConfirm: () => { setLoading(true); fetchInventory(); } });
       } else if (res.status === 402) {
         const err = await res.json().catch(() => ({}));
         setSubscriptionStatus({ subscribed: false });
@@ -757,6 +821,11 @@ export default function Home() {
         setVaultPaywallHasItems(!!err?.hasItems);
         if (err?.code !== 'PAYWALL_VAULT') {
           setNotification({ title: 'Vault Load Failed', message: err?.error || 'Upgrade to Vault+ to access your vault.', type: 'info' });
+        }
+        const resProfile = await fetch(`/api/profile?accessToken=${encodeURIComponent(accessToken)}`);
+        if (resProfile.ok) {
+          const profileData = await resProfile.json();
+          setProfile({ display_name: profileData.display_name ?? null, company_name: profileData.company_name ?? null, logo_url: profileData.logo_url ?? null });
         }
       } else {
         const err = await res.json().catch(() => ({}));
@@ -1817,6 +1886,14 @@ export default function Home() {
       ? filteredInventory.filter(i => selectedItems.has(i.id))
       : filteredInventory;
 
+    const preparedFor = profile?.company_name || profile?.display_name;
+    const headerRows: string[] = [];
+    if (preparedFor) {
+      headerRows.push(`"Prepared for: ${preparedFor}"`);
+      headerRows.push(`"Generated ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}"`);
+      headerRows.push('');
+    }
+
     const headers = ["Item Name", "Status", "Tag", "Location", "Live Retail", "Live Wholesale", "Saved Retail", "Saved Wholesale", "Labor Hours", "Labor Cost", "Materials Cost", "Other Costs", "Stone Retail", "Stone Cost", "Stone Markup", "Overhead Cost", "Overhead Type", "Notes", "Date Created", "Formula", "Metals", "Image URL"];
     const rows = targetItems.map(item => {
       const stonesArray = convertStonesToArray(item);
@@ -1855,7 +1932,7 @@ export default function Home() {
         `"${item.image_url || ''}"`
       ];
     });
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+    const csvContent = "data:text/csv;charset=utf-8," + [...headerRows, headers.join(","), ...rows.map(e => e.join(","))].join("\n");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri); link.setAttribute("download", "bear-vault-inventory.csv");
@@ -2083,20 +2160,31 @@ export default function Home() {
   const pdfContentWidth = pdfPageWidth - pdfMargin * 2;
   const PDF_FOOTER_HEIGHT = 28;
 
-  const drawPDFPageHeader = (doc: jsPDF, currentUser?: { email?: string; user_metadata?: { full_name?: string }; is_anonymous?: boolean } | null) => {
+  const drawPDFPageHeader = async (
+    doc: jsPDF,
+    currentUser?: { email?: string; user_metadata?: { full_name?: string }; is_anonymous?: boolean } | null,
+    profileData?: { display_name: string | null; company_name: string | null; logo_url: string | null } | null
+  ) => {
     doc.setDrawColor(220, 220, 220);
     doc.setLineWidth(0.3);
     doc.line(0, 22, pdfPageWidth, 22);
     doc.setFont("helvetica", "bold"); doc.setFontSize(14); doc.setTextColor(40, 40, 40);
     doc.text('Inventory Report', pdfMargin, 12);
-    let y = 16;
-    if (currentUser && !currentUser.is_anonymous) {
-      const name = currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || currentUser.email;
-      if (name) {
-        doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(100, 100, 100);
-        doc.text(`Prepared for: ${name}`, pdfMargin, y);
-        y += 4;
+    if (profileData?.logo_url) {
+      const imgData = await getImageData(profileData.logo_url);
+      if (imgData) {
+        try {
+          doc.addImage(imgData, 'PNG', pdfPageWidth - pdfMargin - 20, 6, 20, 20);
+        } catch { /* ignore */ }
       }
+    }
+    let y = 16;
+    const preparedFor = profileData?.company_name || profileData?.display_name
+      || (currentUser && !currentUser.is_anonymous ? (currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || currentUser.email) : null);
+    if (preparedFor) {
+      doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(100, 100, 100);
+      doc.text(`Prepared for: ${preparedFor}`, pdfMargin, y);
+      y += 4;
     }
     doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(120, 120, 120);
     doc.text(`Generated ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`, pdfMargin, y);
@@ -2224,6 +2312,21 @@ export default function Home() {
       ? filteredInventory.filter(i => selectedItems.has(i.id))
       : filteredInventory;
 
+    let profileForPDF = profile;
+    if (user && !user.is_anonymous && !profileForPDF) {
+      const session = (await supabase.auth.getSession()).data.session;
+      const accessToken = (session as any)?.access_token;
+      if (accessToken) {
+        try {
+          const resProfile = await fetch(`/api/profile?accessToken=${encodeURIComponent(accessToken)}`);
+          if (resProfile.ok) {
+            const data = await resProfile.json();
+            profileForPDF = { display_name: data.display_name ?? null, company_name: data.company_name ?? null, logo_url: data.logo_url ?? null };
+          }
+        } catch { /* use null */ }
+      }
+    }
+
     const iconData = await getImageData(typeof window !== 'undefined' ? `${window.location.origin}/icon.png?v=2` : '/icon.png?v=2');
 
     const doc = new jsPDF();
@@ -2232,7 +2335,7 @@ export default function Home() {
     const dark = [40, 40, 40];
     let pageNum = 1;
 
-    drawPDFPageHeader(doc, user);
+    await drawPDFPageHeader(doc, user, profileForPDF ?? null);
     let currentY = 28;
 
     if (includeLiveInPDF) {
@@ -2262,7 +2365,7 @@ export default function Home() {
         doc.addPage();
         pageNum += 1;
         currentY = 28;
-        drawPDFPageHeader(doc, user);
+        await drawPDFPageHeader(doc, user, profileForPDF ?? null);
       }
 
       const stonesArray = convertStonesToArray(item);
@@ -2465,6 +2568,26 @@ export default function Home() {
       return;
     }
 
+    // When anonymous (guest), link Google identity to keep same user_id and preserve vault items
+    if (user?.is_anonymous) {
+      const { error: linkError } = await supabase.auth.linkIdentity({
+        provider: 'google',
+        token: idToken,
+      });
+      if (linkError) {
+        if (linkError.message?.toLowerCase().includes('already linked') || linkError.message?.toLowerCase().includes('another user')) {
+          setNotification({ title: "Account exists", message: "This Google account is already used elsewhere. Sign in with that account, or use a different Google account.", type: 'info' });
+        } else {
+          setNotification({ title: "Link Failed", message: linkError.message, type: 'error' });
+        }
+        return;
+      }
+      setShowAuth(false);
+      fetchInventory();
+      setNotification({ title: "Welcome to the Vault", message: "Your Google account is now linked. Your items are preserved.", type: 'success' });
+      return;
+    }
+
     const { data, error } = await supabase.auth.signInWithIdToken({
       provider: 'google',
       token: idToken,
@@ -2580,6 +2703,158 @@ export default function Home() {
             </div>
 
             <canvas ref={canvasRef} className="hidden" />
+          </div>
+        </div>
+      )}
+
+      {/* Profile Settings Modal */}
+      {showProfileModal && user && !user.is_anonymous && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[260] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-6">
+            <div className="flex justify-between items-center">
+              <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Profile</h3>
+              <button onClick={() => setShowProfileModal(false)} className="text-stone-300 hover:text-[#A5BEAC] font-black text-lg">✕</button>
+            </div>
+            <p className="text-xs text-stone-500">Your display name, company, and logo appear in PDF reports and exports.</p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-black uppercase text-stone-500 mb-1">Display name</label>
+                <input
+                  type="text"
+                  placeholder="Your name"
+                  className="w-full p-3 border border-stone-200 rounded-xl text-sm focus:border-[#A5BEAC] outline-none"
+                  value={profileDraft.display_name}
+                  onChange={e => setProfileDraft(p => ({ ...p, display_name: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black uppercase text-stone-500 mb-1">Company name</label>
+                <input
+                  type="text"
+                  placeholder="Company or brand"
+                  className="w-full p-3 border border-stone-200 rounded-xl text-sm focus:border-[#A5BEAC] outline-none"
+                  value={profileDraft.company_name}
+                  onChange={e => setProfileDraft(p => ({ ...p, company_name: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black uppercase text-stone-500 mb-1">Logo</label>
+                <div className="flex items-center gap-4">
+                  {profileDraft.logo_url && (
+                    <img src={profileDraft.logo_url} alt="" className="w-12 h-12 rounded-full object-cover border-2 border-stone-200" />
+                  )}
+                  <div className="flex flex-col gap-1">
+                    <input
+                      ref={profileLogoInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={async e => {
+                        const file = e.target?.files?.[0];
+                        if (!file || !user?.id) return;
+                        setProfileLogoUploading(true);
+                        try {
+                          const img = new Image();
+                          img.src = URL.createObjectURL(file);
+                          await new Promise<void>((res, rej) => {
+                            img.onload = () => res();
+                            img.onerror = () => rej(new Error('Invalid image'));
+                          });
+                          const size = 256;
+                          const canvas = document.createElement('canvas');
+                          canvas.width = size;
+                          canvas.height = size;
+                          const ctx = canvas.getContext('2d');
+                          if (!ctx) throw new Error('Canvas not supported');
+                          ctx.drawImage(img, 0, 0, size, size);
+                          URL.revokeObjectURL(img.src);
+                          canvas.toBlob(async blob => {
+                            if (!blob) {
+                              setProfileLogoUploading(false);
+                              return;
+                            }
+                            try {
+                              const fileName = `${user.id}/logo.png`;
+                              const { error } = await supabase.storage.from('product-images').upload(fileName, blob, { upsert: true });
+                              if (error) {
+                                setNotification({ title: 'Upload Failed', message: error.message, type: 'error' });
+                                return;
+                              }
+                              const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(fileName);
+                              setProfileDraft(p => ({ ...p, logo_url: publicUrl }));
+                            } finally {
+                              setProfileLogoUploading(false);
+                            }
+                            e.target.value = '';
+                          }, 'image/png');
+                        } catch (err: any) {
+                          setNotification({ title: 'Upload Failed', message: err?.message || 'Could not process image.', type: 'error' });
+                          setProfileLogoUploading(false);
+                          e.target.value = '';
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => profileLogoInputRef.current?.click()}
+                      disabled={profileLogoUploading}
+                      className="text-[10px] font-black uppercase px-4 py-2 rounded-xl border-2 border-stone-200 hover:border-[#A5BEAC] transition disabled:opacity-50"
+                    >
+                      {profileLogoUploading ? 'Uploading…' : profileDraft.logo_url ? 'Change logo' : 'Upload logo'}
+                    </button>
+                    {profileDraft.logo_url && (
+                      <button
+                        type="button"
+                        onClick={() => setProfileDraft(p => ({ ...p, logo_url: null }))}
+                        className="text-[10px] font-black uppercase text-stone-400 hover:text-red-600 transition"
+                      >
+                        Remove logo
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={async () => {
+                if (profileSaving || !user?.id) return;
+                const accessToken = (await supabase.auth.getSession()).data.session?.access_token;
+                if (!accessToken) {
+                  setNotification({ title: 'Session Error', message: 'Please sign in again.', type: 'info' });
+                  return;
+                }
+                setProfileSaving(true);
+                try {
+                  const res = await fetch('/api/profile', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      accessToken,
+                      display_name: profileDraft.display_name || null,
+                      company_name: profileDraft.company_name || null,
+                      logo_url: profileDraft.logo_url,
+                    }),
+                  });
+                  if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    setNotification({ title: 'Save Failed', message: err?.error || 'Could not save profile.', type: 'error' });
+                    return;
+                  }
+                  setProfile({
+                    display_name: profileDraft.display_name || null,
+                    company_name: profileDraft.company_name || null,
+                    logo_url: profileDraft.logo_url,
+                  });
+                  setShowProfileModal(false);
+                } finally {
+                  setProfileSaving(false);
+                }
+              }}
+              disabled={profileSaving}
+              className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition disabled:opacity-50"
+            >
+              {profileSaving ? 'Saving…' : 'Save'}
+            </button>
           </div>
         </div>
       )}
@@ -3106,7 +3381,30 @@ export default function Home() {
       <div className="max-w-7xl mx-auto flex flex-col min-h-[calc(100dvh-2rem)] gap-6 md:min-h-0 md:space-y-6 md:gap-0">
         {/* HEADER */}
         <div className="flex flex-col md:flex-row justify-between items-center bg-white px-6 py-8 rounded-[2rem] border-2 shadow-sm gap-8 shrink-0 relative border-[#A5BEAC]">
-          <div className="hidden md:block md:w-1/4"></div>
+          {/* Upgrade to Vault+ - left on desktop, top on mobile */}
+          {user && !user.is_anonymous && subscriptionStatus && !subscriptionStatus.subscribed && (
+            <>
+              <div className="hidden md:flex md:w-1/4 items-center">
+                <button
+                  onClick={() => setShowVaultPlusModal(true)}
+                  className="text-[10px] font-black uppercase bg-[#A5BEAC] text-white px-6 py-2.5 rounded-xl hover:bg-slate-900 transition shadow-sm"
+                >
+                  Upgrade to Vault+
+                </button>
+              </div>
+              <div className="md:hidden w-full flex justify-center">
+                <button
+                  onClick={() => setShowVaultPlusModal(true)}
+                  className="text-[10px] font-black uppercase bg-[#A5BEAC] text-white px-6 py-2.5 rounded-xl hover:bg-slate-900 transition shadow-sm"
+                >
+                  Upgrade to Vault+
+                </button>
+              </div>
+            </>
+          )}
+          {(!user || user.is_anonymous || !subscriptionStatus || subscriptionStatus.subscribed) && (
+            <div className="hidden md:block md:w-1/4"></div>
+          )}
           <div className="flex flex-col items-center justify-center text-center w-full md:w-2/4">
             <img src="/icon.png?v=2" alt="Logo" className="w-12 h-12 object-contain bg-transparent block brightness-110 contrast-125 mb-3" style={{ mixBlendMode: 'multiply' }} />
             <div className="flex flex-col items-center leading-none">
@@ -3132,7 +3430,10 @@ export default function Home() {
                     onClick={() => setShowAccountMenu(!showAccountMenu)}
                     className="text-[10px] font-black uppercase px-8 py-3 rounded-xl transition bg-stone-100 text-slate-900 hover:bg-stone-200 flex items-center gap-1.5"
                   >
-                    {user.email?.split('@')[0] || 'Account'} {showAccountMenu ? '▲' : '▼'}
+                    {profile?.logo_url ? (
+                      <img src={profile.logo_url} alt="" className="w-6 h-6 rounded-full object-cover shrink-0" />
+                    ) : null}
+                    {profile?.company_name || profile?.display_name || user.email?.split('@')[0] || 'Account'} {showAccountMenu ? '▲' : '▼'}
                   </button>
                   {showAccountMenu && (
                     <div className="absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[100] overflow-hidden animate-in fade-in slide-in-from-top-2">
@@ -3145,6 +3446,9 @@ export default function Home() {
                           Upgrade to Vault+
                         </button>
                       )}
+                      <button onClick={() => { setShowProfileModal(true); setShowAccountMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
+                        Profile
+                      </button>
                       <button
                         type="button"
                         disabled={loggingOut}
@@ -3886,14 +4190,6 @@ export default function Home() {
                   >
                     Quick add piece
                   </button>
-                  {subscriptionStatus?.subscribed && (
-                    <button
-                      onClick={() => { initiateManageSubscription(); setShowVaultMenu(false); }}
-                      className="min-h-[48px] sm:min-h-0 px-4 rounded-xl text-[10px] font-black uppercase bg-white text-slate-700 border-2 border-stone-200 hover:border-[#A5BEAC] hover:bg-stone-50 transition shadow-sm flex items-center justify-center"
-                    >
-                      Manage Subscription
-                    </button>
-                  )}
                   {filteredInventory.length > 0 ? (
                     <div className="relative vault-menu-container min-h-[48px] sm:h-full">
                       <button
@@ -4003,6 +4299,44 @@ export default function Home() {
                     </>
                   ) : (
                     <p className="text-stone-500 font-bold uppercase text-xs tracking-wider">No items yet</p>
+                  )}
+                  {(subscriptionStatus?.subscribed || vaultPaywallHasItems) && (
+                    <button
+                      onClick={async () => {
+                        setVaultDiagnostic(null);
+                        const session = (await supabase.auth.getSession()).data.session;
+                        const accessToken = (session as any)?.access_token;
+                        if (!accessToken) return;
+                        try {
+                          const res = await fetch('/api/vault-diagnostic', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ accessToken }),
+                          });
+                          const data = await res.json().catch(() => ({}));
+                          if (data.fix_suggestion) {
+                            setVaultDiagnostic(data.fix_suggestion);
+                          } else if (data.subscribed && data.inventory_count_for_you === 0) {
+                            setVaultDiagnostic('You’re subscribed and no items exist yet for your account. Your vault is empty.');
+                          } else {
+                            setVaultDiagnostic(`Subscribed: ${data.subscribed}. Your inventory count: ${data.inventory_count_for_you}. Run Diagnose again for a fix.`);
+                          }
+                        } catch (_) {
+                          setVaultDiagnostic('Diagnostic failed. Check the browser console.');
+                        }
+                      }}
+                      className="text-[9px] font-bold uppercase text-stone-400 hover:text-[#A5BEAC] transition underline"
+                    >
+                      Not seeing items? Diagnose
+                    </button>
+                  )}
+                  {vaultDiagnostic && (
+                    <div className="mt-4 p-4 bg-stone-50 rounded-xl text-left">
+                      <p className="text-xs font-mono text-slate-700 break-all whitespace-pre-wrap">{vaultDiagnostic}</p>
+                      {(vaultDiagnostic.includes('UPDATE inventory') || vaultDiagnostic.includes('UPDATE subscriptions')) && (
+                        <button onClick={() => { setVaultDiagnostic(null); setLoading(true); fetchInventory(); }} className="mt-2 text-[10px] font-bold uppercase text-[#A5BEAC] hover:underline">I ran the SQL — Refresh</button>
+                      )}
+                    </div>
                   )}
                 </div>
               ) : (

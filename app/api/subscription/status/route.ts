@@ -35,12 +35,8 @@ export async function POST(request: Request) {
       .eq('user_id', resolvedUserId)
       .single();
 
-    const subscribed = !!(
-      sub &&
-      sub.status === 'active' &&
-      sub.current_period_end &&
-      new Date(sub.current_period_end) > new Date()
-    );
+    const periodValid = !sub?.current_period_end || new Date(sub.current_period_end) > new Date();
+    const subscribed = !!(sub && String(sub.status).toLowerCase() === 'active' && periodValid);
 
     return NextResponse.json({ subscribed });
   } catch (e: any) {

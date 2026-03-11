@@ -2,13 +2,21 @@
 
 Follow these steps to enable the Vault+ subscription paywall.
 
-## 1. Run the Database Migration
+## 0. Enable Identity Linking (Prevent User ID Mismatch)
 
-In Supabase SQL Editor, run the contents of `migration_add_subscriptions.sql`:
+When users sign in with Google (or email) after using the app as a guest, we link their identity to keep the same account and preserve their vault items. **Enable manual linking** so this works:
 
-```sql
--- Creates subscriptions table for tracking Stripe subscriptions
-```
+1. Supabase Dashboard → **Authentication** → **Providers**
+2. Enable **Manual linking** (or set `GOTRUE_SECURITY_MANUAL_LINKING_ENABLED: true` when self-hosting)
+
+Without this, signing in with Google or email can create a *different* user, so items and subscriptions end up under mismatched accounts.
+
+## 1. Run the Database Migrations
+
+In Supabase SQL Editor, run the migrations in order:
+
+1. **Subscriptions:** Run the contents of `migration_add_subscriptions.sql` to create the subscriptions table.
+2. **Profiles (optional):** Run the contents of `supabase/migrations/migration_add_profiles.sql` to enable profile branding (display name, company name, logo) in PDF reports and CSV exports.
 
 ## 2. Create a Stripe Account and Product
 
@@ -73,7 +81,56 @@ For development or to give specific users access without Stripe, you can manuall
 ```sql
 INSERT INTO subscriptions (user_id, status, current_period_end)
 VALUES ('your-user-uuid-here', 'active', '2099-12-31 23:59:59+00')
-ON CONFLICT (user_id) DO UPDATE SET status = 'active', current_period_end = '2099-12-31 23:59:59+00';
+ON CONFLICT (user_id) DO UPDATE SET status = 'active', current_period_end = EXCLUDED.current_period_end;
 ```
 
-Replace `your-user-uuid-here` with the Supabase auth user ID.
+Replace `your-user-uuid-here` with the Supabase auth user ID. **Always use `ON CONFLICT`** to avoid duplicate rows.
+
+## 8. Fixing Duplicate Subscriptions
+
+If you see multiple subscription rows for the same user, run this in Supabase SQL Editor:
+
+```sql
+-- Remove duplicates: keep one per user_id (prefer Stripe-linked row, then most recent)
+DELETE FROM subscriptions
+WHERE id IN (
+  SELECT id FROM (
+    SELECT id,
+      ROW_NUMBER() OVER (
+        PARTITION BY user_id
+        ORDER BY (CASE WHEN stripe_subscription_id IS NOT NULL THEN 0 ELSE 1 END), updated_at DESC NULLS LAST
+      ) AS rn
+    FROM subscriptions
+  ) t
+  WHERE t.rn > 1
+);
+
+-- Ensure UNIQUE constraint exists
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'subscriptions_user_id_key') THEN
+    ALTER TABLE subscriptions ADD CONSTRAINT subscriptions_user_id_key UNIQUE (user_id);
+  END IF;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+```
+
+**Prevention:** The app uses `upsert` with `onConflict: 'user_id'` for all subscription writes. Manual inserts must use `ON CONFLICT (user_id) DO UPDATE`.
+
+## 9. Items Not Showing After Upgrade?
+
+If you have a subscription in the DB but still don't see items, check for **user_id mismatch** (e.g. items were added as anonymous user, then you signed up with email—different user IDs):
+
+```sql
+-- See which user_ids have inventory vs subscriptions
+SELECT 'inventory' AS source, user_id FROM inventory
+UNION ALL
+SELECT 'subscriptions' AS source, user_id FROM subscriptions;
+```
+
+If inventory and subscriptions use different user_ids, either:
+- Update the subscription row to the user_id that owns the inventory, or
+- Migrate inventory to your current user_id:
+```sql
+UPDATE inventory SET user_id = 'your-current-user-uuid' WHERE user_id = 'old-anonymous-user-uuid';
+```
