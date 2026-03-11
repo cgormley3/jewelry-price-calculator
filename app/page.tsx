@@ -751,9 +751,7 @@ export default function Home() {
         setInventory([]);
         setLocations(['Main Vault']);
         setVaultPaywallHasItems(!!err?.hasItems);
-        if (err?.code === 'PAYWALL_VAULT') {
-          setShowVaultPlusModal(true);
-        } else {
+        if (err?.code !== 'PAYWALL_VAULT') {
           setNotification({ title: 'Vault Load Failed', message: err?.error || 'Upgrade to Vault+ to access your vault.', type: 'info' });
         }
       } else {
@@ -1964,8 +1962,16 @@ export default function Home() {
   };
 
   const initiateVaultPlusCheckout = async () => {
-    const session = (await supabase.auth.getSession()).data.session;
-    const accessToken = (session as any)?.access_token;
+    const { data: { session } } = await supabase.auth.getSession();
+    let accessToken = (session as any)?.access_token;
+    if (!accessToken) {
+      setNotification({ title: 'Sign in required', message: 'Please sign in to upgrade to Vault+.', type: 'info' });
+      setShowAuth(true);
+      setShowVaultPlusModal(false);
+      return;
+    }
+    const { data: { session: refreshed } } = await supabase.auth.refreshSession();
+    accessToken = (refreshed as any)?.access_token ?? accessToken;
     if (!accessToken || !user?.id) {
       setNotification({ title: 'Sign in required', message: 'Please sign in to upgrade to Vault+.', type: 'info' });
       setShowAuth(true);
@@ -1988,7 +1994,14 @@ export default function Home() {
       if (res.ok && data?.url) {
         window.location.href = data.url;
       } else {
-        setNotification({ title: 'Checkout error', message: data?.error || 'Could not start checkout.', type: 'error' });
+        const msg = data?.error || 'Could not start checkout.';
+        const isAuthError = /auth|session|sign in/i.test(msg);
+        setNotification({
+          title: isAuthError ? 'Session expired' : 'Checkout error',
+          message: isAuthError ? 'Please sign in again and try again.' : msg,
+          type: 'error',
+          onConfirm: isAuthError ? () => { setShowAuth(true); setShowVaultPlusModal(false); } : undefined,
+        });
       }
     } catch (e: any) {
       setNotification({ title: 'Checkout error', message: e?.message || 'Could not start checkout.', type: 'error' });
