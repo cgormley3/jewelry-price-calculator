@@ -4796,17 +4796,14 @@ export default function Home() {
                             </p>
                           </div>
                         </div>
-                        <p className="text-[8px] text-stone-400 font-medium mt-1.5">
-                          {priceRounding === 'none' ? 'No rounding' : `Rounded to $${priceRounding}`}
-                        </p>
                       </div>
 
                       <details className="group border-t border-stone-50 text-left">
                         <summary className="list-none cursor-pointer py-2 text-center text-[8px] font-black uppercase tracking-[0.3em] text-stone-300 hover:text-[#A5BEAC] transition-colors">View Breakdown & Notes</summary>
                         <div className="p-5 md:p-6 bg-stone-50/50 space-y-6">
 
-                          {/* Compact Formula, Materials, and Labor Boxes */}
-                          <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5 md:gap-3">
+                          {/* Compact Formula, Materials, Labor, and Rounding Boxes */}
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 md:gap-3">
                             {/* Formula Box */}
                             <div className="bg-white p-3.5 md:p-3 rounded-xl border border-stone-100 shadow-sm flex flex-col justify-center items-center text-center min-h-[70px] md:min-h-0">
                               <p className="text-[9px] md:text-[8px] font-black text-stone-400 uppercase mb-1.5 md:mb-1">Formula</p>
@@ -4818,7 +4815,7 @@ export default function Home() {
                               <p className="text-sm md:text-xs font-black text-slate-700">${(savedMetalCost + Number(item.other_costs_at_making || 0) + savedStoneCost).toFixed(2)}</p>
                             </div>
                             {/* Labor Box */}
-                            <div className="bg-white p-3.5 md:p-3 rounded-xl border border-stone-100 shadow-sm flex flex-col justify-center items-center text-center col-span-2 md:col-span-1 min-h-[70px] md:min-h-0">
+                            <div className="bg-white p-3.5 md:p-3 rounded-xl border border-stone-100 shadow-sm flex flex-col justify-center items-center text-center min-h-[70px] md:min-h-0">
                               <p className="text-[9px] md:text-[8px] font-black text-stone-400 uppercase mb-1.5 md:mb-1 leading-tight">Labor ({Number(item.hours || 0)}h @ ${((Number(item.labor_at_making) || 0) / (Number(item.hours) || 1)).toFixed(2)}/hr)</p>
                               <p className="text-sm md:text-xs font-black text-slate-700">${Number(item.labor_at_making || 0).toFixed(2)}</p>
                               {(trackedTimeByItem[item.id] || 0) > 0 && (
@@ -4831,6 +4828,13 @@ export default function Home() {
                               >
                                 Log time
                               </button>
+                            </div>
+                            {/* Rounding Box */}
+                            <div className="bg-white p-3.5 md:p-3 rounded-xl border border-stone-100 shadow-sm flex flex-col justify-center items-center text-center min-h-[70px] md:min-h-0">
+                              <p className="text-[9px] md:text-[8px] font-black text-stone-400 uppercase mb-1.5 md:mb-1">Price Rounding</p>
+                              <p className="text-sm md:text-xs font-black text-slate-700">
+                                {priceRounding === 'none' ? 'None' : `$${priceRounding}`}
+                              </p>
                             </div>
                           </div>
 
