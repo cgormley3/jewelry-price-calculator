@@ -3540,7 +3540,7 @@ export default function Home() {
                   )}
                 </div>
               )}
-              {user && !user.is_anonymous && !subscriptionStatus?.subscribed && (
+              {user && !user.is_anonymous && subscriptionStatus !== null && !subscriptionStatus.subscribed && (
                 <button onClick={() => setShowVaultPlusModal(true)} className="w-48 text-[10px] font-black uppercase bg-slate-900 text-white px-8 py-3 rounded-xl hover:bg-[#A5BEAC] transition shadow-sm">
                   Upgrade to Vault+
                 </button>
