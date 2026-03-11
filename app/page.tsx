@@ -2154,6 +2154,39 @@ export default function Home() {
     }
   };
 
+  const getImageWithRoundedCorners = async (dataUrl: string, sizePx: number, cornerRadiusPct = 0.15): Promise<string | null> => {
+    return new Promise((resolve) => {
+      const img = new window.Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = sizePx;
+        canvas.height = sizePx;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(null);
+          return;
+        }
+        const r = Math.max(2, sizePx * cornerRadiusPct);
+        ctx.beginPath();
+        ctx.moveTo(r, 0);
+        ctx.lineTo(sizePx - r, 0);
+        ctx.quadraticCurveTo(sizePx, 0, sizePx, r);
+        ctx.lineTo(sizePx, sizePx - r);
+        ctx.quadraticCurveTo(sizePx, sizePx, sizePx - r, sizePx);
+        ctx.lineTo(r, sizePx);
+        ctx.quadraticCurveTo(0, sizePx, 0, sizePx - r);
+        ctx.lineTo(0, r);
+        ctx.quadraticCurveTo(0, 0, r, 0);
+        ctx.closePath();
+        ctx.clip();
+        ctx.drawImage(img, 0, 0, sizePx, sizePx);
+        resolve(canvas.toDataURL('image/png'));
+      };
+      img.onerror = () => resolve(null);
+      img.src = dataUrl;
+    });
+  };
+
   const pdfPageHeight = 297;
   const pdfPageWidth = 210;
   const pdfMargin = 16;
@@ -2173,8 +2206,12 @@ export default function Home() {
     if (profileData?.logo_url) {
       const imgData = await getImageData(profileData.logo_url);
       if (imgData) {
+        const logoSize = 16;
+        const logoY = 4;
+        const roundedImg = await getImageWithRoundedCorners(imgData, 64, 0.15);
+        const finalImg = roundedImg || imgData;
         try {
-          doc.addImage(imgData, 'PNG', pdfPageWidth - pdfMargin - 20, 6, 20, 20);
+          doc.addImage(finalImg, 'PNG', pdfPageWidth - pdfMargin - logoSize, logoY, logoSize, logoSize);
         } catch { /* ignore */ }
       }
     }
@@ -2327,7 +2364,8 @@ export default function Home() {
       }
     }
 
-    const iconData = await getImageData(typeof window !== 'undefined' ? `${window.location.origin}/icon.png?v=2` : '/icon.png?v=2');
+    const iconRaw = await getImageData(typeof window !== 'undefined' ? `${window.location.origin}/icon.png?v=2` : '/icon.png?v=2');
+    const iconData = iconRaw ? (await getImageWithRoundedCorners(iconRaw, 32, 0.15)) ?? iconRaw : null;
 
     const doc = new jsPDF();
     const neutralDark = [80, 80, 80] as [number, number, number];
