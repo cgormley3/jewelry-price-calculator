@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || '';
@@ -121,7 +122,7 @@ export async function GET() {
             palladium_pct: null,
             updated_at: data.updated_at || new Date().toISOString(),
             _fallback: true
-          });
+          }, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
         }
       } catch (fbErr: any) {
         console.warn("Supabase fallback failed:", fbErr.message);
@@ -149,7 +150,9 @@ export async function GET() {
       console.log("Supabase not configured - skipping database save");
     }
 
-    return NextResponse.json({ success: true, ...priceData });
+    return NextResponse.json({ success: true, ...priceData }, {
+      headers: { 'Cache-Control': 'no-store, max-age=0' },
+    });
 
   } catch (err: any) {
     console.error("Price fetch error:", err.message);
@@ -167,7 +170,7 @@ export async function GET() {
             palladium: data.palladium || 0,
             updated_at: data.updated_at || new Date().toISOString(),
             _fallback: true
-          });
+          }, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
         }
       } catch (fbErr: any) {
         console.warn("Supabase fallback failed:", fbErr.message);
@@ -182,6 +185,6 @@ export async function GET() {
       palladium: 0,
       updated_at: new Date().toISOString(),
       _error: true
-    }, { status: 200 });
+    }, { status: 200, headers: { 'Cache-Control': 'no-store, max-age=0' } });
   }
 }

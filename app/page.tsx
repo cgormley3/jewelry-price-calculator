@@ -391,9 +391,9 @@ export default function Home() {
     const cachedData = sessionStorage.getItem('vault_prices');
     const cacheTimestamp = sessionStorage.getItem('vault_prices_time');
     const now = Date.now();
-    const fiveMinutes = 5 * 60 * 1000;
+    const oneMinute = 60 * 1000;
 
-    // Use cache immediately if valid (even when stale) so UI shows prices right away on refresh
+    // Use cache immediately if valid so UI shows prices right away on refresh
     if (cachedData) {
       try {
         const parsed = JSON.parse(cachedData);
@@ -404,8 +404,9 @@ export default function Home() {
       } catch (_) { /* ignore */ }
     }
 
-    if (!force && cachedData && cacheTimestamp && (now - Number(cacheTimestamp) < fiveMinutes)) {
-      return; // Skip network fetch, we already applied cache above
+    // Only skip network fetch if cache is very fresh (< 1 min) and not forcing, to avoid hammering the API
+    if (!force && cachedData && cacheTimestamp && (now - Number(cacheTimestamp) < oneMinute)) {
+      return;
     }
 
     if (fetchInProgressRef.current) return;
@@ -413,7 +414,7 @@ export default function Home() {
     const myVersion = ++fetchVersionRef.current;
 
     try {
-      const res = await fetch(`/api/gold-price?cb=${now}`);
+      const res = await fetch(`/api/gold-price?cb=${now}`, { cache: 'no-store' });
       if (myVersion !== fetchVersionRef.current) return;
 
       if (!res.ok) {
@@ -4304,9 +4305,19 @@ export default function Home() {
                   <h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Vault Inventory</h2>
                   <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">{inventory.length} Records Stored</p>
                 </div>
-                <div className="text-right">
-                  <p className="text-[9px] font-black text-stone-400 uppercase italic">Total Vault Value</p>
-                  <p className="text-2xl font-black text-slate-900">${pricesLoaded ? roundForDisplay(totalVaultValue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "--.--"}</p>
+                <div className="text-right flex items-center gap-2 justify-end">
+                  <button
+                    type="button"
+                    onClick={() => fetchPrices(true)}
+                    className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 hover:bg-stone-100 hover:text-[#A5BEAC] transition shrink-0"
+                    title="Refresh spot prices"
+                  >
+                    <span className="text-sm">↻</span>
+                  </button>
+                  <div>
+                    <p className="text-[9px] font-black text-stone-400 uppercase italic">Total Vault Value</p>
+                    <p className="text-2xl font-black text-slate-900">${pricesLoaded ? roundForDisplay(totalVaultValue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "--.--"}</p>
+                  </div>
                 </div>
               </div>
 
