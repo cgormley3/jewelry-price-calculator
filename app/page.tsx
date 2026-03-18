@@ -2268,6 +2268,8 @@ export default function Home() {
           resolve(null);
           return;
         }
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
         const r = sizePx / 2;
         ctx.beginPath();
         ctx.arc(r, r, r, 0, 2 * Math.PI);
@@ -2548,7 +2550,7 @@ export default function Home() {
       if (item.image_url) {
         const imgData = await getImageData(item.image_url);
         if (imgData) {
-          const circularImg = await getImageAsCircle(imgData, 72);
+          const circularImg = await getImageAsCircle(imgData, 216);
           const finalImg = circularImg || imgData;
           doc.addImage(finalImg, 'PNG', pdfMargin, currentY, pdfThumbSize, pdfThumbSize);
           titleX = pdfMargin + pdfThumbSize + pdfThumbGap;
