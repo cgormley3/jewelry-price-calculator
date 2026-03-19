@@ -13,7 +13,7 @@ export async function PATCH(request: Request) {
 
   try {
     const body = await request.json();
-    const { accessToken, entryId, userId, inventory_id, duration_minutes, note } = body;
+    const { accessToken, entryId, userId, inventory_id, duration_minutes, note, logged_on } = body;
     if (!accessToken || !entryId) {
       return NextResponse.json({ error: 'Missing access token or entry ID' }, { status: 400 });
     }
@@ -37,6 +37,17 @@ export async function PATCH(request: Request) {
     if (inventory_id !== undefined) payload.inventory_id = inventory_id || null;
     if (dur !== null) payload.duration_minutes = Math.round(dur);
     if (note !== undefined) payload.note = (note || '').trim() || null;
+    if (logged_on !== undefined) {
+      if (logged_on === null || String(logged_on).trim() === '') {
+        payload.logged_on = null;
+      } else {
+        const s = String(logged_on).trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+          return NextResponse.json({ error: 'logged_on must be YYYY-MM-DD' }, { status: 400 });
+        }
+        payload.logged_on = s;
+      }
+    }
     if (Object.keys(payload).length === 0) {
       return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
     }

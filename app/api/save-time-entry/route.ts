@@ -13,13 +13,22 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { accessToken, userId, inventory_id, duration_minutes, note } = body;
+    const { accessToken, userId, inventory_id, duration_minutes, note, logged_on } = body;
     if (!accessToken) {
       return NextResponse.json({ error: 'Missing access token' }, { status: 400 });
     }
     const dur = Number(duration_minutes);
     if (!Number.isFinite(dur) || dur <= 0) {
       return NextResponse.json({ error: 'Invalid duration_minutes' }, { status: 400 });
+    }
+
+    let loggedOnDate: string | null = null;
+    if (logged_on != null && String(logged_on).trim() !== '') {
+      const s = String(logged_on).trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+        return NextResponse.json({ error: 'logged_on must be YYYY-MM-DD' }, { status: 400 });
+      }
+      loggedOnDate = s;
     }
 
     const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey);
@@ -47,6 +56,7 @@ export async function POST(request: Request) {
         inventory_id: inventory_id || null,
         duration_minutes: dur,
         note: (note || '').trim() || null,
+        ...(loggedOnDate ? { logged_on: loggedOnDate } : {}),
       })
       .select()
       .single();

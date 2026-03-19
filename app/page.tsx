@@ -27,6 +27,27 @@ const MAX_VAULT_PHOTO_UPLOAD_BYTES = 45 * 1024 * 1024;
 /** File picker: include HEIC/HEIF so iOS Photos offers all pictures (not only JPEG). */
 const VAULT_PHOTO_ACCEPT = 'image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif,image/*';
 
+/** Local calendar date as YYYY-MM-DD (for `<input type="date" />`). */
+function formatLocalDateYYYYMMDD(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function localTodayYYYYMMDD(): string {
+  return formatLocalDateYYYYMMDD(new Date());
+}
+
+/** Work day for filters & summaries: explicit logged_on or fall back to created_at. */
+function entryWorkLocalDay(e: { logged_on?: string | null; created_at: string }): Date {
+  if (e.logged_on && /^\d{4}-\d{2}-\d{2}$/.test(e.logged_on)) {
+    const [y, mo, d] = e.logged_on.split('-').map(Number);
+    return new Date(y, mo - 1, d);
+  }
+  return new Date(e.created_at);
+}
+
 /** Live $/oz troy for a metal row (matches calculateFullBreakdown spot resolution). */
 function resolveSpotOzForMetal(m: any, livePrices: { gold?: number; silver?: number; platinum?: number; palladium?: number }): number {
   const type = (m.type || '').toLowerCase();
@@ -243,6 +264,7 @@ export default function Home() {
   const [logTimeItemSearch, setLogTimeItemSearch] = useState('');
   const [logTimeItemDropdownOpen, setLogTimeItemDropdownOpen] = useState(false);
   const [logTimeHours, setLogTimeHours] = useState<string>('');
+  const [logTimeDate, setLogTimeDate] = useState<string>('');
   const [logTimeNote, setLogTimeNote] = useState('');
   const [logTimeAllowItemSelect, setLogTimeAllowItemSelect] = useState(false);
   const logTimeItemDropdownRef = useRef<HTMLDivElement>(null);
@@ -1964,6 +1986,7 @@ export default function Home() {
           inventory_id: logTimeItemId || null,
           duration_minutes,
           note: logTimeNote.trim() || null,
+          logged_on: logTimeDate.trim() || localTodayYYYYMMDD(),
         }),
       });
       const data = res.ok ? await res.json() : null;
@@ -1975,6 +1998,7 @@ export default function Home() {
         setShowLogTimeModal(false);
         setLogTimeItemId(null);
         setLogTimeHours('');
+        setLogTimeDate('');
         setLogTimeNote('');
         setLogTimeAllowItemSelect(false);
         setTimerStartedAt(null);
@@ -2019,6 +2043,7 @@ export default function Home() {
           inventory_id: logTimeItemId || null,
           duration_minutes,
           note: logTimeNote.trim() || null,
+          logged_on: logTimeDate.trim() || localTodayYYYYMMDD(),
         }),
       });
       const data = res.ok ? await res.json() : null;
@@ -2031,6 +2056,7 @@ export default function Home() {
         setEditingTimeEntryId(null);
         setLogTimeItemId(null);
         setLogTimeHours('');
+        setLogTimeDate('');
         setLogTimeNote('');
         setLogTimeAllowItemSelect(false);
         setNotification({ title: "Time Updated", message: `${hrs}h updated successfully.`, type: 'success' });
@@ -2077,6 +2103,11 @@ export default function Home() {
     setEditingTimeEntryId(e.id);
     setLogTimeItemId(e.inventory_id || null);
     setLogTimeHours((Number(e.duration_minutes) / 60).toFixed(2));
+    setLogTimeDate(
+      e.logged_on && /^\d{4}-\d{2}-\d{2}$/.test(e.logged_on)
+        ? e.logged_on
+        : formatLocalDateYYYYMMDD(new Date(e.created_at))
+    );
     setLogTimeNote(e.note || '');
     setLogTimeAllowItemSelect(true);
     setShowLogTimeModal(true);
@@ -2177,12 +2208,12 @@ export default function Home() {
     if (timeFilterDateFrom) {
       const from = new Date(timeFilterDateFrom);
       from.setHours(0, 0, 0, 0);
-      list = list.filter(e => new Date(e.created_at) >= from);
+      list = list.filter(e => entryWorkLocalDay(e) >= from);
     }
     if (timeFilterDateTo) {
       const to = new Date(timeFilterDateTo);
       to.setHours(23, 59, 59, 999);
-      list = list.filter(e => new Date(e.created_at) <= to);
+      list = list.filter(e => entryWorkLocalDay(e) <= to);
     }
     if (timeFilterItemId) {
       if (timeFilterItemId === '_unassigned') {
@@ -2201,7 +2232,7 @@ export default function Home() {
     end.setHours(23, 59, 59, 999);
     return timeEntries
       .filter(e => {
-        const d = new Date(e.created_at);
+        const d = entryWorkLocalDay(e);
         return d >= today && d <= end;
       })
       .reduce((sum, e) => sum + Number(e.duration_minutes || 0), 0);
@@ -2213,7 +2244,7 @@ export default function Home() {
     weekStart.setDate(weekStart.getDate() - weekStart.getDay());
     weekStart.setHours(0, 0, 0, 0);
     return timeEntries
-      .filter(e => new Date(e.created_at) >= weekStart)
+      .filter(e => entryWorkLocalDay(e) >= weekStart)
       .reduce((sum, e) => sum + Number(e.duration_minutes || 0), 0);
   }, [timeEntries]);
 
@@ -3841,6 +3872,16 @@ export default function Home() {
               </div>
             )}
             <div>
+              <label className="text-[9px] font-bold text-stone-400 uppercase block mb-1">Date worked</label>
+              <input
+                type="date"
+                className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl outline-none focus:border-[#A5BEAC] text-sm font-bold"
+                value={logTimeDate || localTodayYYYYMMDD()}
+                onChange={e => setLogTimeDate(e.target.value)}
+              />
+              <p className="text-[9px] text-stone-400 mt-1">Backdate or choose the day this time applies to.</p>
+            </div>
+            <div>
               <label className="text-[9px] font-bold text-stone-400 uppercase block mb-1">Hours</label>
               <input
                 type="number"
@@ -3863,7 +3904,7 @@ export default function Home() {
               />
             </div>
             <div className="flex gap-3">
-              <button onClick={() => { setShowLogTimeModal(false); setEditingTimeEntryId(null); setLogTimeItemId(null); setLogTimeItemSearch(''); setLogTimeItemDropdownOpen(false); setLogTimeHours(''); setLogTimeNote(''); setLogTimeAllowItemSelect(false); }} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
+              <button onClick={() => { setShowLogTimeModal(false); setEditingTimeEntryId(null); setLogTimeItemId(null); setLogTimeItemSearch(''); setLogTimeItemDropdownOpen(false); setLogTimeHours(''); setLogTimeDate(''); setLogTimeNote(''); setLogTimeAllowItemSelect(false); }} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
               {editingTimeEntryId ? (
                 <button onClick={updateTimeEntry} disabled={!logTimeHours || parseFloat(logTimeHours) <= 0} className={`flex-1 py-4 rounded-2xl font-black text-[10px] uppercase transition shadow-lg ${!logTimeHours || parseFloat(logTimeHours) <= 0 ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-[#A5BEAC] text-white hover:bg-slate-900'}`}>Update</button>
               ) : (
@@ -5419,7 +5460,7 @@ export default function Home() {
                               )}
                               <button
                                 type="button"
-                                onClick={() => { setEditingTimeEntryId(null); setLogTimeItemId(item.id); setLogTimeAllowItemSelect(false); setLogTimeHours(''); setLogTimeNote(''); setShowLogTimeModal(true); }}
+                                onClick={() => { setEditingTimeEntryId(null); setLogTimeItemId(item.id); setLogTimeAllowItemSelect(false); setLogTimeHours(''); setLogTimeDate(localTodayYYYYMMDD()); setLogTimeNote(''); setShowLogTimeModal(true); }}
                                 className="mt-1.5 py-1 px-2 rounded-lg text-[8px] font-black uppercase bg-[#A5BEAC]/20 text-[#A5BEAC] hover:bg-[#A5BEAC]/30 transition"
                               >
                                 Log time
@@ -6130,6 +6171,7 @@ export default function Home() {
                     setLogTimeAllowItemSelect(true);
                     setEditingTimeEntryId(null);
                     setLogTimeHours('');
+                    setLogTimeDate(localTodayYYYYMMDD());
                     setLogTimeNote('');
                     setShowLogTimeModal(true);
                   }}
@@ -6191,6 +6233,7 @@ export default function Home() {
                                 setLogTimeItemId(null);
                                 setLogTimeAllowItemSelect(true);
                                 setLogTimeHours((timerPausedElapsed / 3600).toFixed(2));
+                                setLogTimeDate(localTodayYYYYMMDD());
                                 setLogTimeNote('');
                                 setShowLogTimeModal(true);
                               }}
@@ -6316,15 +6359,22 @@ export default function Home() {
                     ) : (
                       <div className="space-y-2">
                         {filteredTimeEntries.map((e: any) => {
-                          const date = new Date(e.created_at);
+                          const workDay = entryWorkLocalDay(e);
                           const itemName = e.inventory_id ? ((inventory.find((i: any) => i.id === e.inventory_id)?.name || 'Piece').toUpperCase()) : 'General';
                           const hrs = (Number(e.duration_minutes) / 60).toFixed(2);
                           const isDeleting = deletingTimeEntryId === e.id;
+                          const hasExplicitWorkDate = !!(e.logged_on && /^\d{4}-\d{2}-\d{2}$/.test(e.logged_on));
                           return (
                             <div key={e.id} className="flex items-center justify-between gap-4 py-3 px-4 rounded-xl border border-stone-200 bg-white hover:border-[#A5BEAC]/50 transition">
                               <div className="min-w-0 flex-1">
                                 <p className="font-bold text-slate-900 truncate">{itemName}</p>
-                                <p className="text-[10px] text-stone-500">{date.toLocaleDateString()} {date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                <p className="text-[10px] text-stone-500">
+                                  {hasExplicitWorkDate ? (
+                                    <><span className="font-bold text-stone-600">{workDay.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span><span className="text-stone-400"> · work date</span></>
+                                  ) : (
+                                    <>{workDay.toLocaleDateString()} {new Date(e.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</>
+                                  )}
+                                </p>
                                 {e.note && <p className="text-[10px] text-stone-400 mt-0.5 truncate">{e.note}</p>}
                               </div>
                               <div className="flex items-center gap-2 shrink-0">
