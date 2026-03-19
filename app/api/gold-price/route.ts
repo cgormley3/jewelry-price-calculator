@@ -1,194 +1,83 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { fetchPricesFromBullionByPost } from '@/lib/bullionbypost';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+export const maxDuration = 30;
+
+function toResponse(priceData: { gold: number; silver: number; platinum: number; palladium: number; gold_pct?: number | null; silver_pct?: number | null; platinum_pct?: number | null; palladium_pct?: number | null; updated_at: string }) {
+  return NextResponse.json(
+    {
+      success: true,
+      gold: priceData.gold || 0,
+      silver: priceData.silver || 0,
+      platinum: priceData.platinum || 0,
+      palladium: priceData.palladium || 0,
+      gold_pct: priceData.gold_pct ?? null,
+      silver_pct: priceData.silver_pct ?? null,
+      platinum_pct: priceData.platinum_pct ?? null,
+      palladium_pct: priceData.palladium_pct ?? null,
+      updated_at: priceData.updated_at,
+    },
+    { headers: { 'Cache-Control': 'no-store, max-age=0' } }
+  );
+}
 
 export async function GET() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || '';
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || '';
-  const hasSupabaseConfig = supabaseUrl && supabaseServiceKey && supabaseUrl.startsWith('http');
-
-  const cacheBuster = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
-  const defaultSheetUrl = `https://docs.google.com/spreadsheets/d/e/2PACX-1vRCIKyw7uQpytVE7GayB_rMY8qqMwSjat28AwLj9rSSD64OrZRqDSIuIcDIdAob_BK81rrempUgTO-H/pub?gid=1610736361&single=true&output=csv`;
-  const envSheetUrl = process.env.GOOGLE_SHEETS_CSV_URL?.trim() || '';
-  const csvUrls = [
-    ...(envSheetUrl ? [envSheetUrl + (envSheetUrl.includes('?') ? '&' : '?') + `_=${cacheBuster}`] : []),
-    defaultSheetUrl + `&_=${cacheBuster}`
-  ].filter(Boolean);
-  if (csvUrls.length === 0) csvUrls.push(defaultSheetUrl + `&_=${cacheBuster}`);
-
-  const fetchOptions = {
-    method: 'GET' as const,
-    headers: {
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-      'User-Agent': 'Mozilla/5.0 (compatible; JewelryPriceCalc/1.0)'
-    },
-    cache: 'no-store' as RequestCache
-  };
-
-  let text = '';
-  let lastError = '';
-
-  for (const CSV_URL of csvUrls) {
-    try {
-      const res = await fetch(CSV_URL, fetchOptions);
-      if (res.ok) {
-        text = await res.text();
-        break;
-      }
-      lastError = `Failed to fetch: ${res.status} ${res.statusText}`;
-    } catch (e: any) {
-      lastError = e?.message || 'Fetch failed';
-    }
+  if (!supabaseUrl || !supabaseServiceKey) {
+    return toResponse({ gold: 0, silver: 0, platinum: 0, palladium: 0, updated_at: new Date().toISOString() });
   }
 
   try {
-    if (!text) {
-      throw new Error(lastError || 'No CSV data received');
-    }
-    text = text.replace(/^\uFEFF/, ''); // Strip UTF-8 BOM if present
-    console.log("RAW CSV TEXT FROM GOOGLE:", text.substring(0, 500)); // Log first 500 chars for debugging
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const { data, error } = await supabase.from('metal_prices').select('*').eq('id', 1).single();
 
-    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-
-    /** Extract first price-like number from a line. Handles: 2650.50, 2,650.50, 2 650.50, $2,650.50 */
-    const extractPrice = (line: string): number => {
-      const match = line.match(/(\d[\d\s,]*\.?\d*)/g);
-      if (!match || match.length === 0) return 0;
-      const cleanValue = match[0].replace(/[\s,]/g, '');
-      return parseFloat(cleanValue) || 0;
-    };
-
-    /** Extract second number as % change (allows negative) */
-    const extractChangePct = (line: string): number | null => {
-      const match = line.match(/-?\d[\d\s,]*\.?\d*/g);
-      if (!match || match.length < 2) return null;
-      const pct = parseFloat(match[1].replace(/[\s,]/g, ''));
-      return isNaN(pct) ? null : pct;
-    };
-
-    const findPrice = (metalName: string, altNames?: string[]) => {
-      const names = [metalName, ...(altNames || [])];
-      for (const name of names) {
-        const line = lines.find(l => l.toLowerCase().includes(name.toLowerCase()));
-        if (line) {
-          const price = extractPrice(line);
-          if (price > 0) return price;
-        }
-      }
-      return 0;
-    };
-
-    const findChangePct = (metalName: string, altNames?: string[]) => {
-      const names = [metalName, ...(altNames || [])];
-      for (const name of names) {
-        const line = lines.find(l => l.toLowerCase().includes(name.toLowerCase()));
-        if (line) {
-          const pct = extractChangePct(line);
-          if (pct !== null) return pct;
-        }
-      }
-      return null;
-    };
-
-    const priceData = {
-      gold: findPrice('Gold', ['XAU', 'gold spot']),
-      silver: findPrice('Silver', ['XAG', 'silver spot']),
-      platinum: findPrice('Platinum', ['platinum spot', 'plat']),
-      palladium: findPrice('Palladium', ['palladium spot', 'pall']),
-      gold_pct: findChangePct('Gold', ['XAU']),
-      silver_pct: findChangePct('Silver', ['XAG']),
-      platinum_pct: findChangePct('Platinum'),
-      palladium_pct: findChangePct('Palladium'),
-      updated_at: new Date().toISOString()
-    };
-
-    console.log("PARSED DATA TO DATABASE:", priceData);
-
-    // If CSV parse produced no valid prices, try Supabase fallback
-    const hasValidPrices = (priceData.gold > 0 || priceData.silver > 0 || priceData.platinum > 0 || priceData.palladium > 0);
-    if (!hasValidPrices && hasSupabaseConfig) {
-      try {
-        const supabase = createClient(supabaseUrl, supabaseServiceKey);
-        const { data, error } = await supabase.from('metal_prices').select('*').eq('id', 1).single();
-        if (!error && data && (data.gold > 0 || data.silver > 0)) {
-          return NextResponse.json({
-            success: true,
-            gold: data.gold || 0,
-            silver: data.silver || 0,
-            platinum: data.platinum || 0,
-            palladium: data.palladium || 0,
-            gold_pct: null,
-            silver_pct: null,
-            platinum_pct: null,
-            palladium_pct: null,
-            updated_at: data.updated_at || new Date().toISOString(),
-            _fallback: true
-          }, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
-        }
-      } catch (fbErr: any) {
-        console.warn("Supabase fallback failed:", fbErr.message);
-      }
+    const dbGold = Number(data?.gold) || 0;
+    const hasValidData = !error && data && dbGold > 0 && (Number(data.silver) > 0 || Number(data.platinum) > 0 || Number(data.palladium) > 0);
+    if (hasValidData) {
+      return toResponse({
+        gold: dbGold,
+        silver: Number(data!.silver) || 0,
+        platinum: Number(data!.platinum) || 0,
+        palladium: Number(data!.palladium) || 0,
+        gold_pct: (data as any).gold_pct != null ? Number((data as any).gold_pct) : null,
+        silver_pct: (data as any).silver_pct != null ? Number((data as any).silver_pct) : null,
+        platinum_pct: (data as any).platinum_pct != null ? Number((data as any).platinum_pct) : null,
+        palladium_pct: (data as any).palladium_pct != null ? Number((data as any).palladium_pct) : null,
+        updated_at: data!.updated_at || new Date().toISOString(),
+      });
     }
 
-    // Only try to save to Supabase if credentials are configured (omit _pct until columns exist)
-    if (hasSupabaseConfig) {
-      try {
-        const supabase = createClient(supabaseUrl, supabaseServiceKey);
-        const { gold, silver, platinum, palladium, updated_at } = priceData;
-        const { error: dbError } = await supabase
-          .from('metal_prices')
-          .upsert({ id: 1, gold, silver, platinum, palladium, updated_at });
+    // DB empty, or gold missing (e.g. from failed scrape): scrape to seed/repair, then return
+    try {
+      const priceData = await fetchPricesFromBullionByPost();
+      const hasValidPrices = priceData.gold > 0 || priceData.silver > 0 || priceData.platinum > 0 || priceData.palladium > 0;
 
-        if (dbError) {
-          console.warn("Failed to save prices to Supabase:", dbError.message);
-          // Continue anyway - return the prices even if DB save fails
+      if (hasValidPrices) {
+        try {
+          await supabase.from('metal_prices').upsert({
+            id: 1,
+            gold: priceData.gold,
+            silver: priceData.silver,
+            platinum: priceData.platinum,
+            palladium: priceData.palladium,
+            updated_at: priceData.updated_at,
+          });
+        } catch (_) {
+          /* save failed but we still return the data */
         }
-      } catch (dbErr: any) {
-        console.warn("Supabase error (non-fatal):", dbErr.message);
-        // Continue anyway - return the prices even if DB save fails
+        return toResponse(priceData);
       }
-    } else {
-      console.log("Supabase not configured - skipping database save");
+    } catch (scrapeErr: any) {
+      console.warn('Gold-price seed scrape failed:', scrapeErr?.message);
     }
 
-    return NextResponse.json({ success: true, ...priceData }, {
-      headers: { 'Cache-Control': 'no-store, max-age=0' },
-    });
-
+    return toResponse({ gold: 0, silver: 0, platinum: 0, palladium: 0, updated_at: new Date().toISOString() });
   } catch (err: any) {
-    console.error("Price fetch error:", err.message);
-    // Fallback: try to serve cached prices from Supabase (from previous successful fetches)
-    if (hasSupabaseConfig) {
-      try {
-        const supabase = createClient(supabaseUrl, supabaseServiceKey);
-        const { data, error } = await supabase.from('metal_prices').select('*').eq('id', 1).single();
-        if (!error && data && (data.gold > 0 || data.silver > 0)) {
-          return NextResponse.json({
-            success: true,
-            gold: data.gold || 0,
-            silver: data.silver || 0,
-            platinum: data.platinum || 0,
-            palladium: data.palladium || 0,
-            updated_at: data.updated_at || new Date().toISOString(),
-            _fallback: true
-          }, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
-        }
-      } catch (fbErr: any) {
-        console.warn("Supabase fallback failed:", fbErr.message);
-      }
-    }
-    // Return 200 with zeros so frontend can fall back to sessionStorage instead of throwing
-    return NextResponse.json({
-      success: true,
-      gold: 0,
-      silver: 0,
-      platinum: 0,
-      palladium: 0,
-      updated_at: new Date().toISOString(),
-      _error: true
-    }, { status: 200, headers: { 'Cache-Control': 'no-store, max-age=0' } });
+    console.error('Gold-price fetch error:', err?.message);
+    return toResponse({ gold: 0, silver: 0, platinum: 0, palladium: 0, updated_at: new Date().toISOString() });
   }
 }

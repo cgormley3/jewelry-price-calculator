@@ -451,7 +451,7 @@ export default function Home() {
       } catch (_) { /* ignore */ }
     }
 
-    // Always fetch fresh prices on every call (page load, refresh, tab focus) to match spreadsheet
+    // Fetch prices from API (reads DB, scrapes BullionByPost to seed when needed)
     if (fetchInProgressRef.current) return;
     fetchInProgressRef.current = true;
     const myVersion = ++fetchVersionRef.current;
@@ -717,7 +717,7 @@ export default function Home() {
       }
     } catch (_) { /* ignore */ }
 
-    // Fetch fresh prices from spreadsheet on every page load/refresh (runs immediately, not blocked by auth)
+    // Fetch prices on every page load/refresh (runs immediately, not blocked by auth)
     fetchPrices();
 
     let subscription: { unsubscribe: () => void } | null = null;
