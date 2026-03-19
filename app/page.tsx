@@ -2561,7 +2561,7 @@ export default function Home() {
     const { includeBreakdownInPDF, includeNotesInPDF, pdfWholesalePercentOfRetail } = opts;
     const pdfThumbSize = 18;
     const pdfThumbPaddingBelow = 4;
-    const tableHeight = 22 + (pdfWholesalePercentOfRetail != null ? 8 : 0);
+    const tableHeight = 22;
     const pdfTableEndX = pdfMargin + (opts.includeLiveInPDF ? 96 : 90);
     const pdfBreakdownX = pdfTableEndX + 10;
     const pdfBreakdownMaxWidth = pdfPageWidth - pdfMargin - pdfBreakdownX;
@@ -2740,23 +2740,26 @@ export default function Home() {
       const tableHead = includeLiveInPDF ? [['', 'Saved', 'Live (market)']] : [['', 'Saved']];
       const retailRow: any[] = ['Retail', `$${roundForDisplay(Number(item.retail)).toFixed(2)}`];
       if (includeLiveInPDF) retailRow.push(`$${roundForDisplay(liveRetail).toFixed(2)}`);
-      const wholesaleRow: any[] = ['Wholesale', `$${roundForDisplay(Number(item.wholesale)).toFixed(2)}`];
-      if (includeLiveInPDF) wholesaleRow.push(`$${roundForDisplay(liveWholesale).toFixed(2)}`);
-
-      const tableBody: any[] = [retailRow, wholesaleRow];
-      if (pdfWholesalePercentOfRetail != null && pdfWholesalePercentOfRetail > 0 && pdfWholesalePercentOfRetail <= 100) {
-        const pct = pdfWholesalePercentOfRetail / 100;
-        const wholesaleFromSavedRetail = roundForDisplay(Number(item.retail) * pct);
-        const wholesaleFromLiveRetail = roundForDisplay(liveRetail * pct);
-        const percentRow: any[] = [`Wholesale (${pdfWholesalePercentOfRetail}% of retail)`, `$${wholesaleFromSavedRetail.toFixed(2)}`];
-        if (includeLiveInPDF) percentRow.push(`$${wholesaleFromLiveRetail.toFixed(2)}`);
-        tableBody.push(percentRow);
-      }
+      const useWholesalePercent = pdfWholesalePercentOfRetail != null && pdfWholesalePercentOfRetail > 0 && pdfWholesalePercentOfRetail <= 100;
+      const wholesaleRow: any[] = useWholesalePercent
+        ? (() => {
+            const pct = pdfWholesalePercentOfRetail! / 100;
+            const wholesaleFromSavedRetail = roundForDisplay(Number(item.retail) * pct);
+            const wholesaleFromLiveRetail = roundForDisplay(liveRetail * pct);
+            const row: any[] = [`Wholesale (${pdfWholesalePercentOfRetail}% of retail)`, `$${wholesaleFromSavedRetail.toFixed(2)}`];
+            if (includeLiveInPDF) row.push(`$${wholesaleFromLiveRetail.toFixed(2)}`);
+            return row;
+          })()
+        : (() => {
+            const row: any[] = ['Wholesale', `$${roundForDisplay(Number(item.wholesale)).toFixed(2)}`];
+            if (includeLiveInPDF) row.push(`$${roundForDisplay(liveWholesale).toFixed(2)}`);
+            return row;
+          })();
 
       autoTable(doc, {
         startY: tableStartY,
         head: tableHead,
-        body: tableBody,
+        body: [retailRow, wholesaleRow],
         theme: 'grid',
         headStyles: { fillColor: [235, 235, 235] as any, textColor: [60, 60, 60], fontSize: 8, cellPadding: 1.5 },
         columnStyles: includeLiveInPDF ? { 0: { cellWidth: 32 }, 1: { cellWidth: 32 }, 2: { cellWidth: 32 } } : { 0: { cellWidth: 40 }, 1: { cellWidth: 50 } },
