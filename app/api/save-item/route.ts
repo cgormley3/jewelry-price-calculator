@@ -41,6 +41,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `Upgrade to Vault+ (${VAULT_PLUS_PRICE_PHRASE}) to save items`, code: 'PAYWALL_VAULT' }, { status: 402 });
     }
 
+    const normalizeStockQty = (v: unknown): number => {
+      const n = Math.floor(Number(v));
+      if (!Number.isFinite(n) || n < 1) return 1;
+      return Math.min(999999, n);
+    };
+
     if (itemId) {
       const updatePayload: Record<string, unknown> = {
         name: newItem.name,
@@ -61,6 +67,7 @@ export async function POST(request: Request) {
         custom_formula: newItem.custom_formula ?? null,
         hours: newItem.hours ?? 0,
         status: newItem.status ?? 'active',
+        stock_qty: normalizeStockQty(newItem.stock_qty),
       };
 
       const { data, error } = await supabase
@@ -82,9 +89,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing user_id for new item' }, { status: 400 });
     }
 
+    const rowToInsert = {
+      ...newItem,
+      stock_qty: normalizeStockQty(newItem.stock_qty),
+    };
+
     const { data, error } = await supabase
       .from('inventory')
-      .insert([newItem])
+      .insert([rowToInsert])
       .select()
       .single();
 

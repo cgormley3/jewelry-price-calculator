@@ -18,7 +18,8 @@ In Supabase SQL Editor, run the migrations in order:
 1. **Subscriptions:** Run the contents of `migration_add_subscriptions.sql` to create the subscriptions table.
 2. **Profiles (optional):** Run the contents of `supabase/migrations/migration_add_profiles.sql` to enable profile branding (display name, company name, logo) in PDF reports and CSV exports.
 3. **Profile logo column (if logo doesn't save):** Run `supabase/migrations/migration_add_profile_logo_url.sql` to ensure the `logo_url` column exists.
-4. **Storage bucket for logos:** In Supabase Dashboard → Storage, create a bucket named `product-images` and make it **public** (or add a policy allowing authenticated users to upload/read). Profile logos are stored at `{user_id}/logo.png`.
+4. **Vault stock quantity:** Run `supabase/migrations/migration_add_inventory_stock_qty.sql` to add `stock_qty` (default `1`) on `inventory` so users can track multiples of the same piece in the vault.
+5. **Storage bucket for logos:** In Supabase Dashboard → Storage, create a bucket named `product-images` and make it **public** (or add a policy allowing authenticated users to upload/read). Profile logos are stored at `{user_id}/logo.png`.
 
 ## 2. Create a Stripe Account and Product
 

@@ -347,6 +347,7 @@ export default function Home() {
   const [locations, setLocations] = useState<string[]>(['Main Vault']);
   const [showLocationMenuId, setShowLocationMenuId] = useState<string | null>(null);
   const [showTagMenuId, setShowTagMenuId] = useState<string | null>(null);
+  const [updatingStockId, setUpdatingStockId] = useState<string | null>(null);
   const [newLocationInput, setNewLocationInput] = useState('');
   const [newTagInput, setNewTagInput] = useState('');
 
@@ -911,7 +912,9 @@ export default function Home() {
               authReadyResolve(session);
             }
             setUser(session?.user ?? null);
-            if (session) fetchInventory();
+            // Don’t refetch vault on TOKEN_REFRESHED: refreshSession() (e.g. before Stripe checkout) would
+            // trigger a parallel fetch-inventory → 402 → “Vault Load Failed” toast while redirecting to pay.
+            if (session && event !== 'TOKEN_REFRESHED') fetchInventory();
             if (event === "PASSWORD_RECOVERY") setShowResetModal(true);
           });
           subscription = authSub;
@@ -1336,6 +1339,26 @@ export default function Home() {
     } else {
       setInventory(inventory.map(i => i.id === id ? { ...i, tag: null } : i));
       setShowTagMenuId(null);
+    }
+  };
+
+  /** In-stock count per vault row (defaults to 1 if column missing). */
+  const vaultItemStockQty = useCallback((item: { stock_qty?: unknown }) =>
+    Math.min(999999, Math.max(1, Math.floor(Number(item.stock_qty)) || 1)), []);
+
+  const updateStockQty = async (id: string, nextRaw: number) => {
+    const next = vaultItemStockQty({ stock_qty: nextRaw });
+    if (updatingStockId === id) return;
+    setUpdatingStockId(id);
+    try {
+      const { error } = await supabase.from('inventory').update({ stock_qty: next }).eq('id', id);
+      if (error) {
+        setNotification({ title: 'Could not update stock', message: error.message, type: 'error' });
+      } else {
+        setInventory((prev) => prev.map((i) => (i.id === id ? { ...i, stock_qty: next } : i)));
+      }
+    } finally {
+      setUpdatingStockId(null);
     }
   };
 
@@ -1926,9 +1949,13 @@ export default function Home() {
         hours: 0,
         location: 'Main Vault',
         tag: null,
-        status: 'draft'
+        status: 'draft',
+        stock_qty: 1,
       };
     } else if (isUpdating) {
+      const preserveStock = vaultItemStockQty(
+        inventory.find((i) => i.id === editingItemId) ?? { stock_qty: 1 }
+      );
       const a = calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneList, overheadCost, overheadType, undefined, undefined, undefined, false);
       const { wholesale, retail } = getStrategyPrices(a);
       newItem = {
@@ -1950,7 +1977,8 @@ export default function Home() {
         markup_b: markupB,
         custom_formula: strategy === 'custom' ? (selectedFormulaId ? { ...customFormulaModel, formula_name: formulas.find(f => f.id === selectedFormulaId)?.name || null } : customFormulaModel) : null,
         hours: Number(hours) || 0,
-        status: 'active'
+        status: 'active',
+        stock_qty: preserveStock,
       };
     } else {
       const useManualForInitialSave = metalList.some((m: any) => m.isManual && m.manualPrice);
@@ -1978,7 +2006,8 @@ export default function Home() {
         hours: Number(hours) || 0,
         location: 'Main Vault',
         tag: null,
-        status: 'active'
+        status: 'active',
+        stock_qty: 1,
       };
     }
 
@@ -2446,9 +2475,10 @@ export default function Home() {
       const stonesArray = convertStonesToArray(item);
       const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, stonesArray, item.overhead_cost || 0, (item.overhead_type as 'flat' | 'percent') || 'flat', item.multiplier, item.markup_b);
       const itemPrices = getItemPrices(item, current);
-      return acc + itemPrices.retail;
+      const qty = vaultItemStockQty(item);
+      return acc + itemPrices.retail * qty;
     }, 0);
-  }, [inventory, prices, calculateFullBreakdown]);
+  }, [inventory, prices, calculateFullBreakdown, vaultItemStockQty]);
 
   const exportToCSV = () => {
     const targetItems = selectedItems.size > 0
@@ -2463,7 +2493,35 @@ export default function Home() {
       headerRows.push('');
     }
 
-    const headers = ["Item Name", "Status", "Tag", "Location", "Live Retail", "Live Wholesale", "Saved Retail", "Saved Wholesale", "Labor Hours", "Labor Cost", "Materials Cost", "Other Costs", "Stone Retail", "Stone Cost", "Stone Markup", "Overhead Cost", "Overhead Type", "Notes", "Date Created", "Formula", "Metals", "Image URL"];
+    const headers = [
+      "Item Name",
+      "Stock qty",
+      "Status",
+      "Tag",
+      "Location",
+      "Live Retail (unit)",
+      "Live Wholesale (unit)",
+      "Saved Retail (unit)",
+      "Saved Wholesale (unit)",
+      "Live Retail (× qty)",
+      "Live Wholesale (× qty)",
+      "Saved Retail (× qty)",
+      "Saved Wholesale (× qty)",
+      "Labor Hours",
+      "Labor Cost",
+      "Materials Cost",
+      "Other Costs",
+      "Stone Retail",
+      "Stone Cost",
+      "Stone Markup",
+      "Overhead Cost",
+      "Overhead Type",
+      "Notes",
+      "Date Created",
+      "Formula",
+      "Metals",
+      "Image URL",
+    ];
     const rows = targetItems.map(item => {
       const stonesArray = convertStonesToArray(item);
       const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, stonesArray, item.overhead_cost || 0, (item.overhead_type as 'flat' | 'percent') || 'flat', item.multiplier, item.markup_b);
@@ -2471,6 +2529,7 @@ export default function Home() {
       const liveWholesale = itemPrices.wholesale;
       const liveRetail = itemPrices.retail;
       const metalsStr = item.metals.map((m: any) => `${m.weight}${m.unit} ${m.type}`).join('; ');
+      const q = vaultItemStockQty(item);
 
       const stoneRetail = current.stoneRetail || 0;
       const stoneCost = current.stones || 0;
@@ -2478,6 +2537,7 @@ export default function Home() {
 
       return [
         `"${(item.name || '').toUpperCase()}"`,
+        q,
         `"${item.status || 'active'}"`,
         `"${item.tag || ''}"`,
         `"${item.location || 'Main Vault'}"`,
@@ -2485,6 +2545,10 @@ export default function Home() {
         roundForDisplay(liveWholesale).toFixed(2),
         roundForDisplay(Number(item.retail)).toFixed(2),
         roundForDisplay(Number(item.wholesale)).toFixed(2),
+        roundForDisplay(liveRetail * q).toFixed(2),
+        roundForDisplay(liveWholesale * q).toFixed(2),
+        roundForDisplay(Number(item.retail) * q).toFixed(2),
+        roundForDisplay(Number(item.wholesale) * q).toFixed(2),
         item.hours || 0,
         Number(item.labor_at_making || 0).toFixed(2),
         (Number(current.metalCost)).toFixed(2),
@@ -3050,7 +3114,8 @@ export default function Home() {
       doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(dark[0], dark[1], dark[2]);
       doc.text((item.name || '').toUpperCase(), titleX, titleY);
       doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(muted[0], muted[1], muted[2]);
-      const meta = `${item.status === 'archived' || item.status === 'sold' ? 'Archived' : 'Active'}  ·  ${item.location || 'Main Vault'}  ·  Saved ${new Date(item.created_at).toLocaleDateString()}`;
+      const stockQ = vaultItemStockQty(item);
+      const meta = `${item.status === 'archived' || item.status === 'sold' ? 'Archived' : 'Active'}  ·  ${item.location || 'Main Vault'}  ·  QTY: ${stockQ}  ·  Saved ${new Date(item.created_at).toLocaleDateString()}`;
       doc.text(meta, titleX, titleY + titleMetaGap);
       currentY += itemHeaderHeight;
 
@@ -3062,8 +3127,9 @@ export default function Home() {
       const wholesaleRow: any[] = useWholesalePercent
         ? (() => {
             const pct = pdfWholesalePercentOfRetail! / 100;
-            const wholesaleFromSavedRetail = roundForDisplay(Number(item.retail) * pct);
-            const wholesaleFromLiveRetail = roundForDisplay(liveRetail * pct);
+            // Exact % of retail (no price-band rounding) — only format to cents for display
+            const wholesaleFromSavedRetail = Number(item.retail) * pct;
+            const wholesaleFromLiveRetail = liveRetail * pct;
             const row: any[] = [`Wholesale (${pdfWholesalePercentOfRetail}% of retail)`, `$${wholesaleFromSavedRetail.toFixed(2)}`];
             if (includeLiveInPDF) row.push(`$${wholesaleFromLiveRetail.toFixed(2)}`);
             return row;
@@ -5659,6 +5725,48 @@ export default function Home() {
                             </p>
                           </div>
                         </div>
+
+                        {(() => {
+                          const sq = vaultItemStockQty(item);
+                          const busy = updatingStockId === item.id;
+                          return (
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-3 mt-1 border-t border-stone-100">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-[9px] font-black uppercase text-stone-400 tracking-wider">In stock</span>
+                                <div className="flex items-center rounded-xl border border-stone-200 bg-stone-50 overflow-hidden">
+                                  <button
+                                    type="button"
+                                    disabled={busy || sq <= 1}
+                                    onClick={() => updateStockQty(item.id, sq - 1)}
+                                    className="w-9 h-8 text-sm font-black text-slate-700 hover:bg-stone-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                    aria-label="Decrease stock"
+                                  >
+                                    −
+                                  </button>
+                                  <span className="min-w-[2.25rem] text-center text-xs font-black tabular-nums px-1">{sq}</span>
+                                  <button
+                                    type="button"
+                                    disabled={busy || sq >= 999999}
+                                    onClick={() => updateStockQty(item.id, sq + 1)}
+                                    className="w-9 h-8 text-sm font-black text-slate-700 hover:bg-stone-200 disabled:opacity-40 transition-colors"
+                                    aria-label="Increase stock"
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                                {busy && <span className="text-[8px] font-bold text-stone-400 uppercase">Saving…</span>}
+                              </div>
+                              {sq > 1 && (
+                                <p className="text-[9px] text-stone-600">
+                                  <span className="font-black uppercase text-stone-400 tracking-wider mr-1">Line total (live retail × qty)</span>
+                                  <span className="font-black text-slate-900 tabular-nums">
+                                    ${pricesLoaded ? formatCurrency(liveRetail * sq) : '—'}
+                                  </span>
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       <details className="group border-t border-stone-50 text-left">
