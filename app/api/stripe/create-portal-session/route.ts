@@ -36,7 +36,8 @@ export async function POST(request: Request) {
       .from('subscriptions')
       .select('stripe_customer_id')
       .eq('user_id', user.id)
-      .order('updated_at', { ascending: false })
+      .order('updated_at', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false, nullsFirst: false })
       .limit(1);
 
     const customerId = subRows?.[0]?.stripe_customer_id;

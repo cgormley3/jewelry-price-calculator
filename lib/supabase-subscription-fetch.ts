@@ -12,11 +12,13 @@ export async function fetchLatestSubscriptionForUser(
   supabase: SupabaseClient,
   userId: string
 ): Promise<SubscriptionGateFields | null> {
+  // NULLS LAST: rows with a real updated_at (e.g. after Stripe sync) must win over stale rows with null updated_at
   const { data, error } = await supabase
     .from('subscriptions')
     .select('status, current_period_end, updated_at')
     .eq('user_id', userId)
-    .order('updated_at', { ascending: false })
+    .order('updated_at', { ascending: false, nullsFirst: false })
+    .order('created_at', { ascending: false, nullsFirst: false })
     .limit(1);
 
   if (error) {

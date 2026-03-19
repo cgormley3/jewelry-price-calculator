@@ -1020,15 +1020,37 @@ export default function Home() {
         setLoading(false);
         return;
       }
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 25000);
-      let res = await fetch('/api/fetch-inventory', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accessToken, userId: session.user.id }),
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
+      const fetchInvOnce = () => {
+        const c = new AbortController();
+        const tid = setTimeout(() => c.abort(), 25000);
+        return fetch('/api/fetch-inventory', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessToken, userId: session.user.id }),
+          signal: c.signal,
+        }).finally(() => clearTimeout(tid));
+      };
+
+      let res = await fetchInvOnce();
+      let inventory402Body: Record<string, unknown> | null = null;
+      let retriedInventoryAfter402 = false;
+
+      if (res.status === 402) {
+        inventory402Body = await res.json().catch(() => ({}));
+        const resSubCheck = await fetch('/api/subscription/status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessToken, userId: session.user.id }),
+        });
+        const subCheck = resSubCheck.ok ? await resSubCheck.json().catch(() => ({})) : {};
+        if (subCheck.subscribed) {
+          setSubscriptionStatus({ subscribed: true });
+          await new Promise((r) => setTimeout(r, 450));
+          retriedInventoryAfter402 = true;
+          res = await fetchInvOnce();
+        }
+      }
+
       if (res.ok) {
         const data = await res.json();
         setInventory(Array.isArray(data) ? data : []);
@@ -1114,13 +1136,30 @@ export default function Home() {
         }
         setNotification({ title: 'Session expired', message: err?.error || 'Please sign in again.', type: 'info', onConfirm: () => { setLoading(true); fetchInventory(); } });
       } else if (res.status === 402) {
-        const err = await res.json().catch(() => ({}));
-        setSubscriptionStatus({ subscribed: false });
-        setInventory([]);
-        setLocations(['Main Vault']);
-        setVaultPaywallHasItems(!!err?.hasItems);
-        if (err?.code !== 'PAYWALL_VAULT') {
-          setNotification({ title: 'Vault Load Failed', message: err?.error || `Upgrade to Vault+ (${VAULT_PLUS_PRICE_PHRASE}) to access your vault.`, type: 'info' });
+        const err = retriedInventoryAfter402
+          ? await res.json().catch(() => ({}))
+          : (inventory402Body ?? {});
+        const resSubFinal = await fetch('/api/subscription/status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessToken, userId: session.user.id }),
+        });
+        const subFinal = resSubFinal.ok ? await resSubFinal.json().catch(() => ({})) : {};
+        const paid = !!subFinal.subscribed;
+        setSubscriptionStatus({ subscribed: paid });
+        setVaultPaywallHasItems(!!(err as { hasItems?: boolean })?.hasItems);
+        if (!paid) {
+          setInventory([]);
+          setLocations(['Main Vault']);
+          if ((err as { code?: string })?.code !== 'PAYWALL_VAULT') {
+            setNotification({ title: 'Vault Load Failed', message: (err as { error?: string })?.error || `Upgrade to Vault+ (${VAULT_PLUS_PRICE_PHRASE}) to access your vault.`, type: 'info' });
+          }
+        } else {
+          setNotification({
+            title: 'Vault',
+            message: 'Your subscription is active but the vault request failed once. Tap Refresh again, or open Vault → Sync from Stripe if this keeps happening.',
+            type: 'info',
+          });
         }
         const resProfile = await fetch('/api/profile', {
           method: 'POST',
@@ -1166,6 +1205,7 @@ export default function Home() {
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.synced) {
+        setSubscriptionStatus({ subscribed: true });
         setNotification({ title: 'Vault+ linked', message: data.message || 'Subscription synced.', type: 'success' });
       } else if (data.message) {
         setNotification({ title: 'Vault+ sync', message: data.message, type: 'info' });
@@ -1177,6 +1217,11 @@ export default function Home() {
     } finally {
       setSyncingVaultPlus(false);
       setLoading(true);
+      try {
+        await supabase.auth.refreshSession();
+      } catch {
+        /* ignore */
+      }
       await fetchInventory();
     }
   };
