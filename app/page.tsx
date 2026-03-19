@@ -46,6 +46,15 @@ export default function Home() {
   const [filterStartDate, setFilterStartDate] = useState('');
   const [filterEndDate, setFilterEndDate] = useState('');
 
+  // Compare tab filters (independent from Vault)
+  const [compareFilterLocation, setCompareFilterLocation] = useState('All');
+  const [compareFilterTag, setCompareFilterTag] = useState('All');
+  const [compareFilterStrategy, setCompareFilterStrategy] = useState('All');
+  const [compareFilterMetal, setCompareFilterMetal] = useState('All');
+  const [compareFilterStatus, setCompareFilterStatus] = useState('Active');
+  const [compareSearchTerm, setCompareSearchTerm] = useState('');
+  const [showCompareFilterMenu, setShowCompareFilterMenu] = useState(false);
+
   // Modals
   const [showGlobalRecalc, setShowGlobalRecalc] = useState(false);
   const [openEditId, setOpenEditId] = useState<string | null>(null);
@@ -60,6 +69,7 @@ export default function Home() {
   const [includeLiveInPDF, setIncludeLiveInPDF] = useState(true);
   const [includeBreakdownInPDF, setIncludeBreakdownInPDF] = useState(true);
   const [includeNotesInPDF, setIncludeNotesInPDF] = useState(true);
+  const [pdfWholesalePercentOfRetail, setPdfWholesalePercentOfRetail] = useState<number | null>(null);
 
   // Profile (display name, company, logo for PDF/CSV/account)
   const [profile, setProfile] = useState<{ display_name: string | null; company_name: string | null; logo_url: string | null } | null>(null);
@@ -369,6 +379,8 @@ export default function Home() {
   const wakeUpTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const filterButtonRef = useRef<HTMLButtonElement>(null);
   const [filterDropdownRect, setFilterDropdownRect] = useState<{ top: number; left: number } | null>(null);
+  const compareFilterButtonRef = useRef<HTMLButtonElement>(null);
+  const [compareFilterDropdownRect, setCompareFilterDropdownRect] = useState<{ top: number; left: number } | null>(null);
 
   const [notification, setNotification] = useState<{
     title: string;
@@ -406,7 +418,17 @@ export default function Home() {
     } else {
       setFilterDropdownRect(null);
     }
-  }, [showFilterMenu]);
+    if (showCompareFilterMenu && compareFilterButtonRef.current) {
+      const rect = compareFilterButtonRef.current.getBoundingClientRect();
+      setCompareFilterDropdownRect({ top: rect.bottom + 8, left: rect.left });
+    } else {
+      setCompareFilterDropdownRect(null);
+    }
+  }, [showFilterMenu, showCompareFilterMenu]);
+
+  useEffect(() => {
+    if (activeTab !== 'compare') setShowCompareFilterMenu(false);
+  }, [activeTab]);
 
   const fetchPrices = useCallback(async () => {
     const cachedData = sessionStorage.getItem('vault_prices');
@@ -2029,6 +2051,32 @@ export default function Home() {
     });
   }, [inventory, searchTerm, filterLocation, filterTag, filterStrategy, filterMetal, filterStatus, filterMinPrice, filterMaxPrice, filterStartDate, filterEndDate, prices]);
 
+  const compareFilteredInventory = useMemo(() => {
+    return inventory.filter(item => {
+      const lowerTerm = compareSearchTerm.toLowerCase();
+      if (compareSearchTerm) {
+        const matchName = item.name.toLowerCase().includes(lowerTerm);
+        const matchMetal = (item.metals || []).some((m: any) => m?.type?.toLowerCase().includes(lowerTerm));
+        const matchNotes = item.notes && item.notes.toLowerCase().includes(lowerTerm);
+        const matchLocation = item.location && item.location.toLowerCase().includes(lowerTerm);
+        const matchTag = item.tag && item.tag.toLowerCase().includes(lowerTerm);
+        const matchDate = new Date(item.created_at).toLocaleDateString().includes(compareSearchTerm);
+        if (!matchName && !matchMetal && !matchNotes && !matchLocation && !matchTag && !matchDate) return false;
+      }
+      if (compareFilterLocation !== 'All' && (item.location || 'Main Vault') !== compareFilterLocation) return false;
+      if (compareFilterTag !== 'All' && item.tag !== compareFilterTag) return false;
+      if (compareFilterStrategy !== 'All' && item.strategy !== compareFilterStrategy) return false;
+      if (compareFilterMetal !== 'All') {
+        if (!(item.metals || []).some((m: any) => m?.type?.toLowerCase().includes(compareFilterMetal.toLowerCase()))) return false;
+      }
+      const itemStatus = item.status || 'active';
+      if (compareFilterStatus === 'Active' && itemStatus !== 'active') return false;
+      if (compareFilterStatus === 'Archived' && (itemStatus === 'active' || itemStatus === 'draft')) return false;
+      if (compareFilterStatus === 'Draft' && itemStatus !== 'draft') return false;
+      return true;
+    });
+  }, [inventory, compareSearchTerm, compareFilterLocation, compareFilterTag, compareFilterStrategy, compareFilterMetal, compareFilterStatus]);
+
   const uniqueTags = useMemo(() => {
     const fromItems = inventory.map((i: any) => i.tag).filter(Boolean);
     const merged = [...new Set([...savedUserTags, ...fromItems])];
@@ -2508,12 +2556,12 @@ export default function Home() {
   const computeItemBlockHeight = (
     doc: jsPDF,
     item: any,
-    opts: { includeBreakdownInPDF: boolean; includeLiveInPDF: boolean; includeNotesInPDF: boolean }
+    opts: { includeBreakdownInPDF: boolean; includeLiveInPDF: boolean; includeNotesInPDF: boolean; pdfWholesalePercentOfRetail: number | null }
   ): number => {
-    const { includeBreakdownInPDF, includeNotesInPDF } = opts;
+    const { includeBreakdownInPDF, includeNotesInPDF, pdfWholesalePercentOfRetail } = opts;
     const pdfThumbSize = 18;
     const pdfThumbPaddingBelow = 4;
-    const tableHeight = 22;
+    const tableHeight = 22 + (pdfWholesalePercentOfRetail != null ? 8 : 0);
     const pdfTableEndX = pdfMargin + (opts.includeLiveInPDF ? 96 : 90);
     const pdfBreakdownX = pdfTableEndX + 10;
     const pdfBreakdownMaxWidth = pdfPageWidth - pdfMargin - pdfBreakdownX;
@@ -2647,7 +2695,7 @@ export default function Home() {
     currentY += 8;
 
     for (const item of targetItems) {
-      const itemHeight = computeItemBlockHeight(doc, item, { includeBreakdownInPDF, includeLiveInPDF, includeNotesInPDF });
+      const itemHeight = computeItemBlockHeight(doc, item, { includeBreakdownInPDF, includeLiveInPDF, includeNotesInPDF, pdfWholesalePercentOfRetail });
       if (currentY + itemHeight > pdfPageHeight - PDF_FOOTER_HEIGHT) {
         drawPDFPageFooter(doc, iconData, pageNum);
         doc.addPage();
@@ -2695,10 +2743,20 @@ export default function Home() {
       const wholesaleRow: any[] = ['Wholesale', `$${roundForDisplay(Number(item.wholesale)).toFixed(2)}`];
       if (includeLiveInPDF) wholesaleRow.push(`$${roundForDisplay(liveWholesale).toFixed(2)}`);
 
+      const tableBody: any[] = [retailRow, wholesaleRow];
+      if (pdfWholesalePercentOfRetail != null && pdfWholesalePercentOfRetail > 0 && pdfWholesalePercentOfRetail <= 100) {
+        const pct = pdfWholesalePercentOfRetail / 100;
+        const wholesaleFromSavedRetail = roundForDisplay(Number(item.retail) * pct);
+        const wholesaleFromLiveRetail = roundForDisplay(liveRetail * pct);
+        const percentRow: any[] = [`Wholesale (${pdfWholesalePercentOfRetail}% of retail)`, `$${wholesaleFromSavedRetail.toFixed(2)}`];
+        if (includeLiveInPDF) percentRow.push(`$${wholesaleFromLiveRetail.toFixed(2)}`);
+        tableBody.push(percentRow);
+      }
+
       autoTable(doc, {
         startY: tableStartY,
         head: tableHead,
-        body: [retailRow, wholesaleRow],
+        body: tableBody,
         theme: 'grid',
         headStyles: { fillColor: [235, 235, 235] as any, textColor: [60, 60, 60], fontSize: 8, cellPadding: 1.5 },
         columnStyles: includeLiveInPDF ? { 0: { cellWidth: 32 }, 1: { cellWidth: 32 }, 2: { cellWidth: 32 } } : { 0: { cellWidth: 40 }, 1: { cellWidth: 50 } },
@@ -3291,6 +3349,39 @@ export default function Home() {
                 <div>
                   <p className="text-xs font-black uppercase text-slate-900">Include Notes</p>
                   <p className="text-[10px] text-stone-400 font-bold">Show item notes if present</p>
+                </div>
+              </div>
+
+              {/* Wholesale as % of Retail */}
+              <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 space-y-2">
+                <p className="text-xs font-black uppercase text-slate-900">Wholesale as % of Retail</p>
+                <p className="text-[10px] text-stone-400 font-bold">For store consignment (e.g. 50% = store doubles your price)</p>
+                <div className="flex flex-wrap gap-2 items-center">
+                  {[null, 50, 60, 40].map((pct) => (
+                    <button
+                      key={pct ?? 'off'}
+                      type="button"
+                      onClick={() => setPdfWholesalePercentOfRetail(pct)}
+                      className={`py-2 px-3 rounded-xl text-[10px] font-black uppercase border transition-all ${pdfWholesalePercentOfRetail === pct ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-500 hover:border-stone-300'}`}
+                    >
+                      {pct == null ? 'Off' : `${pct}%`}
+                    </button>
+                  ))}
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      min={1}
+                      max={100}
+                      placeholder="Custom %"
+                      value={pdfWholesalePercentOfRetail != null && ![50, 60, 40].includes(pdfWholesalePercentOfRetail) ? pdfWholesalePercentOfRetail : ''}
+                      onChange={(e) => {
+                        const v = e.target.value ? parseInt(e.target.value, 10) : null;
+                        setPdfWholesalePercentOfRetail(v != null && v >= 1 && v <= 100 ? v : null);
+                      }}
+                      className="w-16 p-2 rounded-lg border border-stone-200 text-xs font-bold text-center"
+                    />
+                    <span className="text-[10px] font-bold text-stone-400">%</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -5262,7 +5353,84 @@ export default function Home() {
           <div className={`bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm flex flex-col flex-1 min-h-0 min-h-[50vh] lg:min-h-0 lg:max-h-[calc(100vh-5rem)] overflow-hidden ${activeTab !== 'compare' ? 'hidden' : ''}`}>
             <div className="p-6 border-b border-stone-100 bg-white space-y-4 rounded-t-[2.5rem] shrink-0">
               <h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Compare Prices</h2>
-              <p className="text-[10px] text-stone-500">Compare vault item prices across different formulas. Uses same filters as Vault — <button type="button" onClick={() => setActiveTab('vault')} className="text-[#A5BEAC] font-bold hover:underline">switch to Vault</button> to adjust.</p>
+              <p className="text-[10px] text-stone-500">Compare vault item prices across different formulas.</p>
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 min-h-[48px] sm:h-12">
+                <div className="relative flex-1 flex gap-2 w-full min-h-[48px] sm:h-full">
+                  <div className="relative shrink-0 min-h-[48px] sm:h-full w-12">
+                    <button
+                      ref={compareFilterButtonRef}
+                      onClick={() => setShowCompareFilterMenu(!showCompareFilterMenu)}
+                      className={`w-full h-full min-h-[48px] sm:min-h-0 flex items-center justify-center rounded-xl border transition-all ${showCompareFilterMenu ? 'bg-slate-900 text-white border-slate-900' : 'bg-stone-50 border-stone-200 text-stone-400 hover:border-[#A5BEAC]'}`}
+                    >
+                      <span className="text-lg">⚡</span>
+                    </button>
+                    {showCompareFilterMenu && compareFilterDropdownRect && typeof document !== 'undefined' && createPortal(
+                      <div
+                        className="fixed w-72 bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[9999] p-4 animate-in fade-in slide-in-from-top-2 space-y-4"
+                        style={{ top: compareFilterDropdownRect.top, left: compareFilterDropdownRect.left }}
+                      >
+                        <div className="flex justify-between items-center">
+                          <h4 className="text-xs font-black uppercase text-slate-900">Compare Filters</h4>
+                          <button onClick={() => {
+                            setCompareFilterLocation('All'); setCompareFilterTag('All'); setCompareFilterStrategy('All'); setCompareFilterMetal('All'); setCompareFilterStatus('Active'); setCompareSearchTerm('');
+                          }} className="text-[9px] font-bold text-[#A5BEAC] uppercase hover:text-slate-900">Reset</button>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-bold text-stone-400 uppercase">Location</label>
+                          <select value={compareFilterLocation} onChange={e => setCompareFilterLocation(e.target.value)} className="w-full p-2 bg-stone-50 border rounded-lg text-xs font-bold">
+                            <option>All</option>
+                            {locations.map(l => <option key={l}>{l}</option>)}
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-bold text-stone-400 uppercase">Tag</label>
+                          <div className="flex flex-wrap gap-2">
+                            <button key="All" onClick={() => setCompareFilterTag('All')} className={`py-1.5 px-2 rounded-lg text-[9px] font-black uppercase border ${compareFilterTag === 'All' ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-400'}`}>All</button>
+                            {uniqueTags.map(t => (
+                              <button key={t} onClick={() => setCompareFilterTag(t)} className={`py-1.5 px-2 rounded-lg text-[9px] font-black uppercase border ${compareFilterTag === t ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-400'}`}>{t}</button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-bold text-stone-400 uppercase">Item Status</label>
+                          <div className="flex gap-2 bg-stone-100 p-1 rounded-lg flex-wrap">
+                            {['Active', 'Draft', 'Archived', 'All'].map(s => (
+                              <button key={s} onClick={() => setCompareFilterStatus(s)} className={`flex-1 py-1.5 rounded-md text-[8px] font-black uppercase transition-all ${compareFilterStatus === s ? 'bg-white text-slate-900 shadow-sm' : 'text-stone-400 hover:text-stone-600'}`}>{s}</button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-bold text-stone-400 uppercase">Formula</label>
+                          <div className="flex gap-2">
+                            {['All', 'A', 'B', 'custom'].map(s => (
+                              <button key={s} onClick={() => setCompareFilterStrategy(s)} className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase border ${compareFilterStrategy === s ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-400'}`}>{s === 'custom' ? 'Custom' : s}</button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-bold text-stone-400 uppercase">Metal Type</label>
+                          <div className="grid grid-cols-2 gap-2">
+                            {['All', 'Gold', 'Silver', 'Platinum'].map(m => (
+                              <button key={m} onClick={() => setCompareFilterMetal(m)} className={`py-1.5 rounded-lg text-[9px] font-black uppercase border ${compareFilterMetal === m ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-400'}`}>{m}</button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>,
+                      document.body
+                    )}
+                  </div>
+                  <div className="relative flex-1 min-w-0 min-h-[48px] sm:h-full">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-300 text-xs">🔍</span>
+                    <input
+                      type="text"
+                      placeholder="Search by name, tag, metal, location..."
+                      className="w-full h-full min-h-[48px] sm:min-h-0 pl-10 pr-4 bg-stone-50 border rounded-xl text-xs font-bold outline-none focus:border-[#A5BEAC] transition-all"
+                      value={compareSearchTerm}
+                      onChange={(e) => setCompareSearchTerm(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
               <div className="flex flex-wrap gap-2 items-center">
                 <span className="text-[9px] font-bold text-stone-400 uppercase">Formulas:</span>
                 <button
@@ -5299,9 +5467,9 @@ export default function Home() {
               </div>
             </div>
             <div className="flex-1 overflow-x-auto overflow-y-auto p-6">
-              {filteredInventory.length === 0 ? (
+              {compareFilteredInventory.length === 0 ? (
                 <div className="text-center py-12 text-stone-500 text-sm">
-                  Add items to your vault to compare prices. Use the Vault tab to add items.
+                  {inventory.length === 0 ? 'Add items to your vault to compare prices. Use the Vault tab to add items.' : 'No items match your filters. Try adjusting filters or search.'}
                 </div>
               ) : !compareFormulas.a && !compareFormulas.b && compareFormulas.customIds.length === 0 ? (
                 <div className="text-center py-12 text-stone-500 text-sm">
@@ -5323,7 +5491,7 @@ export default function Home() {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredInventory.map((item: any) => {
+                      {compareFilteredInventory.map((item: any) => {
                         const pricesByFormula = getPricesForFormulas(item, compareFormulas);
                         const itemStrategy = item.strategy === 'custom' && item.custom_formula?.formula_name ? item.custom_formula.formula_name : item.strategy;
                         return (
