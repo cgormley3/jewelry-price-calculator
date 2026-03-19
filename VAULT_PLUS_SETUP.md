@@ -96,7 +96,7 @@ Check in Supabase **Table Editor → subscriptions**:
 
 1. **`user_id`** must equal the user’s id from **Authentication → Users** for the account they’re signed into (not another email/Google identity). Use Vault → **Not seeing items? Diagnose** to see `your_user_id` and compare.
 2. **`status`** must be `active`, `trialing`, or `past_due` (Stripe retry window). Values like `inactive`, `canceled`, or `unpaid` block access.
-3. **`current_period_end`** must be **null** or a **future** timestamp. A wrong or past date denies access until updated (webhook, **Sync from Stripe**, or manual SQL).
+3. **`current_period_end`** can be **null** or briefly **in the past** in the database while **`status`** is still `active` / `trialing` / `past_due` — the app trusts **`status`** so webhook lag doesn’t lock people out. Use **Sync from Stripe** or webhooks to keep dates accurate for your own reporting.
 4. **Duplicate rows** for the same user are avoided by a unique `user_id`; if you ever had duplicates, the app now uses the row with the latest `updated_at` (null `updated_at` sorts last so a freshly synced row wins).
 5. If access still flips wrong after sync, in SQL run: `UPDATE subscriptions SET updated_at = NOW() WHERE updated_at IS NULL;`
 
