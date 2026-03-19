@@ -633,13 +633,22 @@ export default function Home() {
     return result;
   }, [calculateFullBreakdown, formulas]);
 
-  // Auto-expand custom formula section when user first loads with saved formulas (so it shows first as default)
+  // Auto-expand custom formula section and load first formula when user has saved formulas (so it shows first as default)
   const hasAutoExpandedForFormulasRef = useRef(false);
   useEffect(() => {
     if (formulas.length > 0 && !hasAutoExpandedForFormulasRef.current) {
       hasAutoExpandedForFormulasRef.current = true;
       setCustomStrategyExpanded(true);
       setStrategy('custom');
+      const first = formulas[0];
+      if (first?.formula_base && first?.formula_wholesale && first?.formula_retail) {
+        setSelectedFormulaId(first.id);
+        setCustomFormulaModel({
+          formula_base: first.formula_base,
+          formula_wholesale: first.formula_wholesale,
+          formula_retail: first.formula_retail,
+        });
+      }
     }
     if (formulas.length === 0) hasAutoExpandedForFormulasRef.current = false;
   }, [formulas.length]);
