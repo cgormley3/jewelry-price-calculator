@@ -2463,8 +2463,10 @@ export default function Home() {
       doc.text(nameToShow, pdfMargin, y);
       y += 5;
     }
-    doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(120, 120, 120);
-    doc.text(`Generated ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`, pdfMargin, y);
+    if (pageNum === 1) {
+      doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(120, 120, 120);
+      doc.text(new Date().toLocaleDateString(), pdfMargin, y);
+    }
   };
 
   const drawPDFPageFooter = (doc: jsPDF, iconData: string | null, pageNum?: number) => {
@@ -5501,7 +5503,7 @@ export default function Home() {
                   Create formula
                 </button>
               </div>
-              <p className="text-[10px] text-stone-500">Create custom price formulas and select them in the Calculator.</p>
+              <p className="text-[10px] text-stone-500">Create custom price formulas. Star one to make it the default in the Calculator.</p>
             </div>
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
               {!user ? (
@@ -5607,7 +5609,11 @@ export default function Home() {
                             const saved = await res.json();
                             setFormulas(prev => {
                               const without = prev.filter(f => f.id !== saved.id);
-                              return [saved, ...without];
+                              const existing = prev.find(f => f.id === saved.id);
+                              const merged = { ...saved, is_starred: existing?.is_starred ?? saved.is_starred ?? false };
+                              const next = [merged, ...without];
+                              next.sort((a, b) => (b.is_starred ? 1 : 0) - (a.is_starred ? 1 : 0));
+                              return next;
                             });
                             setFormulaEditorOpen(false);
                             setEditingFormulaId(null);
@@ -5657,7 +5663,40 @@ export default function Home() {
                           Base: {formulaToReadableString(f.formula_base)} | Wholesale: {formulaToReadableString(f.formula_wholesale)} | Retail: {formulaToReadableString(f.formula_retail)}
                         </p>
                       </div>
-                      <div className="flex gap-2 shrink-0">
+                      <div className="flex gap-2 shrink-0 items-center">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              const session = (await supabase.auth.getSession()).data.session;
+                              const accessToken = (session as any)?.access_token;
+                              if (!accessToken || !user?.id) return;
+                              const res = await fetch('/api/star-formula', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ accessToken, userId: user.id, formulaId: f.is_starred ? null : f.id }),
+                              });
+                              if (res.ok) {
+                                const updated = await res.json();
+                                if (updated.id) {
+                                  setFormulas(prev => {
+                                    const next = prev.map(x => x.id === updated.id ? { ...updated, is_starred: true } : { ...x, is_starred: false });
+                                    const starred = next.find(x => x.is_starred);
+                                    return starred ? [starred, ...next.filter(x => x.id !== starred.id)] : next;
+                                  });
+                                  setSelectedFormulaId(updated.id);
+                                  setCustomFormulaModel({ formula_base: updated.formula_base, formula_wholesale: updated.formula_wholesale, formula_retail: updated.formula_retail });
+                                } else {
+                                  setFormulas(prev => prev.map(x => ({ ...x, is_starred: false })));
+                                }
+                              }
+                            } catch { /* ignore */ }
+                          }}
+                          title={f.is_starred ? 'Remove as default' : 'Set as default in Calculator'}
+                          className={`p-1.5 rounded-lg border transition ${f.is_starred ? 'text-amber-500 border-amber-300 bg-amber-50' : 'text-stone-400 border-stone-200 hover:border-[#A5BEAC] hover:text-[#A5BEAC]'}`}
+                        >
+                          {f.is_starred ? '★' : '☆'}
+                        </button>
                         <button
                           type="button"
                           onClick={() => {

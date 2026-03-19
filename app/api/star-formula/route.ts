@@ -13,11 +13,10 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { accessToken, userId } = body;
+    const { accessToken, userId, formulaId } = body;
     if (!accessToken) {
       return NextResponse.json({ error: 'Missing access token' }, { status: 400 });
     }
-
     const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey);
     const { data: { user }, error: userError } = await supabaseAuth.auth.getUser(accessToken);
     if (userError || !user?.id) {
@@ -29,20 +28,38 @@ export async function POST(request: Request) {
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    const { data, error } = await supabase
-      .from('formulas')
-      .select('*')
-      .eq('user_id', resolvedUserId)
-      .order('is_starred', { ascending: false })
-      .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('Fetch formulas error:', error);
-      return NextResponse.json({ error: error.message }, { status: 400 });
+    // Unstar all formulas for this user
+    const { error: unstarError } = await supabase
+      .from('formulas')
+      .update({ is_starred: false })
+      .eq('user_id', resolvedUserId);
+
+    if (unstarError) {
+      console.error('Unstar formulas error:', unstarError);
+      return NextResponse.json({ error: unstarError.message }, { status: 400 });
     }
-    return NextResponse.json(data || []);
+
+    // If formulaId provided, star that formula; otherwise just unstar all
+    if (formulaId) {
+      const { data, error } = await supabase
+        .from('formulas')
+        .update({ is_starred: true })
+        .eq('id', formulaId)
+        .eq('user_id', resolvedUserId)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Star formula error:', error);
+        return NextResponse.json({ error: error.message }, { status: 400 });
+      }
+      return NextResponse.json(data);
+    }
+
+    return NextResponse.json({ ok: true });
   } catch (e: any) {
-    console.error('Fetch formulas exception:', e);
+    console.error('Star formula exception:', e);
     return NextResponse.json({ error: e?.message || 'Server error' }, { status: 500 });
   }
 }
