@@ -47,7 +47,7 @@ Use **POST** `/api/profile` with JSON `{ "accessToken": "..." }`. Do not pass to
 
 ## Build (Next.js 16 + jsPDF)
 
-Production builds use **`next build --webpack`** (see `package.json`). Turbopack’s default resolution can pick jsPDF’s Node entry and fail on `fflate`/workers; webpack uses the browser bundle as expected.
+**Dev and production** use webpack for bundling (see `package.json`: `next dev --webpack`, `next build --webpack`). Turbopack’s default resolution can pick jsPDF’s Node entry and fail on `fflate`/workers; webpack uses the browser bundle as expected.
 
 ## Ongoing
 

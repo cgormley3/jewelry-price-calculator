@@ -279,6 +279,8 @@ export default function Home() {
   const [loggingOut, setLoggingOut] = useState(false);
   const [cropImage, setCropImage] = useState<string | null>(null);
   const [cropItemId, setCropItemId] = useState<string | null>(null);
+  /** True when cropper was opened from the item's saved URL (re-crop) vs a new file pick */
+  const [cropIsExistingPhoto, setCropIsExistingPhoto] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [minZoom, setMinZoom] = useState(0.1);
   const [rotation, setRotation] = useState(0);
@@ -420,6 +422,22 @@ export default function Home() {
     if (priceRounding === 'none' || num === 0) return num;
     return Math.round(num / priceRounding) * priceRounding;
   }, [priceRounding]);
+
+  /** Compare table: stack W/R on two lines on phones; single line from sm+. */
+  const formatCompareWholesaleRetail = useCallback((wh: number, ret: number, alignEnd?: boolean) => {
+    const ws = roundForDisplay(Number(wh)).toFixed(2);
+    const rs = roundForDisplay(Number(ret)).toFixed(2);
+    const align = alignEnd ? 'items-end text-right' : 'items-start text-left';
+    return (
+      <>
+        <span className={`sm:hidden flex flex-col leading-[1.15] tabular-nums gap-0.5 ${align}`}>
+          <span>{`$${ws}`}</span>
+          <span className="text-stone-500 text-[10px]">{`$${rs}`}</span>
+        </span>
+        <span className="hidden sm:inline whitespace-nowrap">{`$${ws} / $${rs}`}</span>
+      </>
+    );
+  }, [roundForDisplay]);
 
   const setPriceRoundingWithPersist = useCallback((val: PriceRoundingOption) => {
     setPriceRounding(val);
@@ -1172,6 +1190,7 @@ export default function Home() {
       return;
     }
     revokeCropBlobUrl();
+    setCropIsExistingPhoto(false);
     try {
       const url = URL.createObjectURL(file);
       cropBlobUrlRef.current = url;
@@ -1184,6 +1203,35 @@ export default function Home() {
       setNotification({ title: "Could not open photo", message: "Try choosing the same picture again, or use a JPEG/PNG from Photos.", type: 'error' });
     }
     event.target.value = '';
+  };
+
+  /** Load the item's current image into the cropper (re-zoom / rotate / re-frame without picking a new file). */
+  const openExistingImageInCropper = async (itemId: string, imageUrl: string) => {
+    const raw = imageUrl?.trim();
+    if (!raw) return;
+    setOpenMenuId(null);
+    setCropIsExistingPhoto(true);
+    try {
+      const busted = raw.includes('?') ? `${raw}&vaultRecrop=${Date.now()}` : `${raw}?vaultRecrop=${Date.now()}`;
+      const res = await fetch(busted, { mode: 'cors', credentials: 'omit' });
+      if (!res.ok) throw new Error('fetch failed');
+      const blob = await res.blob();
+      if (!blob.type.startsWith('image/')) throw new Error('not image');
+      revokeCropBlobUrl();
+      const objectUrl = URL.createObjectURL(blob);
+      cropBlobUrlRef.current = objectUrl;
+      setCropImage(objectUrl);
+      setCropItemId(itemId);
+      setRotation(0);
+      setOffset({ x: 0, y: 0 });
+    } catch {
+      setCropIsExistingPhoto(false);
+      setNotification({
+        title: 'Could not open current photo',
+        message: 'Try “Change image” to pick the picture again from your device, or check your connection.',
+        type: 'error',
+      });
+    }
   };
 
   const handlePointerDown = (e: React.PointerEvent) => {
@@ -1222,6 +1270,7 @@ export default function Home() {
       setUploadingId(cropItemId);
       revokeCropBlobUrl();
       setCropImage(null);
+      setCropIsExistingPhoto(false);
       const fileName = `${user.id}/${cropItemId}-${Date.now()}.png`;
       const { error: uploadError } = await supabase.storage.from('product-images').upload(fileName, blob);
       if (uploadError) {
@@ -3075,7 +3124,11 @@ export default function Home() {
           <div className="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl space-y-4">
             <h3 className="text-lg font-black uppercase text-center text-slate-900">Adjust Photo</h3>
             <p className="text-[9px] text-stone-500 text-center font-medium">
-              iPhone: choose from Photos or camera — HEIC is OK in Safari. Up to {Math.round(MAX_VAULT_PHOTO_UPLOAD_BYTES / (1024 * 1024))} MB; saved vault image is a small square PNG.
+              {cropIsExistingPhoto ? (
+                <>Re-crop your current vault photo — drag to position, zoom, rotate. Saved as a small square PNG.</>
+              ) : (
+                <>iPhone: choose from Photos or camera — HEIC is OK in Safari. Up to {Math.round(MAX_VAULT_PHOTO_UPLOAD_BYTES / (1024 * 1024))} MB; saved vault image is a small square PNG.</>
+              )}
             </p>
 
             {/* Cropper Container - circular preview matches vault display (square crop saved for Shopify) */}
@@ -3118,6 +3171,7 @@ export default function Home() {
                   revokeCropBlobUrl();
                   setCropImage(null);
                   setCropItemId(null);
+                  setCropIsExistingPhoto(false);
                 }}
                 draggable={false}
               />
@@ -3146,6 +3200,7 @@ export default function Home() {
                   revokeCropBlobUrl();
                   setCropImage(null);
                   setCropItemId(null);
+                  setCropIsExistingPhoto(false);
                 }}
                 className="flex-1 py-3 bg-stone-100 rounded-xl font-bold text-xs uppercase hover:bg-stone-200 transition"
               >
@@ -5101,6 +5156,22 @@ export default function Home() {
                                             <span className="text-stone-400 w-5 text-center">✎</span>
                                             Edit name
                                           </button>
+                                          {item.image_url && (
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                void openExistingImageInCropper(item.id, item.image_url);
+                                              }}
+                                              disabled={uploadingId === item.id}
+                                              className="w-full px-4 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-stone-50 transition-colors flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                              <span className="text-stone-400 w-5 text-center">⊙</span>
+                                              <span className="flex flex-col items-start gap-0.5">
+                                                <span>Re-crop &amp; adjust photo</span>
+                                                <span className="text-[9px] font-normal text-stone-400 normal-case">Same picture — zoom, rotate, position</span>
+                                              </span>
+                                            </button>
+                                          )}
                                           <label className="w-full px-4 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-stone-50 transition-colors flex items-center gap-3 cursor-pointer block">
                                             <span className="text-stone-400 w-5 text-center">📷</span>
                                             <span className="flex flex-col items-start gap-0.5">
@@ -5460,8 +5531,8 @@ export default function Home() {
           </div>
 
           {/* COMPARE PANEL */}
-          <div className={`bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm flex flex-col flex-1 min-h-0 min-h-[50vh] lg:min-h-0 lg:max-h-[calc(100vh-5rem)] overflow-hidden ${activeTab !== 'compare' ? 'hidden' : ''}`}>
-            <div className="p-6 border-b border-stone-100 bg-white space-y-4 rounded-t-[2.5rem] shrink-0">
+          <div className={`bg-white rounded-2xl sm:rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm flex flex-col flex-1 min-h-0 min-h-[50vh] lg:min-h-0 lg:max-h-[calc(100vh-5rem)] overflow-hidden ${activeTab !== 'compare' ? 'hidden' : ''}`}>
+            <div className="p-3 sm:p-6 border-b border-stone-100 bg-white space-y-3 sm:space-y-4 rounded-t-2xl sm:rounded-t-[2.5rem] shrink-0">
               <h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Compare Prices</h2>
               <p className="text-[10px] text-stone-500">
                 Compare saved vault prices to live spot pricing and across formulas. Toggle <span className="font-bold">Live</span> and each formula column. Optional <span className="font-bold">Spot scenario</span> adds amber columns at custom metal spots.
@@ -5661,7 +5732,7 @@ export default function Home() {
               )}
             </div>
             {user && subscriptionStatus?.subscribed && (
-            <div className="flex-1 overflow-x-auto overflow-y-auto p-6">
+            <div className="flex-1 overflow-x-auto overflow-y-auto overscroll-x-contain touch-pan-x px-2 pb-3 pt-1 sm:p-6 [scrollbar-gutter:stable]">
               {compareFilteredInventory.length === 0 ? (
                 <div className="text-center py-12 text-stone-500 text-sm">
                   {inventory.length === 0 ? 'Add items to your vault to compare prices. Use the Vault tab to add items.' : 'No items match your filters. Try adjusting filters or search.'}
@@ -5671,23 +5742,24 @@ export default function Home() {
                   Turn on Live or select at least one formula to compare.
                 </div>
               ) : (
-                <div className="min-w-max">
+                <div className="min-w-max w-full">
+                  <p className="sm:hidden text-[9px] font-bold uppercase tracking-wide text-stone-400 mb-2 px-0.5">Scroll sideways — item names are shortened on phone; full name on tap (hold) or desktop.</p>
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="border-b-2 border-stone-200">
-                        <th className="py-2 pr-4 text-[10px] font-black uppercase text-stone-500 sticky left-0 bg-white z-10">Item</th>
-                        <th className="py-2 px-3 text-[10px] font-black uppercase text-stone-500 whitespace-nowrap bg-stone-100">Saved</th>
-                        {compareShowLive && <th className="py-2 px-3 text-[10px] font-black uppercase text-slate-700 whitespace-nowrap bg-slate-50 border-l border-stone-100">Live</th>}
-                        {compareFormulas.a && <th className="py-2 px-3 text-[10px] font-black uppercase text-stone-500 whitespace-nowrap bg-white">Formula A</th>}
-                        {compareSpotEnabled && compareFormulas.a && <th className="py-2 px-3 text-[10px] font-black uppercase text-amber-600 whitespace-nowrap bg-amber-50">A @ Scenario</th>}
-                        {compareFormulas.b && <th className="py-2 px-3 text-[10px] font-black uppercase text-stone-500 whitespace-nowrap bg-white">Formula B</th>}
-                        {compareSpotEnabled && compareFormulas.b && <th className="py-2 px-3 text-[10px] font-black uppercase text-amber-600 whitespace-nowrap bg-amber-50">B @ Scenario</th>}
+                        <th className="py-1.5 pr-2 pl-1 sm:py-2 sm:pr-4 sm:pl-0 text-[9px] sm:text-[10px] font-black uppercase text-stone-500 bg-white border-r border-stone-200 relative sm:sticky sm:left-0 sm:z-20 sm:shadow-[4px_0_12px_-6px_rgba(0,0,0,0.12)] max-sm:w-[min(42vw,9rem)] max-sm:max-w-[min(42vw,9rem)] sm:max-w-[12rem] sm:w-auto">Item</th>
+                        <th className="py-1.5 px-2 sm:py-2 sm:px-3 text-[9px] sm:text-[10px] font-black uppercase text-stone-500 whitespace-nowrap bg-stone-100">Saved</th>
+                        {compareShowLive && <th className="py-1.5 px-2 sm:py-2 sm:px-3 text-[9px] sm:text-[10px] font-black uppercase text-slate-700 whitespace-nowrap bg-slate-50 border-l border-stone-100">Live</th>}
+                        {compareFormulas.a && <th className="py-1.5 px-2 sm:py-2 sm:px-3 text-[9px] sm:text-[10px] font-black uppercase text-stone-500 whitespace-nowrap bg-white"><span className="sm:hidden">A</span><span className="hidden sm:inline">Formula A</span></th>}
+                        {compareSpotEnabled && compareFormulas.a && <th className="py-1.5 px-2 sm:py-2 sm:px-3 text-[9px] sm:text-[10px] font-black uppercase text-amber-600 whitespace-nowrap bg-amber-50"><span className="sm:hidden">A*</span><span className="hidden sm:inline">A @ Scenario</span></th>}
+                        {compareFormulas.b && <th className="py-1.5 px-2 sm:py-2 sm:px-3 text-[9px] sm:text-[10px] font-black uppercase text-stone-500 whitespace-nowrap bg-white"><span className="sm:hidden">B</span><span className="hidden sm:inline">Formula B</span></th>}
+                        {compareSpotEnabled && compareFormulas.b && <th className="py-1.5 px-2 sm:py-2 sm:px-3 text-[9px] sm:text-[10px] font-black uppercase text-amber-600 whitespace-nowrap bg-amber-50"><span className="sm:hidden">B*</span><span className="hidden sm:inline">B @ Scenario</span></th>}
                         {compareFormulas.customIds.map(id => {
                           const f = formulas.find((x: any) => x.id === id);
                           if (!f) return null;
                           return (<React.Fragment key={f.id}>
-                            <th className="py-2 px-3 text-[10px] font-black uppercase text-stone-500 whitespace-nowrap truncate max-w-[100px] bg-white" title={f.name}>{f.name}</th>
-                            {compareSpotEnabled && <th className="py-2 px-3 text-[10px] font-black uppercase text-amber-600 whitespace-nowrap bg-amber-50 truncate max-w-[100px]" title={`${f.name} @ Scenario`}>{f.name} @ Scn</th>}
+                            <th className="py-1.5 px-2 sm:py-2 sm:px-3 text-[9px] sm:text-[10px] font-black uppercase text-stone-500 whitespace-nowrap truncate max-w-[4.5rem] sm:max-w-[100px] bg-white" title={f.name}><span className="sm:hidden">{f.name.length > 6 ? `${f.name.slice(0, 5)}…` : f.name}</span><span className="hidden sm:inline">{f.name}</span></th>
+                            {compareSpotEnabled && <th className="py-1.5 px-2 sm:py-2 sm:px-3 text-[9px] sm:text-[10px] font-black uppercase text-amber-600 whitespace-nowrap bg-amber-50 truncate max-w-[4.5rem] sm:max-w-[100px]" title={`${f.name} @ Scenario`}><span className="sm:hidden">{f.name.length > 4 ? `${f.name.slice(0, 3)}…*` : `${f.name}*`}</span><span className="hidden sm:inline">{f.name} @ Scn</span></th>}
                           </React.Fragment>);
                         })}
                       </tr>
@@ -5711,36 +5783,42 @@ export default function Home() {
                           if (Math.abs(pct) < 0.01) return null;
                           return <span className={`block text-[9px] font-bold ${diff > 0 ? 'text-emerald-600' : 'text-red-500'}`}>{diff > 0 ? '+' : ''}{pct.toFixed(1)}%</span>;
                         };
+                        const itemTitle = (item.name || 'Untitled').toUpperCase();
                         return (
-                          <tr key={item.id} className="border-b border-stone-100 hover:bg-stone-50/50">
-                            <td className="py-2 pr-4 text-xs font-bold text-slate-800 sticky left-0 bg-white z-10">{(item.name || 'Untitled').toUpperCase()}</td>
-                            <td className="py-2 px-3 text-[11px] text-stone-600 whitespace-nowrap bg-stone-100">
-                              ${roundForDisplay(Number(item.wholesale)).toFixed(2)} / ${roundForDisplay(Number(item.retail)).toFixed(2)}
+                          <tr key={item.id} className="group border-b border-stone-100 hover:bg-stone-50/50">
+                            <td
+                              className="py-1.5 pr-2 pl-1 sm:py-2 sm:pr-4 sm:pl-0 text-[10px] sm:text-xs font-bold text-slate-800 bg-white group-hover:bg-stone-50 border-r border-stone-100 relative sm:sticky sm:left-0 sm:z-10 max-sm:shadow-none sm:shadow-[4px_0_12px_-6px_rgba(0,0,0,0.08)] max-sm:w-[min(42vw,9rem)] max-sm:max-w-[min(42vw,9rem)] sm:max-w-[12rem] sm:w-auto align-top overflow-hidden"
+                              title={itemTitle}
+                            >
+                              <span className="block truncate sm:truncate-none sm:line-clamp-2 sm:break-words sm:hyphens-auto">{itemTitle}</span>
+                            </td>
+                            <td className="py-1.5 px-2 sm:py-2 sm:px-3 text-[10px] sm:text-[11px] text-stone-600 tabular-nums bg-stone-100 group-hover:bg-stone-50 align-top">
+                              {formatCompareWholesaleRetail(Number(item.wholesale), Number(item.retail))}
                             </td>
                             {compareShowLive && (
-                              <td className="py-2 px-3 text-[11px] text-slate-800 whitespace-nowrap bg-slate-50 border-l border-stone-100" title={"At current spot, using this item's saved formula"}>
-                                ${roundForDisplay(liveItemPrices.wholesale).toFixed(2)} / ${roundForDisplay(liveItemPrices.retail).toFixed(2)}
+                              <td className="py-1.5 px-2 sm:py-2 sm:px-3 text-[10px] sm:text-[11px] text-slate-800 tabular-nums bg-slate-50 border-l border-stone-100 group-hover:bg-stone-50/90 align-top" title={"At current spot, using this item's saved formula"}>
+                                {formatCompareWholesaleRetail(liveItemPrices.wholesale, liveItemPrices.retail)}
                               </td>
                             )}
                             {compareFormulas.a && (
-                              <td className={`py-2 px-3 text-[11px] whitespace-nowrap bg-white ${itemStrategy === 'A' ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
-                                ${roundForDisplay(pricesByFormula['A']?.wholesale ?? 0).toFixed(2)} / ${roundForDisplay(pricesByFormula['A']?.retail ?? 0).toFixed(2)}
+                              <td className={`py-1.5 px-2 sm:py-2 sm:px-3 text-[10px] sm:text-[11px] tabular-nums bg-white group-hover:bg-stone-50/50 align-top ${itemStrategy === 'A' ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
+                                {formatCompareWholesaleRetail(pricesByFormula['A']?.wholesale ?? 0, pricesByFormula['A']?.retail ?? 0)}
                               </td>
                             )}
                             {compareSpotEnabled && compareFormulas.a && scenarioPrices && (
-                              <td className="py-2 px-3 text-[11px] whitespace-nowrap bg-amber-50">
-                                <span>${roundForDisplay(scenarioPrices['A']?.wholesale ?? 0).toFixed(2)} / ${roundForDisplay(scenarioPrices['A']?.retail ?? 0).toFixed(2)}</span>
+                              <td className="py-1.5 px-2 sm:py-2 sm:px-3 text-[10px] sm:text-[11px] tabular-nums bg-amber-50 group-hover:bg-amber-50/90 align-top">
+                                {formatCompareWholesaleRetail(scenarioPrices['A']?.wholesale ?? 0, scenarioPrices['A']?.retail ?? 0)}
                                 {renderDelta(pricesByFormula['A']?.wholesale ?? 0, scenarioPrices['A']?.wholesale ?? 0)}
                               </td>
                             )}
                             {compareFormulas.b && (
-                              <td className={`py-2 px-3 text-[11px] whitespace-nowrap bg-white ${itemStrategy === 'B' ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
-                                ${roundForDisplay(pricesByFormula['B']?.wholesale ?? 0).toFixed(2)} / ${roundForDisplay(pricesByFormula['B']?.retail ?? 0).toFixed(2)}
+                              <td className={`py-1.5 px-2 sm:py-2 sm:px-3 text-[10px] sm:text-[11px] tabular-nums bg-white group-hover:bg-stone-50/50 align-top ${itemStrategy === 'B' ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
+                                {formatCompareWholesaleRetail(pricesByFormula['B']?.wholesale ?? 0, pricesByFormula['B']?.retail ?? 0)}
                               </td>
                             )}
                             {compareSpotEnabled && compareFormulas.b && scenarioPrices && (
-                              <td className="py-2 px-3 text-[11px] whitespace-nowrap bg-amber-50">
-                                <span>${roundForDisplay(scenarioPrices['B']?.wholesale ?? 0).toFixed(2)} / ${roundForDisplay(scenarioPrices['B']?.retail ?? 0).toFixed(2)}</span>
+                              <td className="py-1.5 px-2 sm:py-2 sm:px-3 text-[10px] sm:text-[11px] tabular-nums bg-amber-50 group-hover:bg-amber-50/90 align-top">
+                                {formatCompareWholesaleRetail(scenarioPrices['B']?.wholesale ?? 0, scenarioPrices['B']?.retail ?? 0)}
                                 {renderDelta(pricesByFormula['B']?.wholesale ?? 0, scenarioPrices['B']?.wholesale ?? 0)}
                               </td>
                             )}
@@ -5751,12 +5829,12 @@ export default function Home() {
                               const sp = scenarioPrices?.[f.name];
                               const isCurrent = itemStrategy === f.name;
                               return (<React.Fragment key={f.id}>
-                                <td className={`py-2 px-3 text-[11px] whitespace-nowrap bg-white ${isCurrent ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
-                                  ${roundForDisplay(p?.wholesale ?? 0).toFixed(2)} / ${roundForDisplay(p?.retail ?? 0).toFixed(2)}
+                                <td className={`py-1.5 px-2 sm:py-2 sm:px-3 text-[10px] sm:text-[11px] tabular-nums bg-white group-hover:bg-stone-50/50 align-top ${isCurrent ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
+                                  {formatCompareWholesaleRetail(p?.wholesale ?? 0, p?.retail ?? 0)}
                                 </td>
                                 {compareSpotEnabled && sp && (
-                                  <td className="py-2 px-3 text-[11px] whitespace-nowrap bg-amber-50">
-                                    <span>${roundForDisplay(sp.wholesale ?? 0).toFixed(2)} / ${roundForDisplay(sp.retail ?? 0).toFixed(2)}</span>
+                                  <td className="py-1.5 px-2 sm:py-2 sm:px-3 text-[10px] sm:text-[11px] tabular-nums bg-amber-50 group-hover:bg-amber-50/90 align-top">
+                                    {formatCompareWholesaleRetail(sp.wholesale ?? 0, sp.retail ?? 0)}
                                     {renderDelta(p?.wholesale ?? 0, sp.wholesale ?? 0)}
                                   </td>
                                 )}
