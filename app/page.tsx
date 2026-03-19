@@ -5320,7 +5320,12 @@ export default function Home() {
                               <h4 className="text-[10px] font-black uppercase text-stone-400">Saved Breakdown</h4>
                               {item.metals?.map((m: any, idx: number) => {
                                 const spotOz = resolveSpotOzForMetal(m, prices);
-                                const val = metalRowLiveDollarValue(m, prices);
+                                const liveLineVal = metalRowLiveDollarValue(m, prices);
+                                const perUnitManual = Number(m.manualPrice) || 0;
+                                const w = Number(m.weight) || 0;
+                                const isManualLine = !!(m.isManual && perUnitManual > 0);
+                                const manualLineTotal = perUnitManual * w;
+                                const displayVal = isManualLine ? manualLineTotal : liveLineVal;
 
                                 return (
                                   <div key={idx} className="flex justify-between items-center text-[10px] font-bold border-b border-stone-100 pb-1.5 uppercase">
@@ -5328,9 +5333,15 @@ export default function Home() {
                                       <span>{m.weight}{m.unit} {m.type}</span>
                                     </div>
                                     <div className="text-right">
-                                      <span>${(val > 0 ? val : 0).toFixed(2)}</span>
-                                      {spotOz > 0 && <span className="block text-[8px] text-stone-400 font-medium normal-case tracking-wide">Spot: ${spotOz.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
-                                      {m.isManual && <span className="block text-[8px] text-amber-700/90 font-medium normal-case tracking-wide">Saved with manual entry at add</span>}
+                                      <span>${(displayVal > 0 ? displayVal : 0).toFixed(2)}</span>
+                                      {isManualLine ? (
+                                        <span className="block text-[8px] text-stone-500 font-medium normal-case tracking-wide">
+                                          Manual rate: ${perUnitManual.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} per {m.unit}
+                                        </span>
+                                      ) : (
+                                        spotOz > 0 && <span className="block text-[8px] text-stone-400 font-medium normal-case tracking-wide">Spot: ${spotOz.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                      )}
+                                      {isManualLine && <span className="block text-[8px] text-amber-700/90 font-medium normal-case tracking-wide">First save used this rate; live pricing uses spot</span>}
                                     </div>
                                   </div>
                                 );
