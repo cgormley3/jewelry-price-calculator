@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { isVaultPlusSubscriptionActive } from '@/lib/is-vault-plus-active';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,17 +32,19 @@ export async function POST(request: Request) {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { data: sub } = await supabase.from('subscriptions').select('status, current_period_end').eq('user_id', user.id).single();
-    const periodValid = !sub?.current_period_end || new Date(sub.current_period_end) > new Date();
-    const subscribed = !!(sub && String(sub.status).toLowerCase() === 'active' && periodValid);
+    const subscribed = isVaultPlusSubscriptionActive(sub);
 
     const { count: myCount } = await supabase.from('inventory').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
 
     let fix_suggestion: string | null = null;
     if (!subscribed && (myCount ?? 0) > 0) {
       fix_suggestion =
-        `You have ${myCount} item(s) on this account but no active Vault+ subscription. After paying, wait a minute and tap Refresh. If it persists, in Supabase SQL Editor check the subscriptions row for YOUR user id only:\n\n` +
-        `SELECT * FROM subscriptions WHERE user_id = '${user.id}';\n\n` +
-        `To activate for this account (admin only):\n` +
+        `You have ${myCount} item(s) on this account but no active Vault+ row in the app database. If Stripe shows you paid:\n\n` +
+        `1) Tap **Sync from Stripe** on the Vault tab (same email as Stripe checkout).\n` +
+        `2) Set STRIPE_VAULT_PLUS_PRICE_ID in production so sync can match your price.\n` +
+        `3) Check webhook URL + STRIPE_WEBHOOK_SECRET on your host.\n\n` +
+        `SQL check (your user only):\nSELECT * FROM subscriptions WHERE user_id = '${user.id}';\n\n` +
+        `Admin override:\n` +
         `INSERT INTO subscriptions (user_id, status, current_period_end)\n` +
         `VALUES ('${user.id}', 'active', '2099-12-31 23:59:59+00')\n` +
         `ON CONFLICT (user_id) DO UPDATE SET status = 'active', current_period_end = EXCLUDED.current_period_end;`;

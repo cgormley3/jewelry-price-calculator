@@ -83,9 +83,18 @@ If you use a **Stripe Payment Link** instead of embedded Checkout from the API:
 2. Endpoint URL: `https://yourdomain.com/api/stripe/webhook`
 3. Events to listen for:
    - `checkout.session.completed`
+   - `customer.subscription.created` (helps when checkout metadata is missing)
    - `customer.subscription.updated`
    - `customer.subscription.deleted`
 4. Copy the **Signing secret** and add to your production env as `STRIPE_WEBHOOK_SECRET`.
+
+### If the user paid in Stripe but the app still shows “Upgrade”
+
+Usually the **`subscriptions`** row was never created (webhook not delivered, wrong URL/secret, or checkout without `client_reference_id` / user metadata).
+
+1. **In the app:** Sign in with the **same email** as the Stripe customer, open Vault, tap **Sync from Stripe** (next to Refresh). The app calls `POST /api/stripe/sync-subscription` with your session.
+2. **Env:** Set **`STRIPE_VAULT_PLUS_PRICE_ID`** in production to your Vault+ price id so sync can pick the right subscription when a customer has multiple products.
+3. **Webhook:** Confirm the endpoint is `https://yourdomain.com/api/stripe/webhook` and **`STRIPE_WEBHOOK_SECRET`** matches the signing secret for that endpoint.
 
 ## 6. Test the Flow
 
@@ -94,7 +103,7 @@ If you use a **Stripe Payment Link** instead of embedded Checkout from the API:
 3. Try to save a vault item, log time, or use custom formulas. You should see the "Upgrade to Vault+" modal.
 4. Click "Get Vault+". You should be redirected to Stripe Checkout.
 5. Use test card `4242 4242 4242 4242` for payments.
-6. After completing checkout, you should be redirected back with `?vaultplus=1`. The app will refetch and you should now be able to save.
+6. After completing checkout, you should be redirected back with `?vaultplus=1`. The app runs **sync from Stripe** (with retries) then refetches; you should be able to save once the subscription row exists.
 
 ## 7. Bypassing the Paywall (Optional)
 

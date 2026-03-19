@@ -75,6 +75,22 @@ function metalRowLiveDollarValue(m: any, livePrices: { gold?: number; silver?: n
   return (spot / 31.1035) * purity * gramWeight;
 }
 
+/**
+ * iOS “Add to Home Screen” / WebKit often invalidates decoded `<img>` bitmaps after backgrounding
+ * (e.g. PDF preview, app switcher) while leaving the same URL cached as failed. Append a query so
+ * the browser requests the image again.
+ */
+function vaultThumbnailSrc(url: string, visibilityEpoch: number, errorRetry: number): string {
+  const u = url.trim();
+  if (!u.startsWith('http')) return u;
+  const parts: string[] = [];
+  if (visibilityEpoch > 0) parts.push(`vv=${visibilityEpoch}`);
+  if (errorRetry > 0) parts.push(`vr=${errorRetry}`);
+  if (parts.length === 0) return u;
+  const sep = u.includes('?') ? '&' : '?';
+  return `${u}${sep}${parts.join('&')}`;
+}
+
 export default function Home() {
   // Check if Turnstile is configured (for human verification)
   const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '';
@@ -141,6 +157,11 @@ export default function Home() {
   const [pendingVaultPlusAfterAuth, setPendingVaultPlusAfterAuth] = useState(false);
   const [vaultPaywallHasItems, setVaultPaywallHasItems] = useState(false);
   const [vaultDiagnostic, setVaultDiagnostic] = useState<string | null>(null);
+  const [syncingVaultPlus, setSyncingVaultPlus] = useState(false);
+  /** Bumped when the PWA returns from hidden (fixes broken vault photos on iOS after PDF / multitask). */
+  const [vaultImageVisibilityEpoch, setVaultImageVisibilityEpoch] = useState(0);
+  /** Per-item retries when `<img>` fires onError (transient cache / WebKit). */
+  const [vaultImageErrorRetries, setVaultImageErrorRetries] = useState<Record<string, number>>({});
 
   // Shopify – set SHOPIFY_FEATURE_ENABLED = true when app is published
   const SHOPIFY_FEATURE_ENABLED = false;
@@ -376,15 +397,28 @@ export default function Home() {
     })();
   }, [user?.id, user?.is_anonymous, profile, hasValidSupabaseCredentials]);
 
-  // Refetch when returning from Stripe (vaultplus=1) — delay + retry to allow webhook to sync subscription
+  // Refetch when returning from Stripe (vaultplus=1) — sync from Stripe API + retries (webhook can be delayed or miss client_reference_id)
   useEffect(() => {
     if (typeof window === 'undefined' || !user?.id) return;
     const params = new URLSearchParams(window.location.search);
     if (params.get('vaultplus') !== '1') return;
     window.history.replaceState({}, '', window.location.pathname);
     setActiveTab('vault');
-    const t1 = setTimeout(() => fetchInventory(), 1500);
-    const t2 = setTimeout(() => fetchInventory(), 5000);
+    const runSyncAndFetch = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = (session as any)?.access_token;
+      if (accessToken && session?.user?.id) {
+        await fetch('/api/stripe/sync-subscription', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessToken, userId: session.user.id }),
+        });
+      }
+      setLoading(true);
+      await fetchInventory();
+    };
+    const t1 = setTimeout(() => { void runSyncAndFetch(); }, 1500);
+    const t2 = setTimeout(() => { void runSyncAndFetch(); }, 5500);
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [user?.id]);
 
@@ -507,6 +541,7 @@ export default function Home() {
   const fetchInProgressRef = useRef(false);
   const fetchVersionRef = useRef(0);
   const wakeUpTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const vaultAppWasHiddenRef = useRef(false);
   const filterButtonRef = useRef<HTMLButtonElement>(null);
   const [filterDropdownRect, setFilterDropdownRect] = useState<{ top: number; left: number } | null>(null);
   const compareFilterButtonRef = useRef<HTMLButtonElement>(null);
@@ -917,6 +952,15 @@ export default function Home() {
     initSession();
 
     const handleWakeUp = () => {
+      if (document.visibilityState === 'hidden') {
+        vaultAppWasHiddenRef.current = true;
+        return;
+      }
+      if (document.visibilityState === 'visible' && vaultAppWasHiddenRef.current) {
+        vaultAppWasHiddenRef.current = false;
+        setVaultImageVisibilityEpoch((e) => e + 1);
+        setVaultImageErrorRetries({});
+      }
       if (document.visibilityState !== 'visible') return;
       if (wakeUpTimeoutRef.current) clearTimeout(wakeUpTimeoutRef.current);
       wakeUpTimeoutRef.current = setTimeout(() => {
@@ -925,8 +969,16 @@ export default function Home() {
       }, 100);
     };
 
+    const handlePageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) {
+        setVaultImageVisibilityEpoch((x) => x + 1);
+        setVaultImageErrorRetries({});
+      }
+    };
+
     window.addEventListener('visibilitychange', handleWakeUp);
     window.addEventListener('focus', handleWakeUp);
+    window.addEventListener('pageshow', handlePageShow);
 
     return () => {
       mounted = false;
@@ -937,6 +989,7 @@ export default function Home() {
       if (wakeUpTimeoutRef.current) clearTimeout(wakeUpTimeoutRef.current);
       window.removeEventListener('visibilitychange', handleWakeUp);
       window.removeEventListener('focus', handleWakeUp);
+      window.removeEventListener('pageshow', handlePageShow);
     };
   }, [fetchPrices]);
 
@@ -1094,6 +1147,38 @@ export default function Home() {
       setLoading(false);
     }
   }
+
+  /** If Stripe shows paid but Supabase `subscriptions` is empty, link by matching account email to Stripe customer. */
+  const syncVaultPlusFromStripe = async () => {
+    const session = (await supabase.auth.getSession()).data.session;
+    const accessToken = (session as any)?.access_token;
+    if (!accessToken || !session?.user?.id) {
+      setNotification({ title: 'Sign in', message: 'Sign in to sync Vault+ from Stripe.', type: 'info' });
+      return;
+    }
+    setSyncingVaultPlus(true);
+    try {
+      const res = await fetch('/api/stripe/sync-subscription', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accessToken, userId: session.user.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.synced) {
+        setNotification({ title: 'Vault+ linked', message: data.message || 'Subscription synced.', type: 'success' });
+      } else if (data.message) {
+        setNotification({ title: 'Vault+ sync', message: data.message, type: 'info' });
+      } else {
+        setNotification({ title: 'Sync failed', message: data.error || `Could not sync (${res.status})`, type: 'error' });
+      }
+    } catch (e: any) {
+      setNotification({ title: 'Sync failed', message: e?.message || 'Try again.', type: 'error' });
+    } finally {
+      setSyncingVaultPlus(false);
+      setLoading(true);
+      await fetchInventory();
+    }
+  };
 
   // --- SELECTION & LOCATION HANDLERS ---
   const toggleSelection = (id: string) => {
@@ -5080,7 +5165,10 @@ export default function Home() {
                         <button onClick={() => setShowVaultPlusModal(true)} className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-[#A5BEAC] text-white hover:bg-slate-900 transition shadow-sm">
                           Upgrade to Vault+
                         </button>
-                        <button onClick={() => { setLoading(true); fetchInventory(); }} className="text-[10px] font-bold uppercase text-stone-400 hover:text-[#A5BEAC] transition">Just upgraded? Refresh</button>
+                        <button type="button" onClick={() => { setLoading(true); void fetchInventory(); }} className="text-[10px] font-bold uppercase text-stone-400 hover:text-[#A5BEAC] transition">Refresh</button>
+                        <button type="button" disabled={syncingVaultPlus} onClick={() => { void syncVaultPlusFromStripe(); }} className="text-[10px] font-bold uppercase text-[#A5BEAC] hover:text-slate-900 transition disabled:opacity-50">
+                          {syncingVaultPlus ? 'Syncing…' : 'Sync from Stripe'}
+                        </button>
                       </div>
                     </>
                   ) : (
@@ -5176,8 +5264,22 @@ export default function Home() {
 
                             {/* Circular 64x64 thumbnail - square crop stored for Shopify export */}
                             {item.image_url && (
-                              <div className="shrink-0 w-16 h-16 rounded-full overflow-hidden border border-stone-200 shadow-sm">
-                                <img src={item.image_url} alt={(item.name || '').toUpperCase()} className="w-full h-full object-cover" />
+                              <div className="shrink-0 w-16 h-16 rounded-full overflow-hidden border border-stone-200 shadow-sm bg-stone-100">
+                                <img
+                                  key={`vault-thumb-${item.id}-${vaultImageVisibilityEpoch}-${vaultImageErrorRetries[item.id] ?? 0}`}
+                                  src={vaultThumbnailSrc(item.image_url, vaultImageVisibilityEpoch, vaultImageErrorRetries[item.id] ?? 0)}
+                                  alt={(item.name || '').toUpperCase()}
+                                  className="w-full h-full object-cover"
+                                  loading="lazy"
+                                  decoding="async"
+                                  onError={() => {
+                                    setVaultImageErrorRetries((prev) => {
+                                      const n = prev[item.id] ?? 0;
+                                      if (n >= 4) return prev;
+                                      return { ...prev, [item.id]: n + 1 };
+                                    });
+                                  }}
+                                />
                               </div>
                             )}
 
@@ -5638,7 +5740,10 @@ export default function Home() {
                         <button onClick={() => setShowVaultPlusModal(true)} className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-[#A5BEAC] text-white hover:bg-slate-900 transition shadow-sm">
                           Upgrade to Vault+
                         </button>
-                        <button onClick={() => { setLoading(true); fetchInventory(); }} className="text-[10px] font-bold uppercase text-stone-400 hover:text-[#A5BEAC] transition">Just upgraded? Refresh</button>
+                        <button type="button" onClick={() => { setLoading(true); void fetchInventory(); }} className="text-[10px] font-bold uppercase text-stone-400 hover:text-[#A5BEAC] transition">Refresh</button>
+                        <button type="button" disabled={syncingVaultPlus} onClick={() => { void syncVaultPlusFromStripe(); }} className="text-[10px] font-bold uppercase text-[#A5BEAC] hover:text-slate-900 transition disabled:opacity-50">
+                          {syncingVaultPlus ? 'Syncing…' : 'Sync from Stripe'}
+                        </button>
                       </>
                     )}
                   </div>

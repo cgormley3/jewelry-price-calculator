@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { isVaultPlusSubscriptionActive } from '@/lib/is-vault-plus-active';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,8 +36,7 @@ export async function POST(request: Request) {
       .eq('user_id', resolvedUserId)
       .single();
 
-    const periodValid = !sub?.current_period_end || new Date(sub.current_period_end) > new Date();
-    const subscribed = !!(sub && String(sub.status).toLowerCase() === 'active' && periodValid);
+    const subscribed = isVaultPlusSubscriptionActive(sub);
 
     return NextResponse.json({ subscribed });
   } catch (e: any) {
