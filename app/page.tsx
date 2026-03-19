@@ -457,7 +457,10 @@ export default function Home() {
     const myVersion = ++fetchVersionRef.current;
 
     try {
-      const res = await fetch(`/api/gold-price?cb=${now}`, { cache: 'no-store' });
+      const res = await fetch(`/api/gold-price?cb=${now}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache' },
+      });
       if (myVersion !== fetchVersionRef.current) return;
 
       if (!res.ok) {
@@ -714,6 +717,9 @@ export default function Home() {
       }
     } catch (_) { /* ignore */ }
 
+    // Fetch fresh prices from spreadsheet on every page load/refresh (runs immediately, not blocked by auth)
+    fetchPrices();
+
     let subscription: { unsubscribe: () => void } | null = null;
     async function initSession() {
       try {
@@ -765,8 +771,6 @@ export default function Home() {
         } else {
           console.log('Skipping Supabase auth - credentials not configured');
         }
-
-        await fetchPrices();
       } catch (e) {
         console.warn('initSession error:', e);
       } finally {
