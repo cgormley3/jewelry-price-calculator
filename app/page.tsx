@@ -21,6 +21,33 @@ const UNIT_TO_GRAMS: { [key: string]: number } = {
 // Fallback spot prices ($/troy oz) when API hasn't loaded — used only when live price is 0
 const FALLBACK_SPOT: Record<string, number> = { gold: 2600, silver: 28, platinum: 950, palladium: 1000 };
 
+/** Live $/oz troy for a metal row (matches calculateFullBreakdown spot resolution). */
+function resolveSpotOzForMetal(m: any, livePrices: { gold?: number; silver?: number; platinum?: number; palladium?: number }): number {
+  const type = (m.type || '').toLowerCase();
+  let spot = 0;
+  if (type.includes('gold')) spot = Number(livePrices.gold) || 0;
+  else if (type.includes('silver')) spot = Number(livePrices.silver) || 0;
+  else if (type.includes('platinum')) spot = Number(livePrices.platinum) || 0;
+  else if (type.includes('palladium')) spot = Number(livePrices.palladium) || 0;
+  if (!spot && m.spotSaved != null && Number(m.spotSaved) > 0) spot = Number(m.spotSaved);
+  else if (!spot) {
+    if (type.includes('gold')) spot = FALLBACK_SPOT.gold;
+    else if (type.includes('silver')) spot = FALLBACK_SPOT.silver;
+    else if (type.includes('platinum')) spot = FALLBACK_SPOT.platinum;
+    else if (type.includes('palladium')) spot = FALLBACK_SPOT.palladium;
+  }
+  return spot;
+}
+
+/** Dollar value of one metal line at current live + saved-spot logic (vault display). */
+function metalRowLiveDollarValue(m: any, livePrices: { gold?: number; silver?: number; platinum?: number; palladium?: number }): number {
+  const spot = resolveSpotOzForMetal(m, livePrices);
+  const purities: Record<string, number> = { '10K Gold': 0.417, '14K Gold': 0.583, '18K Gold': 0.75, '22K Gold': 0.916, '24K Gold': 0.999, 'Sterling Silver': 0.925, 'Platinum 950': 0.95, 'Palladium': 0.95 };
+  const purity = purities[m.type] || 1;
+  const gramWeight = m.weight * (UNIT_TO_GRAMS[m.unit as keyof typeof UNIT_TO_GRAMS] || 1);
+  return (spot / 31.1035) * purity * gramWeight;
+}
+
 export default function Home() {
   // Check if Turnstile is configured (for human verification)
   const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '';
@@ -114,6 +141,11 @@ export default function Home() {
 
   // Calculator State
   const [metalList, setMetalList] = useState<{ type: string, weight: number, unit: string, isManual?: boolean, manualPrice?: number, spotSaved?: number }[]>([]);
+  /** New piece only: calculator preview matches first-time save (manual metal $). Editing existing: always live spot math. */
+  const applyManualMetalInCalculator = useMemo(
+    () => !editingItemId && metalList.some((m) => m.isManual && m.manualPrice),
+    [editingItemId, metalList]
+  );
   const [tempMetal, setTempMetal] = useState('Sterling Silver');
   const [tempWeight, setTempWeight] = useState(0);
   const [tempUnit, setTempUnit] = useState('Ounces (std)');
@@ -521,11 +553,15 @@ export default function Home() {
     }
   }, [pricesLoaded]);
 
-  const calculateFullBreakdown = useCallback((metals: any[], h: any, r: any, o: any, stones: any[], ovCost: any, ovType: 'flat' | 'percent', customMult?: number, customMarkup?: number, priceOverride?: any) => {
+  const calculateFullBreakdown = useCallback((metals: any[], h: any, r: any, o: any, stones: any[], ovCost: any, ovType: 'flat' | 'percent', customMult?: number, customMarkup?: number, priceOverride?: any, useManualMetalForInitialSaveOnly?: boolean) => {
     let rawMaterialCost = 0;
+    /** Compare-tab scenario: revalue from scenario/live spots only */
+    const useScenarioSpotPath = priceOverride !== undefined && priceOverride !== null;
+    /** First-time vault save only: honor manual $/unit for metal cost so saved wholesale/retail match what the user entered */
+    const useManualBranch = !useScenarioSpotPath && !!useManualMetalForInitialSaveOnly && metals.some((x: any) => x?.isManual && x?.manualPrice);
     metals.forEach(m => {
       let pricePerGram = 0;
-      if (m.isManual && m.manualPrice) {
+      if (useManualBranch && m.isManual && m.manualPrice) {
         pricePerGram = m.manualPrice / (UNIT_TO_GRAMS[m.unit] || 1);
       } else {
         let spot = 0;
@@ -643,7 +679,7 @@ export default function Home() {
     const breakdown = calculateFullBreakdown(
       item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0,
       stonesArray, item.overhead_cost || 0, (item.overhead_type as 'flat' | 'percent') || 'flat',
-      item.multiplier, item.markup_b, priceOverride
+      item.multiplier, item.markup_b, priceOverride, false
     );
     const result: Record<string, { wholesale: number; retail: number }> = {};
     if (selected.a) result['A'] = { wholesale: breakdown.wholesaleA, retail: breakdown.retailA };
@@ -1187,7 +1223,7 @@ export default function Home() {
       unit: tempUnit,
       isManual: useManualPrice,
       manualPrice: useManualPrice && manualPriceInput !== '' ? Number(manualPriceInput) : undefined,
-      spotSaved: useManualPrice ? undefined : currentSpot
+      spotSaved: currentSpot
     }]);
     setTempWeight(0); setManualPriceInput(''); setUseManualPrice(false);
   };
@@ -1310,7 +1346,7 @@ export default function Home() {
           else if (type.includes('platinum')) currentSpot = prices.platinum;
           else if (type.includes('palladium')) currentSpot = prices.palladium;
 
-          return { ...m, spotSaved: m.isManual ? undefined : currentSpot };
+          return { ...m, spotSaved: currentSpot };
         });
 
         const { error } = await supabase.from('inventory').update({
@@ -1370,7 +1406,8 @@ export default function Home() {
             (item.overhead_type as 'flat' | 'percent') || 'flat',
             mult,
             mark,
-            recalcParams
+            recalcParams,
+            false
           );
 
           const itemForPricing = applyFormula
@@ -1396,7 +1433,7 @@ export default function Home() {
             else if (type.includes('platinum') && recalcParams.platinum) newSpot = Number(recalcParams.platinum);
             else if (type.includes('palladium') && recalcParams.palladium) newSpot = Number(recalcParams.palladium);
 
-            return { ...m, spotSaved: m.isManual ? undefined : newSpot };
+            return { ...m, spotSaved: newSpot };
           });
 
           const updatePayload: Record<string, unknown> = {
@@ -1478,7 +1515,8 @@ export default function Home() {
           (recalcItem.overhead_type as 'flat' | 'percent') || 'flat',
           recalcItem.multiplier,
           recalcItem.markup_b,
-          recalcParams
+          recalcParams,
+          false
         );
 
         const itemPrices = getItemPrices(recalcItem, calc);
@@ -1494,7 +1532,7 @@ export default function Home() {
           else if (type.includes('platinum') && recalcParams.platinum) newSpot = Number(recalcParams.platinum);
           else if (type.includes('palladium') && recalcParams.palladium) newSpot = Number(recalcParams.palladium);
 
-          return { ...m, spotSaved: m.isManual ? undefined : newSpot };
+          return { ...m, spotSaved: newSpot };
         });
 
         const { error } = await supabase.from('inventory').update({
@@ -1596,7 +1634,7 @@ export default function Home() {
         status: 'draft'
       };
     } else if (isUpdating) {
-      const a = calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneList, overheadCost, overheadType);
+      const a = calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneList, overheadCost, overheadType, undefined, undefined, undefined, false);
       const { wholesale, retail } = getStrategyPrices(a);
       newItem = {
         id: editingItemId,
@@ -1620,7 +1658,8 @@ export default function Home() {
         status: 'active'
       };
     } else {
-      const a = calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneList, overheadCost, overheadType);
+      const useManualForInitialSave = metalList.some((m: any) => m.isManual && m.manualPrice);
+      const a = calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneList, overheadCost, overheadType, undefined, undefined, undefined, useManualForInitialSave);
       const { wholesale, retail } = getStrategyPrices(a);
       newItem = {
         name: itemName,
@@ -2554,7 +2593,7 @@ export default function Home() {
       const savedSpotByMetal: Record<string, number> = {};
       (item.metals || []).forEach((m: any) => {
         const t = m.type?.toLowerCase() || '';
-        if (m.spotSaved != null && !m.isManual) {
+        if (m.spotSaved != null && Number(m.spotSaved) > 0) {
           if (t.includes('gold') && savedSpotByMetal.Gold == null) savedSpotByMetal.Gold = m.spotSaved;
           else if (t.includes('silver') && savedSpotByMetal.Silver == null) savedSpotByMetal.Silver = m.spotSaved;
           else if (t.includes('platinum') && savedSpotByMetal.Platinum == null) savedSpotByMetal.Platinum = m.spotSaved;
@@ -2753,7 +2792,7 @@ export default function Home() {
         const savedSpotByMetal: Record<string, number> = {};
         (item.metals || []).forEach((m: any) => {
           const t = m.type?.toLowerCase() || '';
-          if (m.spotSaved != null && !m.isManual) {
+          if (m.spotSaved != null && Number(m.spotSaved) > 0) {
             if (t.includes('gold') && savedSpotByMetal.Gold == null) savedSpotByMetal.Gold = m.spotSaved;
             else if (t.includes('silver') && savedSpotByMetal.Silver == null) savedSpotByMetal.Silver = m.spotSaved;
             else if (t.includes('platinum') && savedSpotByMetal.Platinum == null) savedSpotByMetal.Platinum = m.spotSaved;
@@ -3578,7 +3617,8 @@ export default function Home() {
                   (recalcItem.overhead_type as 'flat' | 'percent') || 'flat',
                   recalcItem.multiplier,
                   recalcItem.markup_b,
-                  recalcParams
+                  recalcParams,
+                  false
                 );
 
                 const itemPrices = getItemPrices(recalcItem, calc);
@@ -4312,9 +4352,9 @@ export default function Home() {
                   </button>
                 {costBreakdownOpen && (
                 <div className="w-full p-4 rounded-xl bg-stone-100/80 border border-stone-200 space-y-3 text-left">
-                  <div className="flex justify-between items-center py-2 border-b border-stone-200"><span className="text-stone-500 font-bold uppercase text-[10px]">Materials Total (Metal+Stone+Other)</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType).totalMaterials.toFixed(2)}</span></div>
-                  <div className="flex justify-between items-center py-2 border-b border-stone-200"><span className="text-stone-500 font-bold uppercase text-[10px]">Labor Total ({Number(calcHours) || 0}h)</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType).labor.toFixed(2)}</span></div>
-                  <div className="flex justify-between items-center py-2"><span className="text-stone-500 font-bold uppercase text-[10px]">Overhead Total ({overheadType === 'percent' ? `${Number(calcOverheadCost) || 0}%` : 'Flat'})</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType).overhead.toFixed(2)}</span></div>
+                  <div className="flex justify-between items-center py-2 border-b border-stone-200"><span className="text-stone-500 font-bold uppercase text-[10px]">Materials Total (Metal+Stone+Other)</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator).totalMaterials.toFixed(2)}</span></div>
+                  <div className="flex justify-between items-center py-2 border-b border-stone-200"><span className="text-stone-500 font-bold uppercase text-[10px]">Labor Total ({Number(calcHours) || 0}h)</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator).labor.toFixed(2)}</span></div>
+                  <div className="flex justify-between items-center py-2"><span className="text-stone-500 font-bold uppercase text-[10px]">Overhead Total ({overheadType === 'percent' ? `${Number(calcOverheadCost) || 0}%` : 'Flat'})</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator).overhead.toFixed(2)}</span></div>
                 </div>
                 )}
                 </div>
@@ -4370,14 +4410,14 @@ export default function Home() {
                             </div>
                             <p className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums">
                               ${(() => {
-                                const a = calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType);
+                                const a = calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator);
                                 const p = getStrategyPrices(a);
                                 return roundForDisplay(p.retail).toFixed(2);
                               })()}
                             </p>
                             <p className="text-[10px] font-semibold text-stone-500 mt-1">
                               Wholesale ${(() => {
-                                const a = calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType);
+                                const a = calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator);
                                 const p = getStrategyPrices(a);
                                 return roundForDisplay(p.wholesale).toFixed(2);
                               })()}
@@ -4442,8 +4482,8 @@ export default function Home() {
                     >
                       <div className="flex-1 min-w-0">
                         <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter mb-1">Formula A</p>
-                        <p className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums">${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType).retailA).toFixed(2)}</p>
-                        <p className="text-[10px] font-semibold text-stone-500 mt-1">Wholesale ${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType).wholesaleA).toFixed(2)}</p>
+                        <p className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums">${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator).retailA).toFixed(2)}</p>
+                        <p className="text-[10px] font-semibold text-stone-500 mt-1">Wholesale ${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator).wholesaleA).toFixed(2)}</p>
                       </div>
                     </button>
                     <div className="border-t border-stone-200 sm:border-t-0 sm:border-l min-w-0 sm:min-w-[180px]">
@@ -4487,8 +4527,8 @@ export default function Home() {
                     >
                       <div className="flex-1 min-w-0">
                         <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter mb-1">Formula B</p>
-                        <p className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums">${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType).retailB).toFixed(2)}</p>
-                        <p className="text-[10px] font-semibold text-stone-500 mt-1">Wholesale ${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType).wholesaleB).toFixed(2)}</p>
+                        <p className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums">${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator).retailB).toFixed(2)}</p>
+                        <p className="text-[10px] font-semibold text-stone-500 mt-1">Wholesale ${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator).wholesaleB).toFixed(2)}</p>
                       </div>
                     </button>
                     <div className="border-t border-stone-200 sm:border-t-0 sm:border-l min-w-0 sm:min-w-[220px]">
@@ -4569,14 +4609,14 @@ export default function Home() {
                             </div>
                             <p className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums">
                               ${(() => {
-                                const a = calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType);
+                                const a = calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator);
                                 const p = getStrategyPrices(a);
                                 return roundForDisplay(p.retail).toFixed(2);
                               })()}
                             </p>
                             <p className="text-[10px] font-semibold text-stone-500 mt-1">
                               Wholesale ${(() => {
-                                const a = calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType);
+                                const a = calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator);
                                 const p = getStrategyPrices(a);
                                 return roundForDisplay(p.wholesale).toFixed(2);
                               })()}
@@ -4912,15 +4952,7 @@ export default function Home() {
                     });
                   };
 
-                  // Calculate saved metal cost specifically for the breakdown display consistency
-                  const savedMetalCost = item.metals?.reduce((acc: number, m: any) => {
-                    const purities: any = { '10K Gold': 0.417, '14K Gold': 0.583, '18K Gold': 0.75, '22K Gold': 0.916, '24K Gold': 0.999, 'Sterling Silver': 0.925, 'Platinum 950': 0.95, 'Palladium': 0.95 };
-                    const purity = purities[m.type] || 1;
-                    const gramWeight = m.weight * UNIT_TO_GRAMS[m.unit];
-                    const spot = m.isManual ? 0 : (m.spotSaved || 0);
-                    const val = m.isManual ? (m.manualPrice || 0) : (spot / 31.1035) * purity * gramWeight;
-                    return acc + val;
-                  }, 0) || 0;
+                  const savedMetalCost = current.metalCost;
 
                   // Stone cost for Materials display only (does not affect other calculations)
                   const savedStonesArray = convertStonesToArray(item);
@@ -5287,11 +5319,8 @@ export default function Home() {
                             <div className="space-y-3">
                               <h4 className="text-[10px] font-black uppercase text-stone-400">Saved Breakdown</h4>
                               {item.metals?.map((m: any, idx: number) => {
-                                const purities: any = { '10K Gold': 0.417, '14K Gold': 0.583, '18K Gold': 0.75, '22K Gold': 0.916, '24K Gold': 0.999, 'Sterling Silver': 0.925, 'Platinum 950': 0.95, 'Palladium': 0.95 };
-                                const purity = purities[m.type] || 1;
-                                const gramWeight = m.weight * UNIT_TO_GRAMS[m.unit];
-                                const spot = m.isManual ? 0 : (m.spotSaved || 0);
-                                const val = m.isManual ? m.manualPrice : (spot / 31.1035) * purity * gramWeight;
+                                const spotOz = resolveSpotOzForMetal(m, prices);
+                                const val = metalRowLiveDollarValue(m, prices);
 
                                 return (
                                   <div key={idx} className="flex justify-between items-center text-[10px] font-bold border-b border-stone-100 pb-1.5 uppercase">
@@ -5300,8 +5329,8 @@ export default function Home() {
                                     </div>
                                     <div className="text-right">
                                       <span>${(val > 0 ? val : 0).toFixed(2)}</span>
-                                      {spot > 0 && <span className="block text-[8px] text-stone-400 font-medium normal-case tracking-wide">Spot: ${spot.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
-                                      {m.isManual && <span className="block text-[8px] text-stone-400 font-medium normal-case tracking-wide">Manual</span>}
+                                      {spotOz > 0 && <span className="block text-[8px] text-stone-400 font-medium normal-case tracking-wide">Spot: ${spotOz.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
+                                      {m.isManual && <span className="block text-[8px] text-amber-700/90 font-medium normal-case tracking-wide">Saved with manual entry at add</span>}
                                     </div>
                                   </div>
                                 );
@@ -5482,41 +5511,68 @@ export default function Home() {
                   >
                     {compareSpotEnabled ? 'Scenario on — extra columns' : 'Enable scenario columns'}
                   </button>
-                  <span className="text-[9px] text-stone-500 max-w-[220px] leading-tight">
-                    Adds amber columns next to each formula vs. live spot pricing.
+                  <span className="text-[9px] text-stone-500 max-w-[280px] leading-tight">
+                    White columns use live spots (and saved-spot fallback). Amber columns use your scenario spots. Manual metal $ only sets the price on first save; vault and compare always recalc metal from spot like other items.
                   </span>
                 </div>
                 {compareSpotEnabled && (
-                  <div className="flex flex-wrap items-end gap-3 pt-1 border-t border-amber-200/80">
-                    {(['gold', 'silver', 'platinum', 'palladium'] as const).map(metal => (
-                      <div key={metal} className="flex flex-col gap-0.5">
-                        <label className="text-[8px] font-black uppercase text-stone-500">{metal}</label>
-                        <div className="relative">
-                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-stone-400">$</span>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={compareCustomSpots[metal] === 0 ? '' : compareCustomSpots[metal]}
-                            onChange={e => setCompareCustomSpots(p => ({ ...p, [metal]: Number(e.target.value) || 0 }))}
-                            className="w-[100px] pl-5 pr-2 py-1.5 bg-white border border-stone-200 rounded-lg text-xs font-bold outline-none focus:border-[#A5BEAC] transition-all"
-                          />
-                        </div>
-                      </div>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={() => setCompareCustomSpots({ gold: prices.gold || 0, silver: prices.silver || 0, platinum: prices.platinum || 0, palladium: prices.palladium || 0 })}
-                      className="py-1.5 px-3 rounded-lg text-[9px] font-black uppercase text-[#A5BEAC] border border-[#A5BEAC]/40 hover:bg-[#A5BEAC]/10 transition-all"
-                    >
-                      Load live spots
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setCompareSpotEnabled(false); setCompareCustomSpots({ gold: 0, silver: 0, platinum: 0, palladium: 0 }); }}
-                      className="py-1.5 px-3 rounded-lg text-[9px] font-black uppercase text-stone-500 border border-stone-200 hover:bg-stone-100 transition-all"
-                    >
-                      Clear
-                    </button>
+                  <div className="space-y-3 pt-1 border-t border-amber-200/80">
+                    <p className="text-[9px] text-stone-500 leading-snug">
+                      <span className="font-bold text-stone-600">Live</span> is the app&apos;s current spot. <span className="font-bold text-stone-600">Scenario</span> is editable. Table columns use spot × purity × weight (manual entry at add only affects the first saved wholesale/retail, not ongoing metal math).
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+                      {(['gold', 'silver', 'platinum', 'palladium'] as const).map(metal => {
+                        const liveSpot = Number(prices[metal]) || 0;
+                        const scenSpot = compareCustomSpots[metal] || 0;
+                        const spotVsLivePct = liveSpot > 0 ? ((scenSpot - liveSpot) / liveSpot) * 100 : null;
+                        return (
+                          <div key={metal} className="rounded-lg border border-stone-200/90 bg-white/90 p-2.5 space-y-2 shadow-sm">
+                            <div className="text-[9px] font-black uppercase text-slate-800 tracking-wide">{metal}</div>
+                            <div className="flex justify-between items-baseline gap-2 border-b border-stone-100 pb-1.5">
+                              <span className="text-[8px] font-bold uppercase text-stone-400">Live (current)</span>
+                              <span className="text-[11px] font-black text-slate-900 tabular-nums">${liveSpot.toFixed(2)}</span>
+                            </div>
+                            <div className="space-y-0.5">
+                              <label className="text-[8px] font-bold uppercase text-amber-800">Scenario (editable)</label>
+                              <div className="relative">
+                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-stone-400">$</span>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={compareCustomSpots[metal] === 0 ? '' : compareCustomSpots[metal]}
+                                  onChange={e => setCompareCustomSpots(p => ({ ...p, [metal]: Number(e.target.value) || 0 }))}
+                                  className="w-full min-w-0 pl-5 pr-2 py-1.5 bg-white border border-amber-200/80 rounded-lg text-xs font-bold outline-none focus:border-[#A5BEAC] transition-all tabular-nums"
+                                />
+                              </div>
+                            </div>
+                            {spotVsLivePct !== null && Math.abs(spotVsLivePct) > 0.005 && (
+                              <div className={`text-[9px] font-bold ${spotVsLivePct >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                                Scenario spot vs live: {spotVsLivePct >= 0 ? '+' : ''}{spotVsLivePct.toFixed(1)}%
+                              </div>
+                            )}
+                            {spotVsLivePct !== null && Math.abs(spotVsLivePct) <= 0.005 && liveSpot > 0 && (
+                              <div className="text-[9px] font-bold text-stone-400">Scenario matches live spot</div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setCompareCustomSpots({ gold: prices.gold || 0, silver: prices.silver || 0, platinum: prices.platinum || 0, palladium: prices.palladium || 0 })}
+                        className="py-1.5 px-3 rounded-lg text-[9px] font-black uppercase text-[#A5BEAC] border border-[#A5BEAC]/40 hover:bg-[#A5BEAC]/10 transition-all"
+                      >
+                        Reset scenario to live spots
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setCompareSpotEnabled(false); setCompareCustomSpots({ gold: 0, silver: 0, platinum: 0, palladium: 0 }); }}
+                        className="py-1.5 px-3 rounded-lg text-[9px] font-black uppercase text-stone-500 border border-stone-200 hover:bg-stone-100 transition-all"
+                      >
+                        Clear
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -5725,7 +5781,7 @@ export default function Home() {
                     onValidationChange={setFormulaValid}
                     roundForDisplay={roundForDisplay}
                     previewContext={(() => {
-                      const a = calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType);
+                      const a = calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator);
                       return {
                         metalCost: a.metalCost,
                         labor: a.labor,
