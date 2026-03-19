@@ -5,7 +5,9 @@ import Stripe from 'stripe';
 export const dynamic = 'force-dynamic';
 
 const stripeSecret = process.env.STRIPE_SECRET_KEY?.trim();
-const priceId = process.env.STRIPE_VAULT_PLUS_PRICE_ID?.trim();
+const rawPriceEnv = process.env.STRIPE_VAULT_PLUS_PRICE_ID?.trim() || '';
+/** First id when env lists several (comma-separated) for sync migration. */
+const priceId = rawPriceEnv.split(/[\s,]+/).map((s) => s.trim()).find(Boolean);
 
 export async function POST(request: Request) {
   if (!stripeSecret || !priceId) {

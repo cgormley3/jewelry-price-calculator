@@ -48,6 +48,8 @@ STRIPE_WEBHOOK_SECRET=whsec_xxxxx
 STRIPE_VAULT_PLUS_PRICE_ID=price_xxxxx
 ```
 
+After you change the Vault+ dollar amount in Stripe, the **Price id** changes. Update this env to the **new** `price_…` from Stripe → Products → Vault+ → Pricing (or **Sync from Stripe** will not find the subscription). You can list **multiple** ids separated by commas or spaces during a migration, e.g. `price_old,price_new`.
+
 **Production:** Set `ADMIN_DIAGNOSTICS_SECRET` (long random string) if you need to call `/api/db-health` for ops; see [SECURITY.md](./SECURITY.md).
 
 ### Payment Link (optional, recommended for promo codes)
@@ -66,7 +68,7 @@ If you use a **Stripe Payment Link** instead of embedded Checkout from the API:
 
 3. In the Payment Link settings, set the **after-payment redirect** to your site, e.g. `https://yourdomain.com?vaultplus=1` (matches the old checkout success URL).
 
-4. Keep **`STRIPE_VAULT_PLUS_PRICE_ID`** only if you still need `/api/stripe/create-checkout` (e.g. local dev without the payment link env). If `NEXT_PUBLIC_STRIPE_VAULT_PLUS_PAYMENT_LINK` is unset, the app falls back to API checkout.
+4. Set **`STRIPE_VAULT_PLUS_PRICE_ID`** to the **same** Price id attached to that Payment Link (Stripe → Products → your Vault+ price). **Sync from Stripe** matches subscriptions against this id. If you change the product price in Stripe, update this env (or list `old_price,new_price`). If `NEXT_PUBLIC_STRIPE_VAULT_PLUS_PAYMENT_LINK` is unset, the app falls back to API checkout and still uses this env for the line item.
 
 ## 5. Set Up the Stripe Webhook
 
@@ -101,8 +103,8 @@ Check in Supabase **Table Editor → subscriptions**:
 
 Usually the **`subscriptions`** row was never created (webhook not delivered, wrong URL/secret, or checkout without `client_reference_id` / user metadata).
 
-1. **In the app:** Sign in with the **same email** as the Stripe customer, open Vault, tap **Sync from Stripe** (next to Refresh). The app calls `POST /api/stripe/sync-subscription` with your session.
-2. **Env:** Set **`STRIPE_VAULT_PLUS_PRICE_ID`** in production to your Vault+ price id so sync can pick the right subscription when a customer has multiple products.
+1. **In the app:** Sign in with the **same email** as the Stripe customer, open Vault, tap **Sync from Stripe** (next to Refresh). The app calls `POST /api/stripe/sync-subscription` with your session. If the env price list doesn’t match your checkout yet but this email has **only one** active/trialing/past_due subscription in Stripe, sync will still link it; if there are **several**, the error lists the Stripe **price id(s)** in use—add the Vault+ one to **`STRIPE_VAULT_PLUS_PRICE_ID`** (comma-separated) and redeploy.
+2. **Env:** Set **`STRIPE_VAULT_PLUS_PRICE_ID`** in production to every Vault+ price id you use (comma-separated) so sync can pick the right subscription when a customer has multiple products.
 3. **Webhook:** Confirm the endpoint is `https://yourdomain.com/api/stripe/webhook` and **`STRIPE_WEBHOOK_SECRET`** matches the signing secret for that endpoint.
 
 ## 6. Test the Flow

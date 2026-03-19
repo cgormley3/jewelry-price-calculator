@@ -5,7 +5,15 @@ import { getSubscriptionCurrentPeriodEndUnix } from '@/lib/stripe-subscription-p
 
 export const dynamic = 'force-dynamic';
 
-const priceId = process.env.STRIPE_VAULT_PLUS_PRICE_ID?.trim();
+/** Comma- or space-separated `price_...` ids (e.g. old + new after a price change). Empty = match any active/trialing sub. */
+function vaultPlusPriceIdsFromEnv(): string[] {
+  const raw = process.env.STRIPE_VAULT_PLUS_PRICE_ID?.trim();
+  if (!raw) return [];
+  return raw
+    .split(/[\s,]+/)
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+}
 
 /**
  * Links an active Stripe subscription to the signed-in Supabase user by email.
@@ -64,43 +72,82 @@ export async function POST(request: Request) {
       customerId: string;
       periodEnd: string;
       status: string;
+      priceIds: string[];
     };
-    const candidates: Candidate[] = [];
 
-    for (const c of customers) {
-      if (c.deleted) continue;
-      const custId = c.id;
-      const subs = await stripe.subscriptions.list({
-        customer: custId,
-        status: 'all',
-        limit: 20,
-      });
-      for (const sub of subs.data) {
-        if (sub.status !== 'active' && sub.status !== 'trialing') continue;
-        const items = sub.items?.data || [];
-        const matchesPrice =
-          !priceId || items.some((it) => it.price?.id === priceId);
-        if (!matchesPrice) continue;
-        const endUnix = getSubscriptionCurrentPeriodEndUnix(sub);
-        const end = endUnix
-          ? new Date(endUnix * 1000).toISOString()
-          : new Date().toISOString();
-        candidates.push({
-          subscriptionId: sub.id,
-          customerId: custId,
-          periodEnd: end,
-          status: sub.status === 'trialing' ? 'trialing' : 'active',
+    const allowedPriceIds = vaultPlusPriceIdsFromEnv();
+
+    async function collectCandidates(requirePriceMatch: boolean): Promise<Candidate[]> {
+      const out: Candidate[] = [];
+      for (const c of customers) {
+        if (c.deleted) continue;
+        const custId = c.id;
+        const subs = await stripe.subscriptions.list({
+          customer: custId,
+          status: 'all',
+          limit: 20,
+        });
+        for (const sub of subs.data) {
+          if (sub.status !== 'active' && sub.status !== 'trialing' && sub.status !== 'past_due') continue;
+          const items = sub.items?.data || [];
+          const priceIds = items.map((it) => it.price?.id).filter(Boolean) as string[];
+          const matchesPrice =
+            !requirePriceMatch ||
+            allowedPriceIds.length === 0 ||
+            items.some((it) => {
+              const pid = it.price?.id?.toLowerCase();
+              return pid && allowedPriceIds.includes(pid);
+            });
+          if (!matchesPrice) continue;
+          const endUnix = getSubscriptionCurrentPeriodEndUnix(sub);
+          const end = endUnix
+            ? new Date(endUnix * 1000).toISOString()
+            : new Date().toISOString();
+          const st = sub.status;
+          const statusRow =
+            st === 'trialing' ? 'trialing' : st === 'past_due' ? 'past_due' : 'active';
+          out.push({
+            subscriptionId: sub.id,
+            customerId: custId,
+            periodEnd: end,
+            status: statusRow,
+            priceIds,
+          });
+        }
+      }
+      return out;
+    }
+
+    let candidates = await collectCandidates(true);
+
+    /** Payment Link may use a new price id not yet in env — if exactly one paid sub exists for this email, link it. */
+    if (candidates.length === 0 && allowedPriceIds.length > 0) {
+      const anyPrice = await collectCandidates(false);
+      const dedup = new Map<string, Candidate>();
+      for (const x of anyPrice) dedup.set(x.subscriptionId, x);
+      const loose = [...dedup.values()];
+      if (loose.length === 1) {
+        candidates = loose;
+      } else if (loose.length > 1) {
+        const seen = new Set<string>();
+        for (const x of loose) for (const p of x.priceIds) seen.add(p);
+        return NextResponse.json({
+          ok: false,
+          synced: false,
+          message: `No subscription matched your configured prices (${allowedPriceIds.join(', ')}). This email has ${loose.length} active subscriptions with these price ids: ${[...seen].join(', ')}. Add the Vault+ price to STRIPE_VAULT_PLUS_PRICE_ID in Vercel (comma-separated) and redeploy, or remove extra Stripe subscriptions for this email.`,
         });
       }
     }
 
     if (candidates.length === 0) {
+      const hint =
+        allowedPriceIds.length > 0
+          ? `No subscription on this email uses any of these prices: ${allowedPriceIds.join(', ')}. In Stripe → Products, open your Vault+ price and copy its Price id. Set STRIPE_VAULT_PLUS_PRICE_ID in Vercel (comma-separated). If you already paid, check Stripe → Customers that this email matches your login.`
+          : 'No active, trialing, or past_due subscription found for this email in Stripe.';
       return NextResponse.json({
         ok: false,
         synced: false,
-        message: priceId
-          ? `No active subscription found for this email with price ${priceId}. Confirm the Vault+ product/price in Stripe matches STRIPE_VAULT_PLUS_PRICE_ID in hosting env.`
-          : 'No active or trialing subscription found for this email in Stripe.',
+        message: hint,
       });
     }
 
@@ -125,10 +172,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: upsertError.message }, { status: 400 });
     }
 
+    const priceHint =
+      best.priceIds.length > 0
+        ? ` Stripe price id(s): ${best.priceIds.join(', ')}.`
+        : '';
     return NextResponse.json({
       ok: true,
       synced: true,
-      message: 'Vault+ linked to your account. Refresh if the UI has not updated.',
+      message: `Vault+ linked to your account. Refresh if the UI has not updated.${priceHint}`,
     });
   } catch (e: any) {
     console.error('sync-subscription error:', e);

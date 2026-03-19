@@ -4183,7 +4183,7 @@ export default function Home() {
               </span>
             </div>
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900 leading-tight">{notification.title}</h3>
-            <p className="text-xs font-bold text-stone-500 uppercase tracking-wide leading-relaxed">
+            <p className="text-xs font-bold text-stone-500 leading-relaxed normal-case">
               {notification.message}
             </p>
             <div className="flex gap-3">
@@ -5731,11 +5731,6 @@ export default function Home() {
                   {!user && (
                     <p className="text-stone-600 font-bold uppercase text-xs tracking-wider">
                       Sign in to compare prices. With a vault and Vault+, you can compare item prices across different formulas.
-                    </p>
-                  )}
-                  {user && subscriptionStatus && !subscriptionStatus.subscribed && (
-                    <p className="text-stone-600 font-bold uppercase text-xs tracking-wider">
-                      Upgrade to Vault+ ({VAULT_PLUS_PRICE_PHRASE}) to use Compare with your vault and formulas.
                     </p>
                   )}
                   <div className="flex flex-col sm:flex-row gap-2 items-center justify-center">
