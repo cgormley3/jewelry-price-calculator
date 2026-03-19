@@ -104,7 +104,7 @@ Check in Supabase **Table Editor → subscriptions**:
 
 Usually the **`subscriptions`** row was never created (webhook not delivered, wrong URL/secret, or checkout without `client_reference_id` / user metadata).
 
-1. **In the app:** Sign in with the **same email** as the Stripe customer, open Vault, tap **Sync from Stripe** (next to Refresh). The app calls `POST /api/stripe/sync-subscription` with your session. If the env price list doesn’t match your checkout yet but this email has **only one** active/trialing/past_due subscription in Stripe, sync will still link it; if there are **several**, the error lists the Stripe **price id(s)** in use—add the Vault+ one to **`STRIPE_VAULT_PLUS_PRICE_ID`** (comma-separated) and redeploy.
+1. **In the app:** Open Vault, tap **Sync from Stripe**. Sync looks up Stripe by your **login email**, and also uses **`stripe_customer_id` / `stripe_subscription_id`** already saved on your `subscriptions` row (e.g. from a webhook), so it can still work if checkout used a **different** email than your app login. If Stripe has **no** customer for your login and Supabase has **no** customer id yet, use the **same email** as on the Stripe receipt or update the customer’s email in Stripe Dashboard → Customers.
 2. **Env:** Set **`STRIPE_VAULT_PLUS_PRICE_ID`** in production to every Vault+ price id you use (comma-separated) so sync can pick the right subscription when a customer has multiple products.
 3. **Webhook:** Confirm the endpoint is `https://yourdomain.com/api/stripe/webhook` and **`STRIPE_WEBHOOK_SECRET`** matches the signing secret for that endpoint.
 

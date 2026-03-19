@@ -1100,17 +1100,21 @@ export default function Home() {
             setShopifyShop(shopifyData.shop || null);
           }
         }
-        const resSub = await fetch('/api/subscription/status', {
+        // fetch-inventory only returns 200 when the server already verified Vault+ — do not let a
+        // separate /subscription/status failure or mismatch clear the UI back to "Upgrade".
+        setSubscriptionStatus({ subscribed: true });
+        void fetch('/api/subscription/status', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ accessToken, userId: session.user.id }),
-        });
-        if (resSub.ok) {
-          const subData = await resSub.json();
-          setSubscriptionStatus({ subscribed: !!subData.subscribed });
-        } else {
-          setSubscriptionStatus({ subscribed: false });
-        }
+        })
+          .then((r) => r.json().catch(() => ({})))
+          .then((subData: { subscribed?: boolean }) => {
+            if (subData && subData.subscribed === false) {
+              console.warn('[vault] subscription/status said false after inventory 200 — ignoring for UI');
+            }
+          })
+          .catch(() => {});
         const resProfile = await fetch('/api/profile', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1144,20 +1148,32 @@ export default function Home() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ accessToken, userId: session.user.id }),
         });
-        const subFinal = resSubFinal.ok ? await resSubFinal.json().catch(() => ({})) : {};
-        const paid = !!subFinal.subscribed;
-        setSubscriptionStatus({ subscribed: paid });
+        const subFinal = resSubFinal.ok ? await resSubFinal.json().catch(() => ({})) : null;
+        const paidKnown = resSubFinal.ok && subFinal != null;
+        const paid = paidKnown ? !!subFinal.subscribed : null;
+        if (paid !== null) {
+          setSubscriptionStatus({ subscribed: paid });
+        } else {
+          // Don’t flip UI to “Upgrade” because /subscription/status failed (network / 5xx)
+          setSubscriptionStatus((prev) => prev ?? { subscribed: false });
+        }
         setVaultPaywallHasItems(!!(err as { hasItems?: boolean })?.hasItems);
-        if (!paid) {
+        if (paid === false) {
           setInventory([]);
           setLocations(['Main Vault']);
           if ((err as { code?: string })?.code !== 'PAYWALL_VAULT') {
             setNotification({ title: 'Vault Load Failed', message: (err as { error?: string })?.error || `Upgrade to Vault+ (${VAULT_PLUS_PRICE_PHRASE}) to access your vault.`, type: 'info' });
           }
-        } else {
+        } else if (paid === true) {
           setNotification({
             title: 'Vault',
             message: 'Your subscription is active but the vault request failed once. Tap Refresh again, or open Vault → Sync from Stripe if this keeps happening.',
+            type: 'info',
+          });
+        } else {
+          setNotification({
+            title: 'Vault',
+            message: 'Could not verify subscription status. Tap Refresh. If you just used Sync from Stripe, your account may still be linked.',
             type: 'info',
           });
         }

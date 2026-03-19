@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
 import { getSubscriptionCurrentPeriodEndUnix } from '@/lib/stripe-subscription-period-end';
 
@@ -16,9 +16,93 @@ function vaultPlusPriceIdsFromEnv(): string[] {
 }
 
 /**
- * Links an active Stripe subscription to the signed-in Supabase user by email.
- * Use when checkout succeeded in Stripe but `subscriptions` was never updated (webhook / client_reference_id issues).
+ * Links an active Stripe subscription to the signed-in Supabase user.
+ * Uses: (1) stripe_customer_id / stripe_subscription_id already on `subscriptions`, (2) Customer Search,
+ * (3) customers.list by email — so checkout with a different email than the app login can still sync.
  */
+async function gatherStripeCustomersForUser(
+  stripe: Stripe,
+  supabase: SupabaseClient,
+  authUserId: string,
+  loginEmail: string
+): Promise<Stripe.Customer[]> {
+  const map = new Map<string, Stripe.Customer>();
+
+  async function addCustomerById(cid: string | null | undefined) {
+    const id = cid?.trim();
+    if (!id) return;
+    try {
+      const c = await stripe.customers.retrieve(id);
+      if (typeof c === 'string' || ('deleted' in c && c.deleted)) return;
+      map.set(c.id, c);
+    } catch {
+      /* invalid or unknown customer */
+    }
+  }
+
+  const { data: subRows } = await supabase
+    .from('subscriptions')
+    .select('stripe_customer_id, stripe_subscription_id')
+    .eq('user_id', authUserId)
+    .order('updated_at', { ascending: false, nullsFirst: false })
+    .limit(1);
+
+  const row = subRows?.[0] as { stripe_customer_id?: string | null; stripe_subscription_id?: string | null } | undefined;
+
+  await addCustomerById(row?.stripe_customer_id);
+
+  const subId = row?.stripe_subscription_id?.trim();
+  if (subId) {
+    try {
+      const sub = await stripe.subscriptions.retrieve(subId);
+      const cid =
+        typeof sub.customer === 'string'
+          ? sub.customer
+          : sub.customer && typeof sub.customer === 'object' && 'id' in sub.customer
+            ? String((sub.customer as { id: string }).id)
+            : null;
+      await addCustomerById(cid);
+    } catch {
+      /* unknown subscription id */
+    }
+  }
+
+  const escaped = loginEmail.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  try {
+    const { data: searchData } = await stripe.customers.search({
+      query: `email:'${escaped}'`,
+      limit: 10,
+    });
+    for (const c of searchData || []) {
+      if (!c.deleted) map.set(c.id, c as Stripe.Customer);
+    }
+  } catch {
+    /* search unavailable in some accounts — list API below */
+  }
+
+  const tryList = async (em: string) => {
+    const listed = await stripe.customers.list({ email: em.trim(), limit: 20 });
+    for (const c of listed.data) {
+      if (!c.deleted) map.set(c.id, c);
+    }
+  };
+
+  try {
+    await tryList(loginEmail.toLowerCase());
+  } catch {
+    /* noop */
+  }
+  if (loginEmail.trim().toLowerCase() !== loginEmail.trim()) {
+    try {
+      await tryList(loginEmail.trim());
+    } catch {
+      /* noop */
+    }
+  }
+
+  return [...map.values()];
+}
+
 export async function POST(request: Request) {
   const stripeSecret = process.env.STRIPE_SECRET_KEY?.trim();
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || '';
@@ -51,19 +135,16 @@ export async function POST(request: Request) {
     }
 
     const stripe = new Stripe(stripeSecret);
-    const escaped = email.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    const { data: searchData } = await stripe.customers.search({
-      query: `email:'${escaped}'`,
-      limit: 10,
-    });
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const customers = searchData || [];
+    const customers = await gatherStripeCustomersForUser(stripe, supabase, user.id, email);
+
     if (customers.length === 0) {
       return NextResponse.json({
         ok: false,
         synced: false,
         message:
-          'No Stripe customer found with this account email. Use the same email in Stripe, or complete checkout from the app while signed in (so your user id is sent to Stripe).',
+          'No Stripe customer found for this account. Common causes: (1) You paid with a different email than you use to log in — in Stripe Dashboard → Customers, find your payment and either change that customer’s email to match this login or sign in to the app with the same email as the receipt. (2) Complete checkout from the app while signed in so Stripe gets your user id. (3) If you have a subscriptions row in Supabase with stripe_customer_id, sync will use that — ensure it’s the correct Stripe customer id.',
       });
     }
 
@@ -154,7 +235,6 @@ export async function POST(request: Request) {
     candidates.sort((a, b) => new Date(b.periodEnd).getTime() - new Date(a.periodEnd).getTime());
     const best = candidates[0]!;
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const { error: upsertError } = await supabase.from('subscriptions').upsert(
       {
         user_id: user.id,
