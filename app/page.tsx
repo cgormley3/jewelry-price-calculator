@@ -164,6 +164,11 @@ export default function Home() {
   /** Per-item retries when `<img>` fires onError (transient cache / WebKit). */
   const [vaultImageErrorRetries, setVaultImageErrorRetries] = useState<Record<string, number>>({});
 
+  // Vault empty-state “Diagnose” (calls /api/vault-diagnostic) — off for production UX; set true for support/debug
+  const VAULT_DIAGNOSTICS_UI_ENABLED = false;
+  // Vault / Compare paywall “Refresh” + “Sync from Stripe” — off for production UX; set true for support/debug
+  const VAULT_REFRESH_AND_STRIPE_SYNC_UI_ENABLED = false;
+
   // Shopify – set SHOPIFY_FEATURE_ENABLED = true when app is published
   const SHOPIFY_FEATURE_ENABLED = false;
   const [shopifyConnected, setShopifyConnected] = useState(false);
@@ -251,6 +256,8 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [pricesLoaded, setPricesLoaded] = useState(false);
   const [user, setUser] = useState<any>(null);
+  /** Same as Compare tab’s “Upgrade to Vault+”: signed in + subscription known + not subscribed. */
+  const showVaultPlusUpgradeLikeCompare = Boolean(user && subscriptionStatus && !subscriptionStatus.subscribed);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
@@ -5220,23 +5227,38 @@ export default function Home() {
                 <div className="p-20 text-center text-stone-400 font-bold uppercase text-xs tracking-widest animate-pulse">Opening Vault...</div>
               ) : inventory.length === 0 && hasValidSupabaseCredentials ? (
                 <div className="p-12 text-center space-y-4">
-                  {subscriptionStatus && !subscriptionStatus.subscribed && vaultPaywallHasItems ? (
+                  {showVaultPlusUpgradeLikeCompare && vaultPaywallHasItems ? (
                     <>
                       <p className="text-stone-600 font-bold uppercase text-xs tracking-wider">To see your items upgrade to Vault+ ({VAULT_PLUS_PRICE_PHRASE})</p>
                       <div className="flex flex-col sm:flex-row gap-2 items-center justify-center">
                         <button onClick={() => setShowVaultPlusModal(true)} className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-[#A5BEAC] text-white hover:bg-slate-900 transition shadow-sm">
                           Upgrade to Vault+
                         </button>
-                        <button type="button" onClick={() => { setLoading(true); void fetchInventory(); }} className="text-[10px] font-bold uppercase text-stone-400 hover:text-[#A5BEAC] transition">Refresh</button>
-                        <button type="button" disabled={syncingVaultPlus} onClick={() => { void syncVaultPlusFromStripe(); }} className="text-[10px] font-bold uppercase text-[#A5BEAC] hover:text-slate-900 transition disabled:opacity-50">
-                          {syncingVaultPlus ? 'Syncing…' : 'Sync from Stripe'}
-                        </button>
+                        {VAULT_REFRESH_AND_STRIPE_SYNC_UI_ENABLED && (
+                          <>
+                            <button type="button" onClick={() => { setLoading(true); void fetchInventory(); }} className="text-[10px] font-bold uppercase text-stone-400 hover:text-[#A5BEAC] transition">Refresh</button>
+                            <button type="button" disabled={syncingVaultPlus} onClick={() => { void syncVaultPlusFromStripe(); }} className="text-[10px] font-bold uppercase text-[#A5BEAC] hover:text-slate-900 transition disabled:opacity-50">
+                              {syncingVaultPlus ? 'Syncing…' : 'Sync from Stripe'}
+                            </button>
+                          </>
+                        )}
                       </div>
                     </>
                   ) : (
-                    <p className="text-stone-500 font-bold uppercase text-xs tracking-wider">No items yet</p>
+                    <div className="space-y-4">
+                      <p className="text-stone-500 font-bold uppercase text-xs tracking-wider">No items yet</p>
+                      {showVaultPlusUpgradeLikeCompare && (
+                        <button
+                          type="button"
+                          onClick={() => setShowVaultPlusModal(true)}
+                          className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-[#A5BEAC] text-white hover:bg-slate-900 transition shadow-sm"
+                        >
+                          Upgrade to Vault+
+                        </button>
+                      )}
+                    </div>
                   )}
-                  {(subscriptionStatus?.subscribed || vaultPaywallHasItems) && (
+                  {VAULT_DIAGNOSTICS_UI_ENABLED && (subscriptionStatus?.subscribed || vaultPaywallHasItems) && (
                     <button
                       onClick={async () => {
                         setVaultDiagnostic(null);
@@ -5268,7 +5290,7 @@ export default function Home() {
                       Not seeing items? Diagnose
                     </button>
                   )}
-                  {vaultDiagnostic && (
+                  {VAULT_DIAGNOSTICS_UI_ENABLED && vaultDiagnostic && (
                     <div className="mt-4 p-4 bg-stone-50 rounded-xl text-left">
                       <p className="text-xs font-mono text-slate-700 break-all whitespace-pre-wrap">{vaultDiagnostic}</p>
                       {(vaultDiagnostic.includes('UPDATE inventory') || vaultDiagnostic.includes('UPDATE subscriptions')) && (
@@ -5787,7 +5809,7 @@ export default function Home() {
                   Select <span className="font-bold">Formulas</span> to compare prices, and use <span className="font-bold">Spot Scenario</span> to generate amber columns for comparing custom metal prices against your Saved vault prices or Formula prices.
                 </p>
               </div>
-              {(!user || (subscriptionStatus && !subscriptionStatus.subscribed)) ? (
+              {(!user || showVaultPlusUpgradeLikeCompare) ? (
                 <div className="py-8 px-4 rounded-xl bg-stone-50 border border-stone-200 text-center space-y-4">
                   {!user && (
                     <p className="text-stone-600 font-bold uppercase text-xs tracking-wider">
@@ -5804,10 +5826,14 @@ export default function Home() {
                         <button onClick={() => setShowVaultPlusModal(true)} className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-[#A5BEAC] text-white hover:bg-slate-900 transition shadow-sm">
                           Upgrade to Vault+
                         </button>
-                        <button type="button" onClick={() => { setLoading(true); void fetchInventory(); }} className="text-[10px] font-bold uppercase text-stone-400 hover:text-[#A5BEAC] transition">Refresh</button>
-                        <button type="button" disabled={syncingVaultPlus} onClick={() => { void syncVaultPlusFromStripe(); }} className="text-[10px] font-bold uppercase text-[#A5BEAC] hover:text-slate-900 transition disabled:opacity-50">
-                          {syncingVaultPlus ? 'Syncing…' : 'Sync from Stripe'}
-                        </button>
+                        {VAULT_REFRESH_AND_STRIPE_SYNC_UI_ENABLED && (
+                          <>
+                            <button type="button" onClick={() => { setLoading(true); void fetchInventory(); }} className="text-[10px] font-bold uppercase text-stone-400 hover:text-[#A5BEAC] transition">Refresh</button>
+                            <button type="button" disabled={syncingVaultPlus} onClick={() => { void syncVaultPlusFromStripe(); }} className="text-[10px] font-bold uppercase text-[#A5BEAC] hover:text-slate-900 transition disabled:opacity-50">
+                              {syncingVaultPlus ? 'Syncing…' : 'Sync from Stripe'}
+                            </button>
+                          </>
+                        )}
                       </>
                     )}
                   </div>

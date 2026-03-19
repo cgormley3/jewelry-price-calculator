@@ -94,7 +94,7 @@ If you use a **Stripe Payment Link** instead of embedded Checkout from the API:
 
 Check in Supabase **Table Editor → subscriptions**:
 
-1. **`user_id`** must equal the user’s id from **Authentication → Users** for the account they’re signed into (not another email/Google identity). Use Vault → **Not seeing items? Diagnose** to see `your_user_id` and compare.
+1. **`user_id`** must equal the user’s id from **Authentication → Users** for the account they’re signed into (not another email/Google identity). Compare ids in the Supabase dashboard, or set `VAULT_DIAGNOSTICS_UI_ENABLED` to `true` in `app/page.tsx` to show the in-app Diagnose link again.
 2. **`status`** must be `active`, `trialing`, or `past_due` (Stripe retry window). Values like `inactive`, `canceled`, or `unpaid` block access.
 3. **`current_period_end`** can be **null** or briefly **in the past** in the database while **`status`** is still `active` / `trialing` / `past_due` — the app trusts **`status`** so webhook lag doesn’t lock people out. Use **Sync from Stripe** or webhooks to keep dates accurate for your own reporting.
 4. **Duplicate rows** for the same user are avoided by a unique `user_id`; if you ever had duplicates, the app now uses the row with the latest `updated_at` (null `updated_at` sorts last so a freshly synced row wins).

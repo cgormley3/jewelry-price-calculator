@@ -23,7 +23,7 @@ export function vaultPlusAccessBlockReason(sub: {
   current_period_end?: unknown;
 } | null | undefined): string | null {
   if (!sub) {
-    return 'No subscription row for this account’s user id. If you see a row in Supabase, compare `user_id` to your auth user id (Vault → Diagnose).';
+    return 'No subscription row for this account’s user id. If you see a row in Supabase, compare `user_id` to your auth user id.';
   }
   const st = String(sub.status || '').toLowerCase().trim();
   if (!ACCESS_STATUSES.has(st)) {
