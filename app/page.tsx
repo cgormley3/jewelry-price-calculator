@@ -211,6 +211,7 @@ export default function Home() {
   const [showPassword, setShowPassword] = useState(false);
   const [activeTab, setActiveTab] = useState<'calculator' | 'vault' | 'compare' | 'logic' | 'formulas' | 'time'>('calculator');
   const [compareFormulas, setCompareFormulas] = useState<{ a: boolean; b: boolean; customIds: string[] }>({ a: true, b: true, customIds: [] });
+  const [compareShowLive, setCompareShowLive] = useState(true);
   const [compareSpotEnabled, setCompareSpotEnabled] = useState(false);
   const [compareCustomSpots, setCompareCustomSpots] = useState({ gold: 0, silver: 0, platinum: 0, palladium: 0 });
 
@@ -5403,7 +5404,7 @@ export default function Home() {
             <div className="p-6 border-b border-stone-100 bg-white space-y-4 rounded-t-[2.5rem] shrink-0">
               <h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Compare Prices</h2>
               <p className="text-[10px] text-stone-500">
-                Compare vault item prices across different formulas. Use {'"'}What-if spot prices{'"'} to recalculate columns at custom or loaded live metal spots.
+                Compare saved vault prices to live spot pricing and across formulas. Toggle <span className="font-bold">Live</span> and each formula column. Optional <span className="font-bold">Spot scenario</span> adds amber columns at custom metal spots.
               </p>
               {(!user || (subscriptionStatus && !subscriptionStatus.subscribed)) ? (
                 <div className="py-8 px-4 rounded-xl bg-stone-50 border border-stone-200 text-center space-y-4">
@@ -5506,88 +5507,15 @@ export default function Home() {
                   </div>
                 </div>
               </div>
-              <div className="rounded-xl border-2 border-dashed border-amber-200/90 bg-amber-50/40 p-3 space-y-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[9px] font-black uppercase text-amber-900 tracking-wide">What-if spot prices</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const next = !compareSpotEnabled;
-                      setCompareSpotEnabled(next);
-                      if (next && compareCustomSpots.gold === 0 && compareCustomSpots.silver === 0) {
-                        setCompareCustomSpots({ gold: prices.gold || 0, silver: prices.silver || 0, platinum: prices.platinum || 0, palladium: prices.palladium || 0 });
-                      }
-                    }}
-                    className={`py-2 px-3 rounded-lg text-[10px] font-black uppercase border-2 transition-all ${compareSpotEnabled ? 'bg-slate-900 text-white border-slate-900' : 'bg-white border-amber-300 text-amber-900 hover:bg-amber-100'}`}
-                  >
-                    {compareSpotEnabled ? 'Scenario on — extra columns' : 'Enable scenario columns'}
-                  </button>
-                  <span className="text-[9px] text-stone-500 max-w-[280px] leading-tight">
-                    White columns use live spots (and saved-spot fallback). Amber columns use your scenario spots. Manual metal $ only sets the price on first save; vault and compare always recalc metal from spot like other items.
-                  </span>
-                </div>
-                {compareSpotEnabled && (
-                  <div className="space-y-3 pt-1 border-t border-amber-200/80">
-                    <p className="text-[9px] text-stone-500 leading-snug">
-                      <span className="font-bold text-stone-600">Live</span> is the app&apos;s current spot. <span className="font-bold text-stone-600">Scenario</span> is editable. Table columns use spot × purity × weight (manual entry at add only affects the first saved wholesale/retail, not ongoing metal math).
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-                      {(['gold', 'silver', 'platinum', 'palladium'] as const).map(metal => {
-                        const liveSpot = Number(prices[metal]) || 0;
-                        const scenSpot = compareCustomSpots[metal] || 0;
-                        const spotVsLivePct = liveSpot > 0 ? ((scenSpot - liveSpot) / liveSpot) * 100 : null;
-                        return (
-                          <div key={metal} className="rounded-lg border border-stone-200/90 bg-white/90 p-2.5 space-y-2 shadow-sm">
-                            <div className="text-[9px] font-black uppercase text-slate-800 tracking-wide">{metal}</div>
-                            <div className="flex justify-between items-baseline gap-2 border-b border-stone-100 pb-1.5">
-                              <span className="text-[8px] font-bold uppercase text-stone-400">Live (current)</span>
-                              <span className="text-[11px] font-black text-slate-900 tabular-nums">${liveSpot.toFixed(2)}</span>
-                            </div>
-                            <div className="space-y-0.5">
-                              <label className="text-[8px] font-bold uppercase text-amber-800">Scenario (editable)</label>
-                              <div className="relative">
-                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-stone-400">$</span>
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  value={compareCustomSpots[metal] === 0 ? '' : compareCustomSpots[metal]}
-                                  onChange={e => setCompareCustomSpots(p => ({ ...p, [metal]: Number(e.target.value) || 0 }))}
-                                  className="w-full min-w-0 pl-5 pr-2 py-1.5 bg-white border border-amber-200/80 rounded-lg text-xs font-bold outline-none focus:border-[#A5BEAC] transition-all tabular-nums"
-                                />
-                              </div>
-                            </div>
-                            {spotVsLivePct !== null && Math.abs(spotVsLivePct) > 0.005 && (
-                              <div className={`text-[9px] font-bold ${spotVsLivePct >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                                Scenario spot vs live: {spotVsLivePct >= 0 ? '+' : ''}{spotVsLivePct.toFixed(1)}%
-                              </div>
-                            )}
-                            {spotVsLivePct !== null && Math.abs(spotVsLivePct) <= 0.005 && liveSpot > 0 && (
-                              <div className="text-[9px] font-bold text-stone-400">Scenario matches live spot</div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setCompareCustomSpots({ gold: prices.gold || 0, silver: prices.silver || 0, platinum: prices.platinum || 0, palladium: prices.palladium || 0 })}
-                        className="py-1.5 px-3 rounded-lg text-[9px] font-black uppercase text-[#A5BEAC] border border-[#A5BEAC]/40 hover:bg-[#A5BEAC]/10 transition-all"
-                      >
-                        Reset scenario to live spots
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { setCompareSpotEnabled(false); setCompareCustomSpots({ gold: 0, silver: 0, platinum: 0, palladium: 0 }); }}
-                        className="py-1.5 px-3 rounded-lg text-[9px] font-black uppercase text-stone-500 border border-stone-200 hover:bg-stone-100 transition-all"
-                      >
-                        Clear
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
               <div className="flex flex-wrap gap-2 items-center">
+                <span className="text-[9px] font-bold text-stone-400 uppercase">Show:</span>
+                <button
+                  type="button"
+                  onClick={() => setCompareShowLive(p => !p)}
+                  className={`py-2 px-3 rounded-xl text-[10px] font-black uppercase border transition-all ${compareShowLive ? 'bg-slate-800 text-white border-slate-800' : 'bg-white border-stone-200 text-stone-500 hover:border-stone-300'}`}
+                >
+                  Live
+                </button>
                 <span className="text-[9px] font-bold text-stone-400 uppercase">Formulas:</span>
                 <button
                   type="button"
@@ -5621,6 +5549,54 @@ export default function Home() {
                   );
                 })}
               </div>
+              <div className="flex flex-wrap items-end gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = !compareSpotEnabled;
+                    setCompareSpotEnabled(next);
+                    if (next && compareCustomSpots.gold === 0 && compareCustomSpots.silver === 0) {
+                      setCompareCustomSpots({ gold: prices.gold || 0, silver: prices.silver || 0, platinum: prices.platinum || 0, palladium: prices.palladium || 0 });
+                    }
+                  }}
+                  className={`py-2 px-3 rounded-xl text-[10px] font-black uppercase border transition-all ${compareSpotEnabled ? 'bg-amber-600 text-white border-amber-600' : 'bg-white border-stone-200 text-stone-500 hover:border-stone-300'}`}
+                >
+                  {compareSpotEnabled ? 'Spot scenario on' : 'Spot scenario'}
+                </button>
+                {compareSpotEnabled && (
+                  <>
+                    {(['gold', 'silver', 'platinum', 'palladium'] as const).map(metal => (
+                      <div key={metal} className="flex flex-col gap-0.5">
+                        <label className="text-[8px] font-black uppercase text-stone-400">{metal}</label>
+                        <div className="relative">
+                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-stone-400">$</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={compareCustomSpots[metal] || ''}
+                            onChange={e => setCompareCustomSpots(p => ({ ...p, [metal]: Number(e.target.value) || 0 }))}
+                            className="w-[92px] pl-5 pr-2 py-1.5 bg-white border border-stone-200 rounded-lg text-xs font-bold outline-none focus:border-[#A5BEAC] transition-all"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setCompareCustomSpots({ gold: prices.gold || 0, silver: prices.silver || 0, platinum: prices.platinum || 0, palladium: prices.palladium || 0 })}
+                      className="py-1.5 px-3 rounded-lg text-[9px] font-black uppercase text-[#A5BEAC] border border-[#A5BEAC]/30 hover:bg-[#A5BEAC]/10 transition-all"
+                    >
+                      Load live
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setCompareSpotEnabled(false); setCompareCustomSpots({ gold: 0, silver: 0, platinum: 0, palladium: 0 }); }}
+                      className="py-1.5 px-3 rounded-lg text-[9px] font-black uppercase text-stone-400 border border-stone-200 hover:bg-stone-100 transition-all"
+                    >
+                      Clear
+                    </button>
+                  </>
+                )}
+              </div>
             </>
               )}
             </div>
@@ -5630,9 +5606,9 @@ export default function Home() {
                 <div className="text-center py-12 text-stone-500 text-sm">
                   {inventory.length === 0 ? 'Add items to your vault to compare prices. Use the Vault tab to add items.' : 'No items match your filters. Try adjusting filters or search.'}
                 </div>
-              ) : !compareFormulas.a && !compareFormulas.b && compareFormulas.customIds.length === 0 ? (
+              ) : !compareShowLive && !compareFormulas.a && !compareFormulas.b && compareFormulas.customIds.length === 0 ? (
                 <div className="text-center py-12 text-stone-500 text-sm">
-                  Select at least one formula to compare.
+                  Turn on Live or select at least one formula to compare.
                 </div>
               ) : (
                 <div className="min-w-max">
@@ -5641,6 +5617,7 @@ export default function Home() {
                       <tr className="border-b-2 border-stone-200">
                         <th className="py-2 pr-4 text-[10px] font-black uppercase text-stone-500 sticky left-0 bg-white z-10">Item</th>
                         <th className="py-2 px-3 text-[10px] font-black uppercase text-stone-500 whitespace-nowrap bg-stone-100">Saved</th>
+                        {compareShowLive && <th className="py-2 px-3 text-[10px] font-black uppercase text-slate-700 whitespace-nowrap bg-slate-50 border-l border-stone-100">Live</th>}
                         {compareFormulas.a && <th className="py-2 px-3 text-[10px] font-black uppercase text-stone-500 whitespace-nowrap bg-white">Formula A</th>}
                         {compareSpotEnabled && compareFormulas.a && <th className="py-2 px-3 text-[10px] font-black uppercase text-amber-600 whitespace-nowrap bg-amber-50">A @ Scenario</th>}
                         {compareFormulas.b && <th className="py-2 px-3 text-[10px] font-black uppercase text-stone-500 whitespace-nowrap bg-white">Formula B</th>}
@@ -5657,6 +5634,13 @@ export default function Home() {
                     </thead>
                     <tbody>
                       {compareFilteredInventory.map((item: any) => {
+                        const stonesForRow = convertStonesToArray(item);
+                        const liveBreakdownForItem = calculateFullBreakdown(
+                          item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0,
+                          stonesForRow, item.overhead_cost || 0, (item.overhead_type as 'flat' | 'percent') || 'flat',
+                          item.multiplier, item.markup_b
+                        );
+                        const liveItemPrices = getItemPrices(item, liveBreakdownForItem);
                         const pricesByFormula = getPricesForFormulas(item, compareFormulas);
                         const scenarioPrices = compareSpotEnabled ? getPricesForFormulas(item, compareFormulas, compareCustomSpots) : null;
                         const itemStrategy = item.strategy === 'custom' && item.custom_formula?.formula_name ? item.custom_formula.formula_name : item.strategy;
@@ -5673,6 +5657,11 @@ export default function Home() {
                             <td className="py-2 px-3 text-[11px] text-stone-600 whitespace-nowrap bg-stone-100">
                               ${roundForDisplay(Number(item.wholesale)).toFixed(2)} / ${roundForDisplay(Number(item.retail)).toFixed(2)}
                             </td>
+                            {compareShowLive && (
+                              <td className="py-2 px-3 text-[11px] text-slate-800 whitespace-nowrap bg-slate-50 border-l border-stone-100" title={"At current spot, using this item's saved formula"}>
+                                ${roundForDisplay(liveItemPrices.wholesale).toFixed(2)} / ${roundForDisplay(liveItemPrices.retail).toFixed(2)}
+                              </td>
+                            )}
                             {compareFormulas.a && (
                               <td className={`py-2 px-3 text-[11px] whitespace-nowrap bg-white ${itemStrategy === 'A' ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
                                 ${roundForDisplay(pricesByFormula['A']?.wholesale ?? 0).toFixed(2)} / ${roundForDisplay(pricesByFormula['A']?.retail ?? 0).toFixed(2)}
