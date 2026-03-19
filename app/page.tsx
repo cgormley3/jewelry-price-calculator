@@ -1347,9 +1347,9 @@ export default function Home() {
             let newSpot = m.spotSaved;
 
             if (type.includes('gold') && recalcParams.gold) newSpot = Number(recalcParams.gold);
-            if (type.includes('silver') && recalcParams.silver) newSpot = Number(recalcParams.silver);
-            if (type.includes('platinum') && recalcParams.platinum) newSpot = Number(recalcParams.platinum);
-            if (type.includes('palladium') && recalcParams.palladium) newSpot = Number(recalcParams.palladium);
+            else if (type.includes('silver') && recalcParams.silver) newSpot = Number(recalcParams.silver);
+            else if (type.includes('platinum') && recalcParams.platinum) newSpot = Number(recalcParams.platinum);
+            else if (type.includes('palladium') && recalcParams.palladium) newSpot = Number(recalcParams.palladium);
 
             return { ...m, spotSaved: m.isManual ? undefined : newSpot };
           });
@@ -1445,9 +1445,9 @@ export default function Home() {
           let newSpot = m.spotSaved;
 
           if (type.includes('gold') && recalcParams.gold) newSpot = Number(recalcParams.gold);
-          if (type.includes('silver') && recalcParams.silver) newSpot = Number(recalcParams.silver);
-          if (type.includes('platinum') && recalcParams.platinum) newSpot = Number(recalcParams.platinum);
-          if (type.includes('palladium') && recalcParams.palladium) newSpot = Number(recalcParams.palladium);
+          else if (type.includes('silver') && recalcParams.silver) newSpot = Number(recalcParams.silver);
+          else if (type.includes('platinum') && recalcParams.platinum) newSpot = Number(recalcParams.platinum);
+          else if (type.includes('palladium') && recalcParams.palladium) newSpot = Number(recalcParams.palladium);
 
           return { ...m, spotSaved: m.isManual ? undefined : newSpot };
         });
@@ -3366,6 +3366,7 @@ export default function Home() {
             <p className="text-[10px] text-stone-400 font-bold uppercase">Temporarily recalculate logic with custom inputs</p>
 
             <div className="space-y-4 bg-stone-50 p-4 rounded-2xl border border-stone-100">
+              <p className="text-[9px] text-stone-500 italic">Leave blank to keep the previously saved spot price for each metal.</p>
               {recalcItem.metals.some((m: any) => m.type.toLowerCase().includes('gold')) && (
                 <div><label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Gold Spot Price ($/oz)</label>
                   <input type="number" placeholder={`${prices.gold}`} className="w-full p-3 bg-white border rounded-xl outline-none focus:border-[#A5BEAC] font-bold text-sm" value={recalcParams.gold} onChange={(e) => setRecalcParams({ ...recalcParams, gold: e.target.value })} /></div>
@@ -3579,6 +3580,7 @@ export default function Home() {
             </div>
 
             <div className="space-y-4 bg-stone-50 p-4 rounded-2xl border border-stone-100">
+              <p className="text-[9px] text-stone-500 italic">Leave blank to keep the previously saved spot price for each metal.</p>
               <div><label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Gold Spot Price ($/oz)</label>
                 <input type="number" placeholder={`${prices.gold}`} className="w-full p-3 bg-white border rounded-xl outline-none focus:border-[#A5BEAC] font-bold text-sm" value={recalcParams.gold} onChange={(e) => setRecalcParams({ ...recalcParams, gold: e.target.value })} /></div>
 
@@ -3599,28 +3601,20 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="space-y-3">
-              <p className="text-[9px] font-black uppercase text-stone-400">Formula to use</p>
-              <div className="flex flex-col gap-2">
-                <label className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all hover:bg-stone-50 ${globalRecalcFormulaMode === 'keep' ? 'border-[#A5BEAC] bg-[#A5BEAC]/5' : 'border-stone-200'}`}>
-                  <input type="radio" name="globalRecalcFormula" checked={globalRecalcFormulaMode === 'keep'} onChange={() => setGlobalRecalcFormulaMode('keep')} className="accent-[#A5BEAC]" />
-                  <span className="text-sm font-bold text-slate-700">Keep each item&apos;s current formula</span>
-                </label>
-                <label className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all hover:bg-stone-50 ${globalRecalcFormulaMode === 'A' ? 'border-[#A5BEAC] bg-[#A5BEAC]/5' : 'border-stone-200'}`}>
-                  <input type="radio" name="globalRecalcFormula" checked={globalRecalcFormulaMode === 'A'} onChange={() => setGlobalRecalcFormulaMode('A')} className="accent-[#A5BEAC]" />
-                  <span className="text-sm font-bold text-slate-700">Apply Formula A to all</span>
-                </label>
-                <label className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all hover:bg-stone-50 ${globalRecalcFormulaMode === 'B' ? 'border-[#A5BEAC] bg-[#A5BEAC]/5' : 'border-stone-200'}`}>
-                  <input type="radio" name="globalRecalcFormula" checked={globalRecalcFormulaMode === 'B'} onChange={() => setGlobalRecalcFormulaMode('B')} className="accent-[#A5BEAC]" />
-                  <span className="text-sm font-bold text-slate-700">Apply Formula B to all</span>
-                </label>
+            <div>
+              <label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Formula to use</label>
+              <select
+                value={globalRecalcFormulaMode}
+                onChange={(e) => setGlobalRecalcFormulaMode(e.target.value)}
+                className="w-full p-3 rounded-xl border border-stone-200 bg-white text-sm font-bold outline-none focus:border-[#A5BEAC]"
+              >
+                <option value="keep">Keep each item&apos;s current formula</option>
+                <option value="A">Apply Formula A to all</option>
+                <option value="B">Apply Formula B to all</option>
                 {formulas.map((f) => (
-                  <label key={f.id} className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all hover:bg-stone-50 ${globalRecalcFormulaMode === f.id ? 'border-[#A5BEAC] bg-[#A5BEAC]/5' : 'border-stone-200'}`}>
-                    <input type="radio" name="globalRecalcFormula" checked={globalRecalcFormulaMode === f.id} onChange={() => setGlobalRecalcFormulaMode(f.id)} className="accent-[#A5BEAC]" />
-                    <span className="text-sm font-bold text-slate-700">Apply &quot;{f.name}&quot; to all</span>
-                  </label>
+                  <option key={f.id} value={f.id}>Apply &quot;{f.name}&quot; to all</option>
                 ))}
-              </div>
+              </select>
             </div>
 
             <div className="flex gap-3">
@@ -4448,19 +4442,9 @@ export default function Home() {
                   <h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Vault Inventory</h2>
                   <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">{inventory.length} Records Stored</p>
                 </div>
-                <div className="text-right flex items-center gap-2 justify-end">
-                  <button
-                    type="button"
-                    onClick={() => fetchPrices()}
-                    className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 hover:bg-stone-100 hover:text-[#A5BEAC] transition shrink-0"
-                    title="Refresh spot prices"
-                  >
-                    <span className="text-sm">↻</span>
-                  </button>
-                  <div>
-                    <p className="text-[9px] font-black text-stone-400 uppercase italic">Total Vault Value</p>
-                    <p className="text-2xl font-black text-slate-900">${pricesLoaded ? roundForDisplay(totalVaultValue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "--.--"}</p>
-                  </div>
+                <div className="text-right">
+                  <p className="text-[9px] font-black text-stone-400 uppercase italic">Total Vault Value</p>
+                  <p className="text-2xl font-black text-slate-900">${pricesLoaded ? roundForDisplay(totalVaultValue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "--.--"}</p>
                 </div>
               </div>
 
