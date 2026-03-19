@@ -3,7 +3,10 @@ import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
-// Helps diagnose why inventory isn't showing. Call with POST { accessToken }.
+/**
+ * Helps users debug paywall / empty vault for their own account only.
+ * Does not query or expose other users' IDs (public-safe).
+ */
 export async function POST(request: Request) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || '';
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() || '';
@@ -33,25 +36,18 @@ export async function POST(request: Request) {
 
     const { count: myCount } = await supabase.from('inventory').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
 
-    const { data: allSubs } = await supabase.from('subscriptions').select('user_id, status').limit(10);
-
     let fix_suggestion: string | null = null;
-    if (!subscribed && (myCount ?? 0) > 0 && allSubs?.length) {
-      const subForOther = allSubs.find((s: any) => s.user_id !== user.id && String(s.status).toLowerCase() === 'active');
-      if (subForOther) {
-        fix_suggestion = `Subscription exists under a different account. Move it to yours (you have ${myCount} items). Run in Supabase SQL Editor:\n\nUPDATE subscriptions SET user_id = '${user.id}' WHERE user_id = '${subForOther.user_id}';`;
-      } else {
-        fix_suggestion = `You have ${myCount} items but no active subscription for your account. Add one in Supabase SQL Editor:\n\nINSERT INTO subscriptions (user_id, status, current_period_end)\nVALUES ('${user.id}', 'active', '2099-12-31 23:59:59+00')\nON CONFLICT (user_id) DO UPDATE SET status = 'active', current_period_end = '2099-12-31 23:59:59+00';`;
-      }
+    if (!subscribed && (myCount ?? 0) > 0) {
+      fix_suggestion =
+        `You have ${myCount} item(s) on this account but no active Vault+ subscription. After paying, wait a minute and tap Refresh. If it persists, in Supabase SQL Editor check the subscriptions row for YOUR user id only:\n\n` +
+        `SELECT * FROM subscriptions WHERE user_id = '${user.id}';\n\n` +
+        `To activate for this account (admin only):\n` +
+        `INSERT INTO subscriptions (user_id, status, current_period_end)\n` +
+        `VALUES ('${user.id}', 'active', '2099-12-31 23:59:59+00')\n` +
+        `ON CONFLICT (user_id) DO UPDATE SET status = 'active', current_period_end = EXCLUDED.current_period_end;`;
     } else if (!subscribed && (myCount ?? 0) === 0) {
-      const { data: otherUsers } = await supabase.from('inventory').select('user_id').limit(100);
-      const userIdsWithItems = [...new Set((otherUsers || []).map((r: any) => r.user_id))];
-      if (userIdsWithItems.length > 0) {
-        fix_suggestion = `Items exist under a different account. Move them to yours. Run in Supabase SQL Editor:\n\nUPDATE inventory SET user_id = '${user.id}' WHERE user_id = '${userIdsWithItems[0]}';`;
-      } else if (allSubs?.some((s: any) => s.user_id !== user.id)) {
-        const subForOther = allSubs.find((s: any) => s.user_id !== user.id);
-        fix_suggestion = `Subscription is under a different account. Move it to yours:\n\nUPDATE subscriptions SET user_id = '${user.id}' WHERE user_id = '${subForOther?.user_id}';`;
-      }
+      fix_suggestion =
+        'No items for this login. If you had a vault before, you may be signed in with a different email or Google vs password — try the same method you used when you created items.';
     }
 
     return NextResponse.json({
@@ -63,8 +59,7 @@ export async function POST(request: Request) {
       inventory_count_for_you: myCount ?? 0,
       fix_suggestion,
     });
-  } catch (e: any) {
-    console.error('Vault diagnostic error:', e);
-    return NextResponse.json({ error: e?.message }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: 'Diagnostic failed' }, { status: 500 });
   }
 }

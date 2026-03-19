@@ -3,46 +3,12 @@ import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
-async function getProfileForUser(accessToken: string) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || '';
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() || '';
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || '';
-  if (!supabaseUrl || !supabaseServiceKey) {
-    return { error: 'Supabase not configured', status: 500 as const };
-  }
-  const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey);
-  const { data: { user }, error: userError } = await supabaseAuth.auth.getUser(accessToken);
-  if (userError || !user?.id) {
-    return { error: userError?.message || 'Invalid or expired session', status: 401 as const };
-  }
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('display_name, company_name, logo_url')
-    .eq('user_id', user.id)
-    .single();
-  if (error && error.code !== 'PGRST116') {
-    return { error: error.message, status: 400 as const };
-  }
-  return { data: data || { display_name: null, company_name: null, logo_url: null } };
-}
-
-export async function GET(request: Request) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const accessToken = searchParams.get('accessToken');
-    if (!accessToken) {
-      return NextResponse.json({ error: 'Missing access token' }, { status: 400 });
-    }
-    const result = await getProfileForUser(accessToken);
-    if ('error' in result) {
-      return NextResponse.json({ error: result.error }, { status: result.status });
-    }
-    return NextResponse.json(result.data);
-  } catch (e: any) {
-    console.error('Profile GET error:', e);
-    return NextResponse.json({ error: e?.message || 'Server error' }, { status: 500 });
-  }
+/** Tokens must not be sent in URLs (logs, Referer). Use POST with JSON body. */
+export async function GET() {
+  return NextResponse.json(
+    { error: 'Use POST with Content-Type: application/json and body { "accessToken": "..." }.' },
+    { status: 405, headers: { Allow: 'POST, OPTIONS' } }
+  );
 }
 
 export async function POST(request: Request) {

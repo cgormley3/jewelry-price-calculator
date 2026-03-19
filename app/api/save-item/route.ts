@@ -65,6 +65,7 @@ export async function POST(request: Request) {
         .from('inventory')
         .update(updatePayload)
         .eq('id', itemId)
+        .eq('user_id', user.id)
         .select()
         .single();
 

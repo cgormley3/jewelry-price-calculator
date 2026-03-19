@@ -339,7 +339,11 @@ export default function Home() {
       const { data: { session } } = await supabase.auth.getSession();
       const token = (session as any)?.access_token;
       if (!token) return;
-      const res = await fetch(`/api/profile?accessToken=${encodeURIComponent(token)}`);
+      const res = await fetch('/api/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accessToken: token }),
+      });
       if (res.ok) {
         const data = await res.json();
         setProfile({ display_name: data.display_name ?? null, company_name: data.company_name ?? null, logo_url: data.logo_url ?? null });
@@ -953,7 +957,11 @@ export default function Home() {
         } else {
           setSubscriptionStatus({ subscribed: false });
         }
-        const resProfile = await fetch(`/api/profile?accessToken=${encodeURIComponent(accessToken)}`);
+        const resProfile = await fetch('/api/profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessToken }),
+        });
         if (resProfile.ok) {
           const profileData = await resProfile.json();
           setProfile({
@@ -982,7 +990,11 @@ export default function Home() {
         if (err?.code !== 'PAYWALL_VAULT') {
           setNotification({ title: 'Vault Load Failed', message: err?.error || 'Upgrade to Vault+ ($20 flat for the year) to access your vault.', type: 'info' });
         }
-        const resProfile = await fetch(`/api/profile?accessToken=${encodeURIComponent(accessToken)}`);
+        const resProfile = await fetch('/api/profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessToken }),
+        });
         if (resProfile.ok) {
           const profileData = await resProfile.json();
           setProfile({ display_name: profileData.display_name ?? null, company_name: profileData.company_name ?? null, logo_url: profileData.logo_url ?? null });
@@ -2683,7 +2695,11 @@ export default function Home() {
       const accessToken = (session as any)?.access_token;
       if (accessToken) {
         try {
-          const resProfile = await fetch(`/api/profile?accessToken=${encodeURIComponent(accessToken)}`);
+          const resProfile = await fetch('/api/profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accessToken }),
+          });
           if (resProfile.ok) {
             const data = await resProfile.json();
             profileForPDF = { display_name: data.display_name ?? null, company_name: data.company_name ?? null, logo_url: data.logo_url ?? null };

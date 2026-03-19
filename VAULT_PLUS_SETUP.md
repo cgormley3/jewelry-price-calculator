@@ -48,6 +48,8 @@ STRIPE_WEBHOOK_SECRET=whsec_xxxxx
 STRIPE_VAULT_PLUS_PRICE_ID=price_xxxxx
 ```
 
+**Production:** Set `ADMIN_DIAGNOSTICS_SECRET` (long random string) if you need to call `/api/db-health` for ops; see [SECURITY.md](./SECURITY.md).
+
 ### Payment Link (optional, recommended for promo codes)
 
 If you use a **Stripe Payment Link** instead of embedded Checkout from the API:
