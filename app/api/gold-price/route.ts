@@ -9,18 +9,22 @@ export async function GET() {
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || '';
   const hasSupabaseConfig = supabaseUrl && supabaseServiceKey && supabaseUrl.startsWith('http');
 
-  const uniqueId = Math.random().toString(36).substring(7);
+  const cacheBuster = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
   const defaultSheetUrl = `https://docs.google.com/spreadsheets/d/e/2PACX-1vRCIKyw7uQpytVE7GayB_rMY8qqMwSjat28AwLj9rSSD64OrZRqDSIuIcDIdAob_BK81rrempUgTO-H/pub?gid=1610736361&single=true&output=csv`;
   const envSheetUrl = process.env.GOOGLE_SHEETS_CSV_URL?.trim() || '';
   const csvUrls = [
-    ...(envSheetUrl ? [envSheetUrl + (envSheetUrl.includes('?') ? '&' : '?') + `cachebuster=${uniqueId}`] : []),
-    defaultSheetUrl + `&cachebuster=${uniqueId}`
+    ...(envSheetUrl ? [envSheetUrl + (envSheetUrl.includes('?') ? '&' : '?') + `_=${cacheBuster}`] : []),
+    defaultSheetUrl + `&_=${cacheBuster}`
   ].filter(Boolean);
-  if (csvUrls.length === 0) csvUrls.push(defaultSheetUrl + `&cachebuster=${uniqueId}`);
+  if (csvUrls.length === 0) csvUrls.push(defaultSheetUrl + `&_=${cacheBuster}`);
 
   const fetchOptions = {
     method: 'GET' as const,
-    headers: { 'Cache-Control': 'no-cache', 'User-Agent': 'Mozilla/5.0 (compatible; JewelryPriceCalc/1.0)' },
+    headers: {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'User-Agent': 'Mozilla/5.0 (compatible; JewelryPriceCalc/1.0)'
+    },
     cache: 'no-store' as RequestCache
   };
 

@@ -95,6 +95,7 @@ export default function Home() {
   const [manualRetail, setManualRetail] = useState('');
   const [manualWholesale, setManualWholesale] = useState('');
   const [recalcParams, setRecalcParams] = useState({ gold: '', silver: '', platinum: '', palladium: '', laborRate: '' });
+  const [globalRecalcFormulaMode, setGlobalRecalcFormulaMode] = useState<'keep' | 'A' | 'B' | string>('keep');
   const [editingNameId, setEditingNameId] = useState<string | null>(null);
   const [newNameValue, setNewNameValue] = useState('');
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -387,13 +388,11 @@ export default function Home() {
     }
   }, [showFilterMenu]);
 
-  const fetchPrices = useCallback(async (force = false) => {
+  const fetchPrices = useCallback(async () => {
     const cachedData = sessionStorage.getItem('vault_prices');
-    const cacheTimestamp = sessionStorage.getItem('vault_prices_time');
     const now = Date.now();
-    const oneMinute = 60 * 1000;
 
-    // Use cache immediately if valid so UI shows prices right away on refresh
+    // Use cache immediately so UI shows prices right away while we fetch fresh data
     if (cachedData) {
       try {
         const parsed = JSON.parse(cachedData);
@@ -404,11 +403,7 @@ export default function Home() {
       } catch (_) { /* ignore */ }
     }
 
-    // Only skip network fetch if cache is very fresh (< 1 min) and not forcing, to avoid hammering the API
-    if (!force && cachedData && cacheTimestamp && (now - Number(cacheTimestamp) < oneMinute)) {
-      return;
-    }
-
+    // Always fetch fresh prices on every call (page load, refresh, tab focus) to match spreadsheet
     if (fetchInProgressRef.current) return;
     fetchInProgressRef.current = true;
     const myVersion = ++fetchVersionRef.current;
@@ -586,6 +581,17 @@ export default function Home() {
     return { wholesale: breakdown.wholesaleA, retail: breakdown.retailA };
   }, []);
 
+  // Auto-expand custom formula section when user first loads with saved formulas (so it shows first as default)
+  const hasAutoExpandedForFormulasRef = useRef(false);
+  useEffect(() => {
+    if (formulas.length > 0 && !hasAutoExpandedForFormulasRef.current) {
+      hasAutoExpandedForFormulasRef.current = true;
+      setCustomStrategyExpanded(true);
+      setStrategy('custom');
+    }
+    if (formulas.length === 0) hasAutoExpandedForFormulasRef.current = false;
+  }, [formulas.length]);
+
   // Helper function to convert old stone format (stone_cost, stone_markup) to new format (stones array)
   const convertStonesToArray = (item: any): { name: string, cost: number, markup: number }[] => {
     // If stones array exists, use it
@@ -688,7 +694,7 @@ export default function Home() {
       if (wakeUpTimeoutRef.current) clearTimeout(wakeUpTimeoutRef.current);
       wakeUpTimeoutRef.current = setTimeout(() => {
         wakeUpTimeoutRef.current = null;
-        fetchPrices(true);
+        fetchPrices();
       }, 100);
     };
 
@@ -1283,14 +1289,22 @@ export default function Home() {
       : inventory;
 
     const count = targetItems.length;
+    const applyFormula = globalRecalcFormulaMode !== 'keep';
+    const msg = applyFormula
+      ? `Recalculate ${count} item(s) with these new parameters and apply ${globalRecalcFormulaMode === 'A' ? 'Formula A' : globalRecalcFormulaMode === 'B' ? 'Formula B' : `"${formulas.find(f => f.id === globalRecalcFormulaMode)?.name || 'custom'}"`} to all? This will overwrite saved labor costs, spot prices, and each item's formula.`
+      : `Recalculate ${count} item(s) with these new parameters? This will overwrite saved labor costs and spot prices. Each item keeps its current formula.`;
 
     setNotification({
       title: `Recalculate ${selectedItems.size > 0 ? `Selected (${count})` : 'All'}`,
-      message: `Recalculate ${count} item(s) with these new parameters? This will overwrite saved labor costs and spot prices.`,
+      message: msg,
       type: 'confirm',
       onConfirm: async () => {
         setLoading(true);
         setShowVaultMenu(false);
+
+        const selectedCustomFormula = globalRecalcFormulaMode !== 'keep' && globalRecalcFormulaMode !== 'A' && globalRecalcFormulaMode !== 'B'
+          ? formulas.find(f => f.id === globalRecalcFormulaMode)
+          : null;
 
         const updates = targetItems.map(async (item) => {
           const laborHours = item.hours || 1;
@@ -1299,6 +1313,8 @@ export default function Home() {
             : Number(item.labor_at_making || 0);
 
           const stonesArray = convertStonesToArray(item);
+          const mult = globalRecalcFormulaMode === 'A' ? retailMultA : item.multiplier;
+          const mark = globalRecalcFormulaMode === 'B' ? markupB : item.markup_b;
           const calc = calculateFullBreakdown(
             item.metals || [],
             1,
@@ -1307,12 +1323,22 @@ export default function Home() {
             stonesArray,
             item.overhead_cost || 0,
             (item.overhead_type as 'flat' | 'percent') || 'flat',
-            item.multiplier,
-            item.markup_b,
+            mult,
+            mark,
             recalcParams
           );
 
-          const itemPrices = getItemPrices(item, calc);
+          const itemForPricing = applyFormula
+            ? (globalRecalcFormulaMode === 'A'
+              ? { ...item, strategy: 'A', custom_formula: null }
+              : globalRecalcFormulaMode === 'B'
+                ? { ...item, strategy: 'B', custom_formula: null }
+                : selectedCustomFormula
+                  ? { ...item, strategy: 'custom', custom_formula: { formula_base: selectedCustomFormula.formula_base, formula_wholesale: selectedCustomFormula.formula_wholesale, formula_retail: selectedCustomFormula.formula_retail, formula_name: selectedCustomFormula.name } }
+                  : item) // fallback: keep current if custom formula not found
+            : item;
+
+          const itemPrices = getItemPrices(itemForPricing, calc);
           const newWholesale = itemPrices.wholesale;
           const newRetail = itemPrices.retail;
 
@@ -1328,18 +1354,45 @@ export default function Home() {
             return { ...m, spotSaved: m.isManual ? undefined : newSpot };
           });
 
-          return supabase.from('inventory').update({
+          const updatePayload: Record<string, unknown> = {
             wholesale: newWholesale,
             retail: newRetail,
             labor_at_making: newLaborCost,
             metals: updatedMetals
-          }).eq('id', item.id);
+          };
+
+          if (applyFormula) {
+            if (globalRecalcFormulaMode === 'A') {
+              updatePayload.strategy = 'A';
+              updatePayload.multiplier = retailMultA;
+              updatePayload.markup_b = item.markup_b;
+              updatePayload.custom_formula = null;
+            } else if (globalRecalcFormulaMode === 'B') {
+              updatePayload.strategy = 'B';
+              updatePayload.multiplier = item.multiplier;
+              updatePayload.markup_b = markupB;
+              updatePayload.custom_formula = null;
+            } else if (selectedCustomFormula) {
+              updatePayload.strategy = 'custom';
+              updatePayload.multiplier = item.multiplier;
+              updatePayload.markup_b = item.markup_b;
+              updatePayload.custom_formula = {
+                formula_base: selectedCustomFormula.formula_base,
+                formula_wholesale: selectedCustomFormula.formula_wholesale,
+                formula_retail: selectedCustomFormula.formula_retail,
+                formula_name: selectedCustomFormula.name
+              };
+            }
+          }
+
+          return supabase.from('inventory').update(updatePayload).eq('id', item.id);
         });
 
         await Promise.all(updates);
         await fetchInventory();
         setShowGlobalRecalc(false);
         setRecalcParams({ gold: '', silver: '', platinum: '', palladium: '', laborRate: '' });
+        setGlobalRecalcFormulaMode('keep');
         setNotification({ title: "Update Complete", message: `${count} items have been recalculated.`, type: 'success' });
       }
     });
@@ -3546,8 +3599,32 @@ export default function Home() {
               </div>
             </div>
 
+            <div className="space-y-3">
+              <p className="text-[9px] font-black uppercase text-stone-400">Formula to use</p>
+              <div className="flex flex-col gap-2">
+                <label className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all hover:bg-stone-50 ${globalRecalcFormulaMode === 'keep' ? 'border-[#A5BEAC] bg-[#A5BEAC]/5' : 'border-stone-200'}`}>
+                  <input type="radio" name="globalRecalcFormula" checked={globalRecalcFormulaMode === 'keep'} onChange={() => setGlobalRecalcFormulaMode('keep')} className="accent-[#A5BEAC]" />
+                  <span className="text-sm font-bold text-slate-700">Keep each item&apos;s current formula</span>
+                </label>
+                <label className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all hover:bg-stone-50 ${globalRecalcFormulaMode === 'A' ? 'border-[#A5BEAC] bg-[#A5BEAC]/5' : 'border-stone-200'}`}>
+                  <input type="radio" name="globalRecalcFormula" checked={globalRecalcFormulaMode === 'A'} onChange={() => setGlobalRecalcFormulaMode('A')} className="accent-[#A5BEAC]" />
+                  <span className="text-sm font-bold text-slate-700">Apply Formula A to all</span>
+                </label>
+                <label className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all hover:bg-stone-50 ${globalRecalcFormulaMode === 'B' ? 'border-[#A5BEAC] bg-[#A5BEAC]/5' : 'border-stone-200'}`}>
+                  <input type="radio" name="globalRecalcFormula" checked={globalRecalcFormulaMode === 'B'} onChange={() => setGlobalRecalcFormulaMode('B')} className="accent-[#A5BEAC]" />
+                  <span className="text-sm font-bold text-slate-700">Apply Formula B to all</span>
+                </label>
+                {formulas.map((f) => (
+                  <label key={f.id} className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all hover:bg-stone-50 ${globalRecalcFormulaMode === f.id ? 'border-[#A5BEAC] bg-[#A5BEAC]/5' : 'border-stone-200'}`}>
+                    <input type="radio" name="globalRecalcFormula" checked={globalRecalcFormulaMode === f.id} onChange={() => setGlobalRecalcFormulaMode(f.id)} className="accent-[#A5BEAC]" />
+                    <span className="text-sm font-bold text-slate-700">Apply &quot;{f.name}&quot; to all</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
             <div className="flex gap-3">
-              <button onClick={() => { setShowGlobalRecalc(false); setRecalcParams({ gold: '', silver: '', platinum: '', palladium: '', laborRate: '' }); }} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
+              <button onClick={() => { setShowGlobalRecalc(false); setRecalcParams({ gold: '', silver: '', platinum: '', palladium: '', laborRate: '' }); setGlobalRecalcFormulaMode('keep'); }} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
               <button onClick={handleGlobalRecalcSync} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition shadow-lg">Recalculate All</button>
             </div>
           </div>
@@ -4068,6 +4145,99 @@ export default function Home() {
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-1 gap-3 lg:gap-4 w-full">
+                  {formulas.length > 0 && (
+                    customStrategyExpanded ? (
+                      <div
+                        className={`rounded-2xl border-2 transition-all overflow-hidden lg:shadow-sm ${strategy === 'custom' ? 'border-[#A5BEAC] bg-stone-50 shadow-md ring-2 ring-[#A5BEAC]/20' : 'border-stone-100 bg-white hover:border-stone-200'}`}
+                      >
+                        <div className="w-full p-5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (subscriptionStatus && !subscriptionStatus.subscribed) {
+                                setShowVaultPlusModal(true);
+                                return;
+                              }
+                              setStrategy('custom');
+                            }}
+                            className="w-full text-left"
+                          >
+                            <div className="flex items-center justify-between gap-2 mb-1">
+                              <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter">Custom</p>
+                              <span
+                                role="button"
+                                tabIndex={0}
+                                onClick={(e) => { e.stopPropagation(); setCustomStrategyExpanded(false); setStrategy('A'); }}
+                                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); setCustomStrategyExpanded(false); setStrategy('A'); } }}
+                                className="text-[9px] font-bold text-stone-400 hover:text-stone-600 uppercase cursor-pointer"
+                              >
+                                Hide
+                              </span>
+                            </div>
+                            <p className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums">
+                              ${(() => {
+                                const a = calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType);
+                                const p = getStrategyPrices(a);
+                                return roundForDisplay(p.retail).toFixed(2);
+                              })()}
+                            </p>
+                            <p className="text-[10px] font-semibold text-stone-500 mt-1">
+                              Wholesale ${(() => {
+                                const a = calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType);
+                                const p = getStrategyPrices(a);
+                                return roundForDisplay(p.wholesale).toFixed(2);
+                              })()}
+                            </p>
+                          </button>
+                          <div className="border-t border-stone-200 mt-3 pt-3">
+                            <p className="text-[9px] font-black text-stone-400 uppercase tracking-wider mb-2">Select formula</p>
+                            <select
+                              value={selectedFormulaId || ''}
+                              onChange={(e) => {
+                                const id = e.target.value || null;
+                                setSelectedFormulaId(id);
+                                const f = formulas.find(x => x.id === id);
+                                if (f) {
+                                  setCustomFormulaModel({ formula_base: f.formula_base, formula_wholesale: f.formula_wholesale, formula_retail: f.formula_retail });
+                                } else {
+                                  setCustomFormulaModel({ formula_base: PRESET_A.base, formula_wholesale: PRESET_A.wholesale, formula_retail: PRESET_A.retail });
+                                }
+                              }}
+                              className="w-full p-3 rounded-xl border border-stone-200 bg-white text-sm font-bold outline-none focus:border-[#A5BEAC]"
+                            >
+                              <option value="">Choose a formula…</option>
+                              {formulas.map((f) => (
+                                <option key={f.id} value={f.id}>{f.name}</option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab('formulas')}
+                              className="mt-2 text-[9px] font-bold text-[#A5BEAC] hover:underline"
+                            >
+                              Manage formulas →
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (subscriptionStatus && !subscriptionStatus.subscribed) {
+                            setShowVaultPlusModal(true);
+                            return;
+                          }
+                          setCustomStrategyExpanded(true);
+                          setStrategy('custom');
+                        }}
+                        className="w-full flex items-center justify-between gap-2 py-3 px-4 rounded-xl border-2 border-dashed border-stone-200 bg-stone-50/50 hover:border-[#A5BEAC]/50 hover:bg-stone-50 text-left transition-colors group"
+                      >
+                        <span className="text-[10px] font-black uppercase tracking-wider text-stone-500 group-hover:text-[#A5BEAC]">Use Custom Formula</span>
+                        <span className="text-stone-400 text-xs group-hover:text-[#A5BEAC]">+</span>
+                      </button>
+                    )
+                  )}
                   <div
                     className={`rounded-2xl border-2 transition-all overflow-hidden lg:shadow-sm ${strategy === 'A' ? 'border-[#A5BEAC] bg-stone-50 shadow-md ring-2 ring-[#A5BEAC]/20' : 'border-stone-100 bg-white hover:border-stone-200'}`}
                   >
@@ -4158,27 +4328,8 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {!customStrategyExpanded ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (subscriptionStatus && !subscriptionStatus.subscribed) {
-                          setShowVaultPlusModal(true);
-                          return;
-                        }
-                        setCustomStrategyExpanded(true);
-                        setStrategy('custom');
-                      }}
-                      className="w-full flex items-center justify-between gap-2 py-3 px-4 rounded-xl border-2 border-dashed border-stone-200 bg-stone-50/50 hover:border-[#A5BEAC]/50 hover:bg-stone-50 text-left transition-colors group"
-                    >
-                      <span className="text-[10px] font-black uppercase tracking-wider text-stone-500 group-hover:text-[#A5BEAC]">Add Custom Price Formula</span>
-                      <span className="text-stone-400 text-xs group-hover:text-[#A5BEAC]">+</span>
-                    </button>
-                  ) : (
-                  <div
-                    className={`rounded-2xl border-2 transition-all overflow-hidden lg:shadow-sm ${strategy === 'custom' ? 'border-[#A5BEAC] bg-stone-50 shadow-md ring-2 ring-[#A5BEAC]/20' : 'border-stone-100 bg-white hover:border-stone-200'}`}
-                  >
-                    <div className="w-full p-5">
+                  {formulas.length === 0 && (
+                    !customStrategyExpanded ? (
                       <button
                         type="button"
                         onClick={() => {
@@ -4186,80 +4337,70 @@ export default function Home() {
                             setShowVaultPlusModal(true);
                             return;
                           }
+                          setCustomStrategyExpanded(true);
                           setStrategy('custom');
                         }}
-                        className="w-full text-left"
+                        className="w-full flex items-center justify-between gap-2 py-3 px-4 rounded-xl border-2 border-dashed border-stone-200 bg-stone-50/50 hover:border-[#A5BEAC]/50 hover:bg-stone-50 text-left transition-colors group"
                       >
-                        <div className="flex items-center justify-between gap-2 mb-1">
-                          <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter">Custom</p>
-                          <span
-                            role="button"
-                            tabIndex={0}
-                            onClick={(e) => { e.stopPropagation(); setCustomStrategyExpanded(false); setStrategy('A'); }}
-                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); setCustomStrategyExpanded(false); setStrategy('A'); } }}
-                            className="text-[9px] font-bold text-stone-400 hover:text-stone-600 uppercase cursor-pointer"
-                          >
-                            Hide
-                          </span>
-                        </div>
-                        <p className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums">
-                          ${(() => {
-                            const a = calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType);
-                            const p = getStrategyPrices(a);
-                            return roundForDisplay(p.retail).toFixed(2);
-                          })()}
-                        </p>
-                        <p className="text-[10px] font-semibold text-stone-500 mt-1">
-                          Wholesale ${(() => {
-                            const a = calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType);
-                            const p = getStrategyPrices(a);
-                            return roundForDisplay(p.wholesale).toFixed(2);
-                          })()}
-                        </p>
+                        <span className="text-[10px] font-black uppercase tracking-wider text-stone-500 group-hover:text-[#A5BEAC]">Add Custom Price Formula</span>
+                        <span className="text-stone-400 text-xs group-hover:text-[#A5BEAC]">+</span>
                       </button>
-                      <div className="border-t border-stone-200 mt-3 pt-3">
-                        <p className="text-[9px] font-black text-stone-400 uppercase tracking-wider mb-2">Select formula</p>
-                        {formulas.length === 0 ? (
+                    ) : (
+                      <div
+                        className={`rounded-2xl border-2 transition-all overflow-hidden lg:shadow-sm ${strategy === 'custom' ? 'border-[#A5BEAC] bg-stone-50 shadow-md ring-2 ring-[#A5BEAC]/20' : 'border-stone-100 bg-white hover:border-stone-200'}`}
+                      >
+                        <div className="w-full p-5">
                           <button
                             type="button"
-                            onClick={() => { setActiveTab('formulas'); setFormulaEditorOpen(true); setEditingFormulaId(null); setFormulaDraftName(''); setFormulaDraftTokens({ base: formulaToTokens(PRESET_A.base), wholesale: formulaToTokens(PRESET_A.wholesale), retail: formulaToTokens(PRESET_A.retail) }); }}
-                            className="w-full py-2.5 px-3 rounded-xl border-2 border-dashed border-stone-200 bg-stone-50/50 hover:border-[#A5BEAC]/50 text-left text-[10px] font-bold text-stone-500 hover:text-[#A5BEAC] transition"
-                          >
-                            Create your first formula →
-                          </button>
-                        ) : (
-                          <select
-                            value={selectedFormulaId || ''}
-                            onChange={(e) => {
-                              const id = e.target.value || null;
-                              setSelectedFormulaId(id);
-                              const f = formulas.find(x => x.id === id);
-                              if (f) {
-                                setCustomFormulaModel({ formula_base: f.formula_base, formula_wholesale: f.formula_wholesale, formula_retail: f.formula_retail });
-                              } else {
-                                setCustomFormulaModel({ formula_base: PRESET_A.base, formula_wholesale: PRESET_A.wholesale, formula_retail: PRESET_A.retail });
+                            onClick={() => {
+                              if (subscriptionStatus && !subscriptionStatus.subscribed) {
+                                setShowVaultPlusModal(true);
+                                return;
                               }
+                              setStrategy('custom');
                             }}
-                            className="w-full p-3 rounded-xl border border-stone-200 bg-white text-sm font-bold outline-none focus:border-[#A5BEAC]"
+                            className="w-full text-left"
                           >
-                            <option value="">Choose a formula…</option>
-                            {formulas.map((f) => (
-                              <option key={f.id} value={f.id}>{f.name}</option>
-                            ))}
-                          </select>
-                        )}
-                        {formulas.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => setActiveTab('formulas')}
-                            className="mt-2 text-[9px] font-bold text-[#A5BEAC] hover:underline"
-                          >
-                            Manage formulas →
+                            <div className="flex items-center justify-between gap-2 mb-1">
+                              <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter">Custom</p>
+                              <span
+                                role="button"
+                                tabIndex={0}
+                                onClick={(e) => { e.stopPropagation(); setCustomStrategyExpanded(false); setStrategy('A'); }}
+                                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); setCustomStrategyExpanded(false); setStrategy('A'); } }}
+                                className="text-[9px] font-bold text-stone-400 hover:text-stone-600 uppercase cursor-pointer"
+                              >
+                                Hide
+                              </span>
+                            </div>
+                            <p className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums">
+                              ${(() => {
+                                const a = calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType);
+                                const p = getStrategyPrices(a);
+                                return roundForDisplay(p.retail).toFixed(2);
+                              })()}
+                            </p>
+                            <p className="text-[10px] font-semibold text-stone-500 mt-1">
+                              Wholesale ${(() => {
+                                const a = calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType);
+                                const p = getStrategyPrices(a);
+                                return roundForDisplay(p.wholesale).toFixed(2);
+                              })()}
+                            </p>
                           </button>
-                        )}
+                          <div className="border-t border-stone-200 mt-3 pt-3">
+                            <p className="text-[9px] font-black text-stone-400 uppercase tracking-wider mb-2">Select formula</p>
+                            <button
+                              type="button"
+                              onClick={() => { setActiveTab('formulas'); setFormulaEditorOpen(true); setEditingFormulaId(null); setFormulaDraftName(''); setFormulaDraftTokens({ base: formulaToTokens(PRESET_A.base), wholesale: formulaToTokens(PRESET_A.wholesale), retail: formulaToTokens(PRESET_A.retail) }); }}
+                              className="w-full py-2.5 px-3 rounded-xl border-2 border-dashed border-stone-200 bg-stone-50/50 hover:border-[#A5BEAC]/50 text-left text-[10px] font-bold text-stone-500 hover:text-[#A5BEAC] transition"
+                            >
+                              Create your first formula →
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
+                    )
                   )}
                 </div>
                 </div>
@@ -4310,7 +4451,7 @@ export default function Home() {
                 <div className="text-right flex items-center gap-2 justify-end">
                   <button
                     type="button"
-                    onClick={() => fetchPrices(true)}
+                    onClick={() => fetchPrices()}
                     className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 hover:bg-stone-100 hover:text-[#A5BEAC] transition shrink-0"
                     title="Refresh spot prices"
                   >
