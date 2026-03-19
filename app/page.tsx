@@ -5613,9 +5613,14 @@ export default function Home() {
           <div className={`bg-white rounded-2xl sm:rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm flex flex-col flex-1 min-h-0 min-h-[50vh] lg:min-h-0 lg:max-h-[calc(100vh-5rem)] overflow-hidden ${activeTab !== 'compare' ? 'hidden' : ''}`}>
             <div className="p-3 sm:p-6 border-b border-stone-100 bg-white space-y-3 sm:space-y-4 rounded-t-2xl sm:rounded-t-[2.5rem] shrink-0">
               <h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Compare Prices</h2>
-              <p className="text-[10px] text-stone-500">
-                By default: <span className="font-bold">Saved</span> (vault snapshot) and <span className="font-bold">Live</span> (current spot with each piece’s saved formula). Toggle formula columns or <span className="font-bold">Spot scenario</span> for more — scenario adds amber columns and <span className="font-bold">Vault @ Scenario</span> (saved formula at your custom metal spots vs frozen Saved).
-              </p>
+              <div className="text-[10px] text-stone-500 space-y-2">
+                <p>
+                  Default view shows <span className="font-bold">Saved</span> (snapshot) and <span className="font-bold">Live</span> (current spot) pricing.
+                </p>
+                <p>
+                  Select <span className="font-bold">Formulas</span> to compare prices, and use <span className="font-bold">Spot Scenario</span> to generate amber columns for comparing custom metal prices against your Saved vault prices or Formula prices.
+                </p>
+              </div>
               {(!user || (subscriptionStatus && !subscriptionStatus.subscribed)) ? (
                 <div className="py-8 px-4 rounded-xl bg-stone-50 border border-stone-200 text-center space-y-4">
                   {!user && (
