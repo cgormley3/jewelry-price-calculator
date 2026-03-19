@@ -237,7 +237,7 @@ export default function Home() {
   const [newPassword, setNewPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [activeTab, setActiveTab] = useState<'calculator' | 'vault' | 'compare' | 'logic' | 'formulas' | 'time'>('calculator');
-  const [compareFormulas, setCompareFormulas] = useState<{ a: boolean; b: boolean; customIds: string[] }>({ a: true, b: true, customIds: [] });
+  const [compareFormulas, setCompareFormulas] = useState<{ a: boolean; b: boolean; customIds: string[] }>({ a: false, b: false, customIds: [] });
   const [compareShowLive, setCompareShowLive] = useState(true);
   const [compareSpotEnabled, setCompareSpotEnabled] = useState(false);
   const [compareCustomSpots, setCompareCustomSpots] = useState({ gold: 0, silver: 0, platinum: 0, palladium: 0 });
@@ -5614,7 +5614,7 @@ export default function Home() {
             <div className="p-3 sm:p-6 border-b border-stone-100 bg-white space-y-3 sm:space-y-4 rounded-t-2xl sm:rounded-t-[2.5rem] shrink-0">
               <h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Compare Prices</h2>
               <p className="text-[10px] text-stone-500">
-                Compare saved vault prices to live spot pricing and across formulas. Toggle <span className="font-bold">Live</span> and each formula column. <span className="font-bold">Spot scenario</span> adds amber columns at your custom metal spots — including <span className="font-bold">Vault @ Scenario</span>, which reapplies each piece’s <em>saved</em> formula at those spots (vs the frozen Saved column in the vault).
+                By default: <span className="font-bold">Saved</span> (vault snapshot) and <span className="font-bold">Live</span> (current spot with each piece’s saved formula). Toggle formula columns or <span className="font-bold">Spot scenario</span> for more — scenario adds amber columns and <span className="font-bold">Vault @ Scenario</span> (saved formula at your custom metal spots vs frozen Saved).
               </p>
               {(!user || (subscriptionStatus && !subscriptionStatus.subscribed)) ? (
                 <div className="py-8 px-4 rounded-xl bg-stone-50 border border-stone-200 text-center space-y-4">
