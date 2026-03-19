@@ -440,8 +440,11 @@ export default function Home() {
     const cachedData = sessionStorage.getItem('vault_prices');
     const now = Date.now();
 
-    // Use cache immediately so UI shows prices right away while we fetch fresh data
-    if (cachedData) {
+    // Use cache only if fresh (< 2 min) so we don't show stale data while fetching
+    const cachedTime = typeof window !== 'undefined' ? sessionStorage.getItem('vault_prices_time') : null;
+    const maxAgeMs = 2 * 60 * 1000;
+    const isFresh = cachedTime && (Date.now() - parseInt(cachedTime, 10)) < maxAgeMs;
+    if (cachedData && isFresh) {
       try {
         const parsed = JSON.parse(cachedData);
         if (parsed.gold > 0 || parsed.silver > 0 || parsed.platinum > 0 || parsed.palladium > 0) {
@@ -705,10 +708,13 @@ export default function Home() {
       if (mounted) setLoading(false);
     }, 10000);
 
-    // Apply cached prices immediately so calculator shows values on refresh before any network calls
+    // Apply cached prices only if fresh (< 2 min) so refresh doesn't show stale data
     try {
       const cached = typeof window !== 'undefined' ? sessionStorage.getItem('vault_prices') : null;
-      if (cached) {
+      const cachedTime = typeof window !== 'undefined' ? sessionStorage.getItem('vault_prices_time') : null;
+      const maxAgeMs = 2 * 60 * 1000; // 2 minutes
+      const isFresh = cachedTime && (Date.now() - parseInt(cachedTime, 10)) < maxAgeMs;
+      if (cached && isFresh) {
         const parsed = JSON.parse(cached);
         if (parsed.gold > 0 || parsed.silver > 0 || parsed.platinum > 0 || parsed.palladium > 0) {
           setPrices(parsed);
