@@ -1310,64 +1310,6 @@ export default function Home() {
     });
   };
 
-  const syncAllToMarket = async () => {
-    const targetItems = selectedItems.size > 0
-      ? inventory.filter(i => selectedItems.has(i.id))
-      : inventory;
-
-    const count = targetItems.length;
-
-    setNotification({
-      title: `Sync ${selectedItems.size > 0 ? `Selected (${count})` : 'All'}`,
-      message: `Update ${count} item(s) to reflect current market spot prices? This cannot be undone.`,
-      type: 'confirm',
-      onConfirm: async () => {
-        setLoading(true);
-        setShowVaultMenu(false);
-
-        const updates = targetItems.map(async (item) => {
-          const stonesArray = convertStonesToArray(item);
-          const calc = calculateFullBreakdown(
-            item.metals || [],
-            1,
-            item.labor_at_making || 0, // CORRECTED: Use saved labor cost
-            item.other_costs_at_making || 0,
-            stonesArray,
-            item.overhead_cost || 0,
-            (item.overhead_type as 'flat' | 'percent') || 'flat',
-            item.multiplier,
-            item.markup_b
-          );
-
-          const itemPrices = getItemPrices(item, calc);
-          const liveRetail = roundForDisplay(itemPrices.retail);
-          const liveWholesale = roundForDisplay(itemPrices.wholesale);
-
-          const updatedMetals = item.metals.map((m: any) => {
-            let currentSpot = 0;
-            const type = m.type.toLowerCase();
-            if (type.includes('gold')) currentSpot = prices.gold;
-            else if (type.includes('silver')) currentSpot = prices.silver;
-            else if (type.includes('platinum')) currentSpot = prices.platinum;
-            else if (type.includes('palladium')) currentSpot = prices.palladium;
-
-            return { ...m, spotSaved: m.isManual ? undefined : currentSpot };
-          });
-
-          return supabase.from('inventory').update({
-            wholesale: liveWholesale,
-            retail: liveRetail,
-            metals: updatedMetals
-          }).eq('id', item.id);
-        });
-
-        await Promise.all(updates);
-        await fetchInventory();
-        setNotification({ title: "Vault Synced", message: `${count} items updated to live market prices.`, type: 'success' });
-      }
-    });
-  };
-
   const handleGlobalRecalcSync = async () => {
     const targetItems = selectedItems.size > 0
       ? inventory.filter(i => selectedItems.has(i.id))
@@ -3747,8 +3689,8 @@ export default function Home() {
       {showGlobalRecalc && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-5 max-h-[95vh] overflow-y-auto custom-scrollbar">
-            <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Global Recalculate</h3>
-            <p className="text-[10px] text-stone-400 font-bold uppercase">Recalculate ENTIRE inventory with new inputs</p>
+            <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Recalculate all items</h3>
+            <p className="text-[10px] text-stone-400 font-bold uppercase">Update spot prices, labor rate, and formula for selected or all items</p>
 
             {/* Rounding options */}
             <div className="flex flex-wrap items-center gap-2">
@@ -3762,7 +3704,20 @@ export default function Home() {
             </div>
 
             <div className="space-y-4 bg-stone-50 p-4 rounded-2xl border border-stone-100">
-              <p className="text-[9px] text-stone-500 italic">Leave blank to keep the previously saved spot price for each metal.</p>
+              <p className="text-[9px] text-stone-500 italic">Leave blank to keep saved spot price for each metal.</p>
+              <button
+                type="button"
+                onClick={() => setRecalcParams({
+                  gold: prices.gold ? String(prices.gold) : '',
+                  silver: prices.silver ? String(prices.silver) : '',
+                  platinum: prices.platinum ? String(prices.platinum) : '',
+                  palladium: prices.palladium ? String(prices.palladium) : '',
+                  laborRate: recalcParams.laborRate
+                })}
+                className="w-full py-2.5 rounded-xl text-[10px] font-black uppercase bg-[#A5BEAC] text-white hover:bg-slate-900 transition"
+              >
+                Fill with current spot prices
+              </button>
               <div><label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Gold Spot Price ($/oz)</label>
                 <input type="number" placeholder={`${prices.gold}`} className="w-full p-3 bg-white border rounded-xl outline-none focus:border-[#A5BEAC] font-bold text-sm" value={recalcParams.gold} onChange={(e) => setRecalcParams({ ...recalcParams, gold: e.target.value })} /></div>
 
@@ -3801,7 +3756,7 @@ export default function Home() {
 
             <div className="flex gap-3">
               <button onClick={() => { setShowGlobalRecalc(false); setRecalcParams({ gold: '', silver: '', platinum: '', palladium: '', laborRate: '' }); setGlobalRecalcFormulaMode('keep'); }} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
-              <button onClick={handleGlobalRecalcSync} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition shadow-lg">Recalculate All</button>
+              <button onClick={handleGlobalRecalcSync} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition shadow-lg">Recalculate</button>
             </div>
           </div>
         </div>
@@ -4771,11 +4726,8 @@ export default function Home() {
                           </div>
                           {/* Mobile only: action items merged into More */}
                           <div className="md:hidden">
-                            <button onClick={() => { syncAllToMarket(); setShowVaultMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
-                              Sync {selectedItems.size > 0 ? `Selected (${selectedItems.size})` : 'All'} to Market
-                            </button>
                             <button onClick={() => { setShowGlobalRecalc(true); setShowVaultMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
-                              Recalculate {selectedItems.size > 0 ? `Selected (${selectedItems.size})` : 'All'}
+                              Recalculate {selectedItems.size > 0 ? `Selected (${selectedItems.size})` : 'All'} items
                             </button>
                             {SHOPIFY_FEATURE_ENABLED && shopifyConnected && (
                               <button onClick={() => { setShowShopifyExportOptions(true); setShowVaultMenu(false); }} disabled={shopifyExporting} className={`w-full px-4 py-3 text-left text-[10px] font-black uppercase border-b border-stone-100 transition-colors ${shopifyExporting ? 'text-stone-400 cursor-not-allowed' : 'text-slate-700 hover:bg-stone-50'}`}>
@@ -4797,7 +4749,7 @@ export default function Home() {
                     <button
                       disabled
                       className="min-h-[48px] sm:min-h-0 px-4 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 bg-stone-100 text-stone-400 cursor-not-allowed border border-stone-200"
-                      title={SHOPIFY_FEATURE_ENABLED ? "Add items to unlock Sync, Export, and Shopify" : "Add items to unlock Sync and Export"}
+                      title={SHOPIFY_FEATURE_ENABLED ? "Add items to unlock Recalculate, Export, and Shopify" : "Add items to unlock Recalculate and Export"}
                     >
                       Vault Options
                     </button>
@@ -4808,11 +4760,8 @@ export default function Home() {
                 {/* Row 2: Action bar when items exist (desktop only; mobile uses More dropdown) */}
                 {filteredInventory.length > 0 && (
                   <div className="hidden md:flex flex-wrap gap-2">
-                      <button onClick={syncAllToMarket} className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase bg-white text-slate-700 border-2 border-stone-200 hover:border-[#A5BEAC] hover:bg-stone-50 transition shadow-sm">
-                        Sync {selectedItems.size > 0 ? `Selected (${selectedItems.size})` : 'All'} to Market
-                      </button>
                       <button onClick={() => { setShowGlobalRecalc(true); }} className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase bg-white text-slate-700 border-2 border-stone-200 hover:border-[#A5BEAC] hover:bg-stone-50 transition shadow-sm">
-                        Recalculate {selectedItems.size > 0 ? `Selected (${selectedItems.size})` : 'All'}
+                        Recalculate {selectedItems.size > 0 ? `Selected (${selectedItems.size})` : 'All'} items
                       </button>
                       {SHOPIFY_FEATURE_ENABLED && shopifyConnected && (
                         <button onClick={() => { setShowShopifyExportOptions(true); }} disabled={shopifyExporting} className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase transition shadow-sm ${shopifyExporting ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-white text-slate-700 border-2 border-stone-200 hover:border-[#A5BEAC] hover:bg-stone-50'}`}>
