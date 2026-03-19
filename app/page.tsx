@@ -199,14 +199,20 @@ export default function Home() {
   const [timeEntries, setTimeEntries] = useState<any[]>([]);
   const [showLogTimeModal, setShowLogTimeModal] = useState(false);
   const [logTimeItemId, setLogTimeItemId] = useState<string | null>(null);
+  const [logTimeItemSearch, setLogTimeItemSearch] = useState('');
+  const [logTimeItemDropdownOpen, setLogTimeItemDropdownOpen] = useState(false);
   const [logTimeHours, setLogTimeHours] = useState<string>('');
   const [logTimeNote, setLogTimeNote] = useState('');
   const [logTimeAllowItemSelect, setLogTimeAllowItemSelect] = useState(false);
+  const logTimeItemDropdownRef = useRef<HTMLDivElement>(null);
   const [editingTimeEntryId, setEditingTimeEntryId] = useState<string | null>(null);
   const [deletingTimeEntryId, setDeletingTimeEntryId] = useState<string | null>(null);
   const [timeFilterDateFrom, setTimeFilterDateFrom] = useState('');
   const [timeFilterDateTo, setTimeFilterDateTo] = useState('');
   const [timeFilterItemId, setTimeFilterItemId] = useState<string>('');
+  const [timeFilterItemSearch, setTimeFilterItemSearch] = useState('');
+  const [timeFilterItemDropdownOpen, setTimeFilterItemDropdownOpen] = useState(false);
+  const timeFilterItemDropdownRef = useRef<HTMLDivElement>(null);
   // Timer persisted to localStorage so it survives refresh/background (PWA, mobile home screen)
   const [timerStartedAt, setTimerStartedAt] = useState<number | null>(() => {
     if (typeof window === 'undefined') return null;
@@ -3223,6 +3229,7 @@ export default function Home() {
                   <li className="flex items-center gap-2"><span className="text-[#A5BEAC]">✓</span> Unlimited vault items</li>
                   <li className="flex items-center gap-2"><span className="text-[#A5BEAC]">✓</span> Time tracking</li>
                   <li className="flex items-center gap-2"><span className="text-[#A5BEAC]">✓</span> Custom price formulas</li>
+                  <li className="flex items-center gap-2"><span className="text-[#A5BEAC]">✓</span> Compare prices across formulas</li>
                 </ul>
                 <div className="flex gap-3">
                   <button onClick={() => setShowVaultPlusModal(false)} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Maybe later</button>
@@ -3249,6 +3256,7 @@ export default function Home() {
                   <li className="flex items-center gap-2"><span className="text-[#A5BEAC]">✓</span> Unlimited vault items</li>
                   <li className="flex items-center gap-2"><span className="text-[#A5BEAC]">✓</span> Time tracking</li>
                   <li className="flex items-center gap-2"><span className="text-[#A5BEAC]">✓</span> Custom price formulas</li>
+                  <li className="flex items-center gap-2"><span className="text-[#A5BEAC]">✓</span> Compare prices across formulas</li>
                 </ul>
                 <div className="flex gap-3">
                   <button onClick={() => setShowVaultPlusModal(false)} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Maybe later</button>
@@ -3618,18 +3626,44 @@ export default function Home() {
               {editingTimeEntryId ? (logTimeItemId ? `Assigned to: ${(inventory.find(i => i.id === logTimeItemId)?.name || 'Piece').toUpperCase()}` : 'General / unassigned') : (logTimeItemId ? `Add time to: ${(inventory.find(i => i.id === logTimeItemId)?.name || 'Piece').toUpperCase()}` : 'Log general shop time (unassigned)')}
             </p>
             {logTimeAllowItemSelect && (
-              <div>
+              <div ref={logTimeItemDropdownRef} className="relative">
                 <label className="text-[9px] font-bold text-stone-400 uppercase block mb-1">Assign to piece (optional)</label>
-                <select
-                  value={logTimeItemId || ''}
-                  onChange={e => setLogTimeItemId(e.target.value || null)}
+                <input
+                  type="text"
+                  placeholder="Search pieces…"
+                  value={logTimeItemDropdownOpen ? logTimeItemSearch : (logTimeItemId ? (inventory.find((i: any) => i.id === logTimeItemId)?.name || '').toUpperCase() : '')
+                  }
+                  onChange={e => { setLogTimeItemSearch(e.target.value); setLogTimeItemDropdownOpen(true); }}
+                  onFocus={() => { setLogTimeItemDropdownOpen(true); setLogTimeItemSearch(logTimeItemId ? (inventory.find((i: any) => i.id === logTimeItemId)?.name || '') : ''); }}
+                  onBlur={() => setTimeout(() => setLogTimeItemDropdownOpen(false), 150)}
                   className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl outline-none focus:border-[#A5BEAC] text-sm font-bold"
-                >
-                  <option value="">General / unassigned</option>
-                  {inventory.map((i: any) => (
-                    <option key={i.id} value={i.id}>{(i.name || '').toUpperCase()}</option>
-                  ))}
-                </select>
+                />
+                {logTimeItemDropdownOpen && (
+                  <div className="absolute top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white border border-stone-200 rounded-xl shadow-lg z-50">
+                    <button
+                      type="button"
+                      onClick={() => { setLogTimeItemId(null); setLogTimeItemSearch(''); setLogTimeItemDropdownOpen(false); }}
+                      className={`w-full text-left px-3 py-2.5 text-sm font-bold hover:bg-stone-50 first:rounded-t-xl ${!logTimeItemId ? 'bg-[#A5BEAC]/10 text-[#A5BEAC]' : 'text-stone-600'}`}
+                    >
+                      General / unassigned
+                    </button>
+                    {inventory
+                      .filter((i: any) => !logTimeItemSearch.trim() || (i.name || '').toUpperCase().includes(logTimeItemSearch.trim().toUpperCase()))
+                      .map((i: any) => (
+                        <button
+                          key={i.id}
+                          type="button"
+                          onClick={() => { setLogTimeItemId(i.id); setLogTimeItemSearch(''); setLogTimeItemDropdownOpen(false); }}
+                          className={`w-full text-left px-3 py-2.5 text-sm font-bold hover:bg-stone-50 last:rounded-b-xl ${logTimeItemId === i.id ? 'bg-[#A5BEAC]/10 text-[#A5BEAC]' : 'text-stone-800'}`}
+                        >
+                          {(i.name || '').toUpperCase()}
+                        </button>
+                      ))}
+                    {inventory.filter((i: any) => !logTimeItemSearch.trim() || (i.name || '').toUpperCase().includes(logTimeItemSearch.trim().toUpperCase())).length === 0 && (
+                      <div className="px-3 py-4 text-sm text-stone-400 font-bold">No pieces match</div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
             <div>
@@ -3655,7 +3689,7 @@ export default function Home() {
               />
             </div>
             <div className="flex gap-3">
-              <button onClick={() => { setShowLogTimeModal(false); setEditingTimeEntryId(null); setLogTimeItemId(null); setLogTimeHours(''); setLogTimeNote(''); setLogTimeAllowItemSelect(false); }} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
+              <button onClick={() => { setShowLogTimeModal(false); setEditingTimeEntryId(null); setLogTimeItemId(null); setLogTimeItemSearch(''); setLogTimeItemDropdownOpen(false); setLogTimeHours(''); setLogTimeNote(''); setLogTimeAllowItemSelect(false); }} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
               {editingTimeEntryId ? (
                 <button onClick={updateTimeEntry} disabled={!logTimeHours || parseFloat(logTimeHours) <= 0} className={`flex-1 py-4 rounded-2xl font-black text-[10px] uppercase transition shadow-lg ${!logTimeHours || parseFloat(logTimeHours) <= 0 ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-[#A5BEAC] text-white hover:bg-slate-900'}`}>Update</button>
               ) : (
@@ -5308,6 +5342,30 @@ export default function Home() {
             <div className="p-6 border-b border-stone-100 bg-white space-y-4 rounded-t-[2.5rem] shrink-0">
               <h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Compare Prices</h2>
               <p className="text-[10px] text-stone-500">Compare vault item prices across different formulas.</p>
+              {(!user || (subscriptionStatus && !subscriptionStatus.subscribed)) ? (
+                <div className="py-8 px-4 rounded-xl bg-stone-50 border border-stone-200 text-center space-y-4">
+                  <p className="text-stone-600 font-bold uppercase text-xs tracking-wider">
+                    {!user
+                      ? 'Sign in to compare prices. With a vault and Vault+, you can compare item prices across different formulas.'
+                      : 'Compare prices is a Vault+ feature. Save items to your vault and upgrade to compare prices across formulas.'}
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-2 items-center justify-center">
+                    {!user ? (
+                      <button onClick={() => setShowAuth(true)} className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-[#A5BEAC] text-white hover:bg-slate-900 transition shadow-sm">
+                        Sign in
+                      </button>
+                    ) : (
+                      <>
+                        <button onClick={() => setShowVaultPlusModal(true)} className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-[#A5BEAC] text-white hover:bg-slate-900 transition shadow-sm">
+                          Upgrade to Vault+
+                        </button>
+                        <button onClick={() => { setLoading(true); fetchInventory(); }} className="text-[10px] font-bold uppercase text-stone-400 hover:text-[#A5BEAC] transition">Just upgraded? Refresh</button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ) : (
+              <>
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 min-h-[48px] sm:h-12">
                 <div className="relative flex-1 flex gap-2 w-full min-h-[48px] sm:h-full">
                   <div className="relative shrink-0 min-h-[48px] sm:h-full w-12">
@@ -5419,7 +5477,10 @@ export default function Home() {
                   );
                 })}
               </div>
+            </>
+              )}
             </div>
+            {user && subscriptionStatus?.subscribed && (
             <div className="flex-1 overflow-x-auto overflow-y-auto p-6">
               {compareFilteredInventory.length === 0 ? (
                 <div className="text-center py-12 text-stone-500 text-sm">
@@ -5483,6 +5544,7 @@ export default function Home() {
                 </div>
               )}
             </div>
+            )}
           </div>
 
           {/* FORMULAS PANEL */}
@@ -5886,21 +5948,55 @@ export default function Home() {
                       onChange={e => setTimeFilterDateTo(e.target.value)}
                       className="py-2 px-3 rounded-lg border border-stone-200 text-xs font-bold outline-none focus:border-[#A5BEAC]"
                     />
-                    <select
-                      value={timeFilterItemId}
-                      onChange={e => setTimeFilterItemId(e.target.value)}
-                      className="py-2 px-3 rounded-lg border border-stone-200 text-xs font-bold outline-none focus:border-[#A5BEAC] min-w-[140px]"
-                    >
-                      <option value="">All pieces</option>
-                      <option value="_unassigned">General / unassigned</option>
-                      {inventory.map((i: any) => (
-                        <option key={i.id} value={i.id}>{(i.name || '').toUpperCase()}</option>
-                      ))}
-                    </select>
+                    <div ref={timeFilterItemDropdownRef} className="relative min-w-[140px]">
+                      <input
+                        type="text"
+                        placeholder="Filter by piece…"
+                        value={timeFilterItemDropdownOpen ? timeFilterItemSearch : (timeFilterItemId === '_unassigned' ? 'General / unassigned' : timeFilterItemId ? (inventory.find((i: any) => i.id === timeFilterItemId)?.name || '').toUpperCase() : 'All pieces')
+                        }
+                        onChange={e => { setTimeFilterItemSearch(e.target.value); setTimeFilterItemDropdownOpen(true); }}
+                        onFocus={() => { setTimeFilterItemDropdownOpen(true); setTimeFilterItemSearch(timeFilterItemId && timeFilterItemId !== '_unassigned' ? (inventory.find((i: any) => i.id === timeFilterItemId)?.name || '') : ''); }}
+                        onBlur={() => setTimeout(() => setTimeFilterItemDropdownOpen(false), 150)}
+                        className="w-full py-2 px-3 rounded-lg border border-stone-200 text-xs font-bold outline-none focus:border-[#A5BEAC]"
+                      />
+                      {timeFilterItemDropdownOpen && (
+                        <div className="absolute top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white border border-stone-200 rounded-xl shadow-lg z-50 min-w-[180px]">
+                          <button
+                            type="button"
+                            onClick={() => { setTimeFilterItemId(''); setTimeFilterItemSearch(''); setTimeFilterItemDropdownOpen(false); }}
+                            className={`w-full text-left px-3 py-2.5 text-xs font-bold hover:bg-stone-50 first:rounded-t-xl ${!timeFilterItemId ? 'bg-[#A5BEAC]/10 text-[#A5BEAC]' : 'text-stone-600'}`}
+                          >
+                            All pieces
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setTimeFilterItemId('_unassigned'); setTimeFilterItemSearch(''); setTimeFilterItemDropdownOpen(false); }}
+                            className={`w-full text-left px-3 py-2.5 text-xs font-bold hover:bg-stone-50 ${timeFilterItemId === '_unassigned' ? 'bg-[#A5BEAC]/10 text-[#A5BEAC]' : 'text-stone-600'}`}
+                          >
+                            General / unassigned
+                          </button>
+                          {inventory
+                            .filter((i: any) => !timeFilterItemSearch.trim() || (i.name || '').toUpperCase().includes(timeFilterItemSearch.trim().toUpperCase()))
+                            .map((i: any) => (
+                              <button
+                                key={i.id}
+                                type="button"
+                                onClick={() => { setTimeFilterItemId(i.id); setTimeFilterItemSearch(''); setTimeFilterItemDropdownOpen(false); }}
+                                className={`w-full text-left px-3 py-2.5 text-xs font-bold hover:bg-stone-50 last:rounded-b-xl ${timeFilterItemId === i.id ? 'bg-[#A5BEAC]/10 text-[#A5BEAC]' : 'text-stone-800'}`}
+                              >
+                                {(i.name || '').toUpperCase()}
+                              </button>
+                            ))}
+                          {inventory.filter((i: any) => !timeFilterItemSearch.trim() || (i.name || '').toUpperCase().includes(timeFilterItemSearch.trim().toUpperCase())).length === 0 && (
+                            <div className="px-3 py-4 text-xs text-stone-400 font-bold">No pieces match</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                     {(timeFilterDateFrom || timeFilterDateTo || timeFilterItemId) && (
                       <button
                         type="button"
-                        onClick={() => { setTimeFilterDateFrom(''); setTimeFilterDateTo(''); setTimeFilterItemId(''); }}
+                        onClick={() => { setTimeFilterDateFrom(''); setTimeFilterDateTo(''); setTimeFilterItemId(''); setTimeFilterItemSearch(''); setTimeFilterItemDropdownOpen(false); }}
                         className="py-2 px-3 rounded-lg text-[10px] font-black uppercase text-stone-500 hover:text-slate-900 border border-stone-200 hover:border-stone-300 transition"
                       >
                         Clear
