@@ -461,6 +461,44 @@ export default function Home() {
     );
   }, [roundForDisplay]);
 
+  /**
+   * Compare table % change: use rounded $ values (matches displayed W/R).
+   * If wholesale is unchanged after rounding but retail moves (common with manual original saves), show retail %.
+   */
+  const renderComparePriceDelta = useCallback((baseW: number, baseR: number, scenW: number, scenR: number) => {
+    const rw = roundForDisplay(Number(baseW));
+    const rr = roundForDisplay(Number(baseR));
+    const swd = roundForDisplay(Number(scenW));
+    const srd = roundForDisplay(Number(scenR));
+    let base: number;
+    let next: number;
+    let kind: 'wholesale' | 'retail';
+    if (rw !== swd) {
+      base = rw;
+      next = swd;
+      kind = 'wholesale';
+    } else if (rr !== srd) {
+      base = rr;
+      next = srd;
+      kind = 'retail';
+    } else {
+      return null;
+    }
+    if (base === 0 && next === 0) return null;
+    const diff = next - base;
+    const pct = base !== 0 ? (diff / base) * 100 : (next !== 0 ? 100 : 0);
+    if (Math.abs(pct) < 0.01) return null;
+    return (
+      <span
+        title={kind === 'retail' ? '% change on retail (wholesale matches after rounding)' : '% change on wholesale'}
+        className={`block text-[9px] font-bold ${diff > 0 ? 'text-emerald-600' : 'text-red-500'}`}
+      >
+        {diff > 0 ? '+' : ''}{pct.toFixed(1)}%
+        {kind === 'retail' ? <span className="font-normal text-stone-500"> R</span> : null}
+      </span>
+    );
+  }, [roundForDisplay]);
+
   const setPriceRoundingWithPersist = useCallback((val: PriceRoundingOption) => {
     setPriceRounding(val);
     if (typeof window !== 'undefined') localStorage.setItem('price_rounding', val === 'none' ? 'none' : String(val));
@@ -605,7 +643,7 @@ export default function Home() {
     }
   }, [pricesLoaded]);
 
-  const calculateFullBreakdown = useCallback((metals: any[], h: any, r: any, o: any, stones: any[], ovCost: any, ovType: 'flat' | 'percent', customMult?: number, customMarkup?: number, priceOverride?: any, useManualMetalForInitialSaveOnly?: boolean) => {
+  const calculateFullBreakdown = useCallback((metals: any[], h: any, r: any, o: any, stones: any[], ovCost: any, ovType: 'flat' | 'percent', customMult?: number, customMarkup?: number, priceOverride?: any, useManualMetalForInitialSaveOnly?: boolean, skipSpotSavedFallback?: boolean) => {
     let rawMaterialCost = 0;
     /** Compare-tab scenario: revalue from scenario/live spots only */
     const useScenarioSpotPath = priceOverride !== undefined && priceOverride !== null;
@@ -624,8 +662,8 @@ export default function Home() {
         else if (type.includes('platinum')) spot = (priceOverride && priceOverride.platinum) ? Number(priceOverride.platinum) : prices.platinum;
         else if (type.includes('palladium')) spot = (priceOverride && priceOverride.palladium) ? Number(priceOverride.palladium) : prices.palladium;
 
-        // Fallback: use saved spot from add-time, then static defaults when live prices haven't loaded
-        if (!spot && m.spotSaved != null && m.spotSaved > 0) spot = m.spotSaved;
+        /** Compare / live recalc: price metals like spot rows only — do not substitute spotSaved (manual vault rows otherwise skew metal cost). */
+        if (!spot && !skipSpotSavedFallback && m.spotSaved != null && Number(m.spotSaved) > 0) spot = Number(m.spotSaved);
         else if (!spot) {
           if (type.includes('gold')) spot = FALLBACK_SPOT.gold;
           else if (type.includes('silver')) spot = FALLBACK_SPOT.silver;
@@ -731,7 +769,7 @@ export default function Home() {
     const breakdown = calculateFullBreakdown(
       item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0,
       stonesArray, item.overhead_cost || 0, (item.overhead_type as 'flat' | 'percent') || 'flat',
-      item.multiplier, item.markup_b, priceOverride, false
+      item.multiplier, item.markup_b, priceOverride, false, true
     );
     const result: Record<string, { wholesale: number; retail: number }> = {};
     if (selected.a) result['A'] = { wholesale: breakdown.wholesaleA, retail: breakdown.retailA };
@@ -5817,27 +5855,20 @@ export default function Home() {
                         const liveBreakdownForItem = calculateFullBreakdown(
                           item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0,
                           stonesForRow, item.overhead_cost || 0, (item.overhead_type as 'flat' | 'percent') || 'flat',
-                          item.multiplier, item.markup_b
+                          item.multiplier, item.markup_b, undefined, false, true
                         );
                         const liveItemPrices = getItemPrices(item, liveBreakdownForItem);
                         const scenarioBreakdownForItem = compareSpotEnabled
                           ? calculateFullBreakdown(
                               item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0,
                               stonesForRow, item.overhead_cost || 0, (item.overhead_type as 'flat' | 'percent') || 'flat',
-                              item.multiplier, item.markup_b, compareCustomSpots, false
+                              item.multiplier, item.markup_b, compareCustomSpots, false, true
                             )
                           : null;
                         const vaultScenarioPrices = scenarioBreakdownForItem ? getItemPrices(item, scenarioBreakdownForItem) : null;
                         const pricesByFormula = getPricesForFormulas(item, compareFormulas);
                         const scenarioPrices = compareSpotEnabled ? getPricesForFormulas(item, compareFormulas, compareCustomSpots) : null;
                         const itemStrategy = item.strategy === 'custom' && item.custom_formula?.formula_name ? item.custom_formula.formula_name : item.strategy;
-                        const renderDelta = (live: number, scenario: number) => {
-                          if (!live || !scenario) return null;
-                          const diff = scenario - live;
-                          const pct = live !== 0 ? (diff / live) * 100 : 0;
-                          if (Math.abs(pct) < 0.01) return null;
-                          return <span className={`block text-[9px] font-bold ${diff > 0 ? 'text-emerald-600' : 'text-red-500'}`}>{diff > 0 ? '+' : ''}{pct.toFixed(1)}%</span>;
-                        };
                         const itemTitle = (item.name || 'Untitled').toUpperCase();
                         return (
                           <tr key={item.id} className="group border-b border-stone-100 hover:bg-stone-50/50">
@@ -5856,7 +5887,7 @@ export default function Home() {
                                 title="This piece’s saved pricing strategy at your scenario spot prices (labor, overhead, stones unchanged)"
                               >
                                 {formatCompareWholesaleRetail(vaultScenarioPrices.wholesale, vaultScenarioPrices.retail)}
-                                {renderDelta(Number(item.wholesale), vaultScenarioPrices.wholesale)}
+                                {renderComparePriceDelta(Number(item.wholesale), Number(item.retail), vaultScenarioPrices.wholesale, vaultScenarioPrices.retail)}
                               </td>
                             )}
                             {compareShowLive && (
@@ -5872,7 +5903,12 @@ export default function Home() {
                             {compareSpotEnabled && compareFormulas.a && scenarioPrices && (
                               <td className="py-1.5 px-2 sm:py-2 sm:px-3 text-[10px] sm:text-[11px] tabular-nums bg-amber-50 group-hover:bg-amber-50/90 align-top">
                                 {formatCompareWholesaleRetail(scenarioPrices['A']?.wholesale ?? 0, scenarioPrices['A']?.retail ?? 0)}
-                                {renderDelta(pricesByFormula['A']?.wholesale ?? 0, scenarioPrices['A']?.wholesale ?? 0)}
+                                {renderComparePriceDelta(
+                                  pricesByFormula['A']?.wholesale ?? 0,
+                                  pricesByFormula['A']?.retail ?? 0,
+                                  scenarioPrices['A']?.wholesale ?? 0,
+                                  scenarioPrices['A']?.retail ?? 0
+                                )}
                               </td>
                             )}
                             {compareFormulas.b && (
@@ -5883,7 +5919,12 @@ export default function Home() {
                             {compareSpotEnabled && compareFormulas.b && scenarioPrices && (
                               <td className="py-1.5 px-2 sm:py-2 sm:px-3 text-[10px] sm:text-[11px] tabular-nums bg-amber-50 group-hover:bg-amber-50/90 align-top">
                                 {formatCompareWholesaleRetail(scenarioPrices['B']?.wholesale ?? 0, scenarioPrices['B']?.retail ?? 0)}
-                                {renderDelta(pricesByFormula['B']?.wholesale ?? 0, scenarioPrices['B']?.wholesale ?? 0)}
+                                {renderComparePriceDelta(
+                                  pricesByFormula['B']?.wholesale ?? 0,
+                                  pricesByFormula['B']?.retail ?? 0,
+                                  scenarioPrices['B']?.wholesale ?? 0,
+                                  scenarioPrices['B']?.retail ?? 0
+                                )}
                               </td>
                             )}
                             {compareFormulas.customIds.map(id => {
@@ -5899,7 +5940,7 @@ export default function Home() {
                                 {compareSpotEnabled && sp && (
                                   <td className="py-1.5 px-2 sm:py-2 sm:px-3 text-[10px] sm:text-[11px] tabular-nums bg-amber-50 group-hover:bg-amber-50/90 align-top">
                                     {formatCompareWholesaleRetail(sp.wholesale ?? 0, sp.retail ?? 0)}
-                                    {renderDelta(p?.wholesale ?? 0, sp.wholesale ?? 0)}
+                                    {renderComparePriceDelta(p?.wholesale ?? 0, p?.retail ?? 0, sp.wholesale ?? 0, sp.retail ?? 0)}
                                   </td>
                                 )}
                               </React.Fragment>);
