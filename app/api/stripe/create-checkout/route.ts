@@ -42,13 +42,14 @@ export async function POST(request: Request) {
     const cancel = cancelUrl || origin;
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    const { data: existing } = await supabase
+    const { data: subRows } = await supabase
       .from('subscriptions')
       .select('stripe_customer_id')
       .eq('user_id', resolvedUserId)
-      .single();
+      .order('updated_at', { ascending: false })
+      .limit(1);
 
-    let customerId = existing?.stripe_customer_id;
+    let customerId = subRows?.[0]?.stripe_customer_id;
     if (!customerId) {
       const customer = await stripe.customers.create({
         metadata: { supabase_user_id: resolvedUserId },

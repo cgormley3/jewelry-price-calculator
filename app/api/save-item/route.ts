@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { isVaultPlusSubscriptionActive } from '@/lib/is-vault-plus-active';
+import { VAULT_PLUS_PRICE_PHRASE } from '@/lib/vault-plus-copy';
+import { fetchLatestSubscriptionForUser } from '@/lib/supabase-subscription-fetch';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,10 +35,10 @@ export async function POST(request: Request) {
     if (newItem.user_id && newItem.user_id !== user.id) {
       return NextResponse.json({ error: 'Session mismatch' }, { status: 403 });
     }
-    const { data: sub } = await supabase.from('subscriptions').select('status, current_period_end').eq('user_id', user.id).single();
+    const sub = await fetchLatestSubscriptionForUser(supabase, user.id);
     const subscribed = isVaultPlusSubscriptionActive(sub);
     if (!subscribed) {
-      return NextResponse.json({ error: 'Upgrade to Vault+ to save items', code: 'PAYWALL_VAULT' }, { status: 402 });
+      return NextResponse.json({ error: `Upgrade to Vault+ (${VAULT_PLUS_PRICE_PHRASE}) to save items`, code: 'PAYWALL_VAULT' }, { status: 402 });
     }
 
     if (itemId) {

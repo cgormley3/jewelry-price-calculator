@@ -10,6 +10,7 @@ import InstallPrompt from './InstallPrompt';
 import FormulaBuilder from '../components/FormulaBuilder';
 import { evaluateCustomModel, formulaReferencesBase, formulaToReadableString, formulaToTokens, parseTokensStrict, PRESET_A, type FormulaNode } from '../lib/formula-engine';
 import type { FormulaTokens } from '../components/FormulaBuilder';
+import { VAULT_PLUS_PRICE_PHRASE } from '@/lib/vault-plus-copy';
 
 const UNIT_TO_GRAMS: { [key: string]: number } = {
   "Grams": 1,
@@ -1119,7 +1120,7 @@ export default function Home() {
         setLocations(['Main Vault']);
         setVaultPaywallHasItems(!!err?.hasItems);
         if (err?.code !== 'PAYWALL_VAULT') {
-          setNotification({ title: 'Vault Load Failed', message: err?.error || 'Upgrade to Vault+ ($20 flat for the year) to access your vault.', type: 'info' });
+          setNotification({ title: 'Vault Load Failed', message: err?.error || `Upgrade to Vault+ (${VAULT_PLUS_PRICE_PHRASE}) to access your vault.`, type: 'info' });
         }
         const resProfile = await fetch('/api/profile', {
           method: 'POST',
@@ -2546,7 +2547,7 @@ export default function Home() {
     const { data: { session } } = await supabase.auth.getSession();
     let accessToken = (session as any)?.access_token;
     if (!accessToken) {
-      setNotification({ title: 'Sign in required', message: 'Please sign in to upgrade to Vault+ ($20 flat for the year).', type: 'info' });
+      setNotification({ title: 'Sign in required', message: `Please sign in to upgrade to Vault+ (${VAULT_PLUS_PRICE_PHRASE}).`, type: 'info' });
       setShowAuth(true);
       setShowVaultPlusModal(false);
       return;
@@ -2554,7 +2555,7 @@ export default function Home() {
     const { data: { session: refreshed } } = await supabase.auth.refreshSession();
     accessToken = (refreshed as any)?.access_token ?? accessToken;
     if (!accessToken || !user?.id) {
-      setNotification({ title: 'Sign in required', message: 'Please sign in to upgrade to Vault+ ($20 flat for the year).', type: 'info' });
+      setNotification({ title: 'Sign in required', message: `Please sign in to upgrade to Vault+ (${VAULT_PLUS_PRICE_PHRASE}).`, type: 'info' });
       setShowAuth(true);
       setShowVaultPlusModal(false);
       return;
@@ -3550,7 +3551,7 @@ export default function Home() {
             {(!user || user.is_anonymous) ? (
               <>
                 <p className="text-sm text-stone-600 font-medium">
-                  Create your free Vault account first. Then upgrade for $20 flat for the year and unlock everything.
+                  Create your free Vault account first. Then upgrade for {VAULT_PLUS_PRICE_PHRASE} and unlock everything.
                 </p>
                 <ul className="text-[10px] font-bold text-stone-500 uppercase tracking-wider space-y-2">
                   <li className="flex items-center gap-2"><span className="text-[#A5BEAC]">✓</span> Unlimited vault items</li>
@@ -3577,7 +3578,7 @@ export default function Home() {
             ) : (
               <>
                 <p className="text-sm text-stone-600 font-medium">
-                  Save vault items, log time, and use custom formulas. Vault+ unlocks everything—$20 flat for the year.
+                  Save vault items, log time, and use custom formulas. Vault+ unlocks everything—{VAULT_PLUS_PRICE_PHRASE}.
                 </p>
                 <ul className="text-[10px] font-bold text-stone-500 uppercase tracking-wider space-y-2">
                   <li className="flex items-center gap-2"><span className="text-[#A5BEAC]">✓</span> Unlimited vault items</li>
@@ -5160,7 +5161,7 @@ export default function Home() {
                 <div className="p-12 text-center space-y-4">
                   {subscriptionStatus && !subscriptionStatus.subscribed && vaultPaywallHasItems ? (
                     <>
-                      <p className="text-stone-600 font-bold uppercase text-xs tracking-wider">To see your items upgrade to Vault+ ($20 flat for the year)</p>
+                      <p className="text-stone-600 font-bold uppercase text-xs tracking-wider">To see your items upgrade to Vault+ ({VAULT_PLUS_PRICE_PHRASE})</p>
                       <div className="flex flex-col sm:flex-row gap-2 items-center justify-center">
                         <button onClick={() => setShowVaultPlusModal(true)} className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-[#A5BEAC] text-white hover:bg-slate-900 transition shadow-sm">
                           Upgrade to Vault+
@@ -5190,10 +5191,12 @@ export default function Home() {
                           const data = await res.json().catch(() => ({}));
                           if (data.fix_suggestion) {
                             setVaultDiagnostic(data.fix_suggestion);
+                          } else if (data.access_block_reason) {
+                            setVaultDiagnostic(String(data.access_block_reason));
                           } else if (data.subscribed && data.inventory_count_for_you === 0) {
                             setVaultDiagnostic('You’re subscribed and no items exist yet for your account. Your vault is empty.');
                           } else {
-                            setVaultDiagnostic(`Subscribed: ${data.subscribed}. Your inventory count: ${data.inventory_count_for_you}. Run Diagnose again for a fix.`);
+                            setVaultDiagnostic(`Subscribed: ${data.subscribed}. Status: ${data.subscription_status ?? '—'}. Period end: ${data.subscription_period_end ?? '—'}. Items: ${data.inventory_count_for_you}. Run Diagnose again or tap Sync from Stripe.`);
                           }
                         } catch (_) {
                           setVaultDiagnostic('Diagnostic failed. Check the browser console.');
@@ -5728,6 +5731,11 @@ export default function Home() {
                   {!user && (
                     <p className="text-stone-600 font-bold uppercase text-xs tracking-wider">
                       Sign in to compare prices. With a vault and Vault+, you can compare item prices across different formulas.
+                    </p>
+                  )}
+                  {user && subscriptionStatus && !subscriptionStatus.subscribed && (
+                    <p className="text-stone-600 font-bold uppercase text-xs tracking-wider">
+                      Upgrade to Vault+ ({VAULT_PLUS_PRICE_PHRASE}) to use Compare with your vault and formulas.
                     </p>
                   )}
                   <div className="flex flex-col sm:flex-row gap-2 items-center justify-center">

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { isVaultPlusSubscriptionActive } from '@/lib/is-vault-plus-active';
+import { VAULT_PLUS_PRICE_PHRASE } from '@/lib/vault-plus-copy';
+import { fetchLatestSubscriptionForUser } from '@/lib/supabase-subscription-fetch';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,13 +33,13 @@ export async function POST(request: Request) {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { data: sub } = await supabase.from('subscriptions').select('status, current_period_end').eq('user_id', resolvedUserId).single();
+    const sub = await fetchLatestSubscriptionForUser(supabase, resolvedUserId);
     const subscribed = isVaultPlusSubscriptionActive(sub);
 
     if (!subscribed) {
       const { count } = await supabase.from('inventory').select('*', { count: 'exact', head: true }).eq('user_id', resolvedUserId);
       return NextResponse.json(
-        { error: 'Upgrade to Vault+ to access your vault', code: 'PAYWALL_VAULT', hasItems: (count ?? 0) > 0 },
+        { error: `Upgrade to Vault+ (${VAULT_PLUS_PRICE_PHRASE}) to access your vault`, code: 'PAYWALL_VAULT', hasItems: (count ?? 0) > 0 },
         { status: 402 }
       );
     }

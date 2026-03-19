@@ -32,13 +32,14 @@ export async function POST(request: Request) {
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    const { data: sub } = await supabase
+    const { data: subRows } = await supabase
       .from('subscriptions')
       .select('stripe_customer_id')
       .eq('user_id', user.id)
-      .single();
+      .order('updated_at', { ascending: false })
+      .limit(1);
 
-    const customerId = sub?.stripe_customer_id;
+    const customerId = subRows?.[0]?.stripe_customer_id;
     if (!customerId) {
       return NextResponse.json({ error: 'No subscription found' }, { status: 404 });
     }

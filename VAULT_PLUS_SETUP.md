@@ -27,7 +27,7 @@ In Supabase SQL Editor, run the migrations in order:
 3. Add a **Price**:
    - Type: Recurring
    - Billing period: Yearly
-   - Set your price (e.g. $X/year)
+   - Set your price (e.g. **$15/year** — must match in-app copy in `lib/vault-plus-copy.ts`)
 4. Copy the **Price ID** (starts with `price_`).
 
 ## 3. Get Your Stripe Keys
@@ -87,6 +87,15 @@ If you use a **Stripe Payment Link** instead of embedded Checkout from the API:
    - `customer.subscription.updated`
    - `customer.subscription.deleted`
 4. Copy the **Signing secret** and add to your production env as `STRIPE_WEBHOOK_SECRET`.
+
+### If a row exists in `subscriptions` but the app still shows “Upgrade”
+
+Check in Supabase **Table Editor → subscriptions**:
+
+1. **`user_id`** must equal the user’s id from **Authentication → Users** for the account they’re signed into (not another email/Google identity). Use Vault → **Not seeing items? Diagnose** to see `your_user_id` and compare.
+2. **`status`** must be `active`, `trialing`, or `past_due` (Stripe retry window). Values like `inactive`, `canceled`, or `unpaid` block access.
+3. **`current_period_end`** must be **null** or a **future** timestamp. A wrong or past date denies access until updated (webhook, **Sync from Stripe**, or manual SQL).
+4. **Duplicate rows** for the same user are avoided by a unique `user_id`; if you ever had duplicates, the app now uses the row with the latest `updated_at`.
 
 ### If the user paid in Stripe but the app still shows “Upgrade”
 

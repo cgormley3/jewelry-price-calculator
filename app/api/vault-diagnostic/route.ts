@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { isVaultPlusSubscriptionActive } from '@/lib/is-vault-plus-active';
+import { isVaultPlusSubscriptionActive, vaultPlusAccessBlockReason } from '@/lib/is-vault-plus-active';
+import { fetchLatestSubscriptionForUser } from '@/lib/supabase-subscription-fetch';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,15 +32,20 @@ export async function POST(request: Request) {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { data: sub } = await supabase.from('subscriptions').select('status, current_period_end').eq('user_id', user.id).single();
+    const sub = await fetchLatestSubscriptionForUser(supabase, user.id);
     const subscribed = isVaultPlusSubscriptionActive(sub);
+    const access_block_reason = vaultPlusAccessBlockReason(sub);
 
     const { count: myCount } = await supabase.from('inventory').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
 
     let fix_suggestion: string | null = null;
+    if (!subscribed && access_block_reason && (myCount ?? 0) > 0) {
+      fix_suggestion = `${access_block_reason}\n\n`;
+    }
     if (!subscribed && (myCount ?? 0) > 0) {
       fix_suggestion =
-        `You have ${myCount} item(s) on this account but no active Vault+ row in the app database. If Stripe shows you paid:\n\n` +
+        (fix_suggestion || '') +
+        `You have ${myCount} item(s) on this account but Vault+ access is denied. If Stripe shows you paid:\n\n` +
         `1) Tap **Sync from Stripe** on the Vault tab (same email as Stripe checkout).\n` +
         `2) Set STRIPE_VAULT_PLUS_PRICE_ID in production so sync can match your price.\n` +
         `3) Check webhook URL + STRIPE_WEBHOOK_SECRET on your host.\n\n` +
@@ -50,6 +56,7 @@ export async function POST(request: Request) {
         `ON CONFLICT (user_id) DO UPDATE SET status = 'active', current_period_end = EXCLUDED.current_period_end;`;
     } else if (!subscribed && (myCount ?? 0) === 0) {
       fix_suggestion =
+        (!subscribed && access_block_reason ? `${access_block_reason}\n\n` : '') +
         'No items for this login. If you had a vault before, you may be signed in with a different email or Google vs password — try the same method you used when you created items.';
     }
 
@@ -59,6 +66,8 @@ export async function POST(request: Request) {
       is_anonymous: user.is_anonymous,
       subscribed,
       subscription_status: sub?.status ?? null,
+      subscription_period_end: sub?.current_period_end ?? null,
+      access_block_reason: subscribed ? null : access_block_reason,
       inventory_count_for_you: myCount ?? 0,
       fix_suggestion,
     });
