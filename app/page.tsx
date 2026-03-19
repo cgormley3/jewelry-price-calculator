@@ -5576,7 +5576,7 @@ export default function Home() {
             <div className="p-3 sm:p-6 border-b border-stone-100 bg-white space-y-3 sm:space-y-4 rounded-t-2xl sm:rounded-t-[2.5rem] shrink-0">
               <h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Compare Prices</h2>
               <p className="text-[10px] text-stone-500">
-                Compare saved vault prices to live spot pricing and across formulas. Toggle <span className="font-bold">Live</span> and each formula column. Optional <span className="font-bold">Spot scenario</span> adds amber columns at custom metal spots.
+                Compare saved vault prices to live spot pricing and across formulas. Toggle <span className="font-bold">Live</span> and each formula column. <span className="font-bold">Spot scenario</span> adds amber columns at your custom metal spots — including <span className="font-bold">Vault @ Scenario</span>, which reapplies each piece’s <em>saved</em> formula at those spots (vs the frozen Saved column in the vault).
               </p>
               {(!user || (subscriptionStatus && !subscriptionStatus.subscribed)) ? (
                 <div className="py-8 px-4 rounded-xl bg-stone-50 border border-stone-200 text-center space-y-4">
@@ -5778,9 +5778,9 @@ export default function Home() {
                 <div className="text-center py-12 text-stone-500 text-sm">
                   {inventory.length === 0 ? 'Add items to your vault to compare prices. Use the Vault tab to add items.' : 'No items match your filters. Try adjusting filters or search.'}
                 </div>
-              ) : !compareShowLive && !compareFormulas.a && !compareFormulas.b && compareFormulas.customIds.length === 0 ? (
+              ) : !compareShowLive && !compareFormulas.a && !compareFormulas.b && compareFormulas.customIds.length === 0 && !compareSpotEnabled ? (
                 <div className="text-center py-12 text-stone-500 text-sm">
-                  Turn on Live or select at least one formula to compare.
+                  Turn on Live, Spot scenario, or select at least one formula to compare.
                 </div>
               ) : (
                 <div className="min-w-max w-full">
@@ -5790,6 +5790,12 @@ export default function Home() {
                       <tr className="border-b-2 border-stone-200">
                         <th className="py-1.5 pr-2 pl-1 sm:py-2 sm:pr-4 sm:pl-0 text-[9px] sm:text-[10px] font-black uppercase text-stone-500 bg-white border-r border-stone-200 relative sm:sticky sm:left-0 sm:z-20 sm:shadow-[4px_0_12px_-6px_rgba(0,0,0,0.12)] max-sm:w-[min(42vw,9rem)] max-sm:max-w-[min(42vw,9rem)] sm:max-w-[12rem] sm:w-auto">Item</th>
                         <th className="py-1.5 px-2 sm:py-2 sm:px-3 text-[9px] sm:text-[10px] font-black uppercase text-stone-500 whitespace-nowrap bg-stone-100">Saved</th>
+                        {compareSpotEnabled && (
+                          <th className="py-1.5 px-2 sm:py-2 sm:px-3 text-[9px] sm:text-[10px] font-black uppercase text-amber-700 whitespace-nowrap bg-amber-50 border-l border-amber-100" title="Each item’s saved formula (A, B, or custom) recalculated at scenario spot prices">
+                            <span className="sm:hidden">V@S</span>
+                            <span className="hidden sm:inline">Vault @ Scenario</span>
+                          </th>
+                        )}
                         {compareShowLive && <th className="py-1.5 px-2 sm:py-2 sm:px-3 text-[9px] sm:text-[10px] font-black uppercase text-slate-700 whitespace-nowrap bg-slate-50 border-l border-stone-100">Live</th>}
                         {compareFormulas.a && <th className="py-1.5 px-2 sm:py-2 sm:px-3 text-[9px] sm:text-[10px] font-black uppercase text-stone-500 whitespace-nowrap bg-white"><span className="sm:hidden">A</span><span className="hidden sm:inline">Formula A</span></th>}
                         {compareSpotEnabled && compareFormulas.a && <th className="py-1.5 px-2 sm:py-2 sm:px-3 text-[9px] sm:text-[10px] font-black uppercase text-amber-600 whitespace-nowrap bg-amber-50"><span className="sm:hidden">A*</span><span className="hidden sm:inline">A @ Scenario</span></th>}
@@ -5814,6 +5820,14 @@ export default function Home() {
                           item.multiplier, item.markup_b
                         );
                         const liveItemPrices = getItemPrices(item, liveBreakdownForItem);
+                        const scenarioBreakdownForItem = compareSpotEnabled
+                          ? calculateFullBreakdown(
+                              item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0,
+                              stonesForRow, item.overhead_cost || 0, (item.overhead_type as 'flat' | 'percent') || 'flat',
+                              item.multiplier, item.markup_b, compareCustomSpots, false
+                            )
+                          : null;
+                        const vaultScenarioPrices = scenarioBreakdownForItem ? getItemPrices(item, scenarioBreakdownForItem) : null;
                         const pricesByFormula = getPricesForFormulas(item, compareFormulas);
                         const scenarioPrices = compareSpotEnabled ? getPricesForFormulas(item, compareFormulas, compareCustomSpots) : null;
                         const itemStrategy = item.strategy === 'custom' && item.custom_formula?.formula_name ? item.custom_formula.formula_name : item.strategy;
@@ -5836,6 +5850,15 @@ export default function Home() {
                             <td className="py-1.5 px-2 sm:py-2 sm:px-3 text-[10px] sm:text-[11px] text-stone-600 tabular-nums bg-stone-100 group-hover:bg-stone-50 align-top">
                               {formatCompareWholesaleRetail(Number(item.wholesale), Number(item.retail))}
                             </td>
+                            {compareSpotEnabled && vaultScenarioPrices && (
+                              <td
+                                className="py-1.5 px-2 sm:py-2 sm:px-3 text-[10px] sm:text-[11px] tabular-nums bg-amber-50 border-l border-amber-100 group-hover:bg-amber-50/90 align-top"
+                                title="This piece’s saved pricing strategy at your scenario spot prices (labor, overhead, stones unchanged)"
+                              >
+                                {formatCompareWholesaleRetail(vaultScenarioPrices.wholesale, vaultScenarioPrices.retail)}
+                                {renderDelta(Number(item.wholesale), vaultScenarioPrices.wholesale)}
+                              </td>
+                            )}
                             {compareShowLive && (
                               <td className="py-1.5 px-2 sm:py-2 sm:px-3 text-[10px] sm:text-[11px] text-slate-800 tabular-nums bg-slate-50 border-l border-stone-100 group-hover:bg-stone-50/90 align-top" title={"At current spot, using this item's saved formula"}>
                                 {formatCompareWholesaleRetail(liveItemPrices.wholesale, liveItemPrices.retail)}
