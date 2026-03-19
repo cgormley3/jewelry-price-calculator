@@ -2399,19 +2399,22 @@ export default function Home() {
   const drawPDFPageHeader = async (
     doc: jsPDF,
     currentUser?: { email?: string; user_metadata?: { full_name?: string }; is_anonymous?: boolean } | null,
-    profileData?: { display_name: string | null; company_name: string | null; logo_url: string | null } | null
+    profileData?: { display_name: string | null; company_name: string | null; logo_url: string | null } | null,
+    pageNum: number = 1
   ) => {
     doc.setDrawColor(220, 220, 220);
     doc.setLineWidth(0.3);
     doc.line(0, 22, pdfPageWidth, 22);
-    doc.setFont("helvetica", "bold"); doc.setFontSize(14); doc.setTextColor(40, 40, 40);
-    doc.text('Inventory Report', pdfMargin, 12);
+    if (pageNum === 1) {
+      doc.setFont("helvetica", "bold"); doc.setFontSize(14); doc.setTextColor(40, 40, 40);
+      doc.text('Inventory Report', pdfMargin, 12);
+    }
     if (profileData?.logo_url) {
       const imgData = await getImageData(profileData.logo_url);
       if (imgData) {
         const logoSize = 16;
         const logoY = 4;
-        const roundedImg = await getImageWithRoundedCorners(imgData, 64, 0.15);
+        const roundedImg = await getImageWithRoundedCorners(imgData, 128, 0.15);
         const finalImg = roundedImg || imgData;
         try {
           doc.addImage(finalImg, 'PNG', pdfPageWidth - pdfMargin - logoSize, logoY, logoSize, logoSize);
@@ -2419,12 +2422,14 @@ export default function Home() {
       }
     }
     let y = 16;
-    const preparedFor = profileData?.company_name || profileData?.display_name
-      || (currentUser && !currentUser.is_anonymous ? (currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || currentUser.email) : null);
-    if (preparedFor) {
-      doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(100, 100, 100);
-      doc.text(`Prepared for: ${preparedFor}`, pdfMargin, y);
-      y += 4;
+    const companyName = profileData?.company_name?.trim() || null;
+    const displayName = profileData?.display_name?.trim() || null;
+    const userFallback = currentUser && !currentUser.is_anonymous ? (currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || currentUser.email) : null;
+    const nameToShow = companyName || displayName || userFallback;
+    if (nameToShow) {
+      doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(60, 60, 60);
+      doc.text(nameToShow, pdfMargin, y);
+      y += 5;
     }
     doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(120, 120, 120);
     doc.text(`Generated ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`, pdfMargin, y);
@@ -2576,7 +2581,7 @@ export default function Home() {
     const dark = [40, 40, 40];
     let pageNum = 1;
 
-    await drawPDFPageHeader(doc, user, profileForPDF ?? null);
+    await drawPDFPageHeader(doc, user, profileForPDF ?? null, 1);
     let currentY = 28;
 
     if (includeLiveInPDF) {
@@ -2606,7 +2611,7 @@ export default function Home() {
         doc.addPage();
         pageNum += 1;
         currentY = 28;
-        await drawPDFPageHeader(doc, user, profileForPDF ?? null);
+        await drawPDFPageHeader(doc, user, profileForPDF ?? null, pageNum);
       }
 
       const stonesArray = convertStonesToArray(item);
@@ -2736,7 +2741,7 @@ export default function Home() {
           drawPDFPageFooter(doc, iconData, pageNum);
           doc.addPage();
           pageNum += 1;
-          await drawPDFPageHeader(doc, user, profileForPDF ?? null);
+          await drawPDFPageHeader(doc, user, profileForPDF ?? null, pageNum);
           drawNotesY = 28;
         }
         doc.setDrawColor(230, 230, 230);
