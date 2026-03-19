@@ -454,7 +454,7 @@ export default function Home() {
       } catch (_) { /* ignore */ }
     }
 
-    // Fetch prices from API (reads DB, scrapes BullionByPost to seed when needed)
+    // Fetch prices from API (spreadsheet)
     if (fetchInProgressRef.current) return;
     fetchInProgressRef.current = true;
     const myVersion = ++fetchVersionRef.current;
@@ -723,7 +723,7 @@ export default function Home() {
       }
     } catch (_) { /* ignore */ }
 
-    // Fetch prices on every page load/refresh (runs immediately, not blocked by auth)
+    // Fetch prices from spreadsheet on every page load/refresh (runs immediately, not blocked by auth)
     fetchPrices();
 
     let subscription: { unsubscribe: () => void } | null = null;

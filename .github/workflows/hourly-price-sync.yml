@@ -1,4 +1,4 @@
-name: Daily BullionByPost Price Sync
+name: Daily Price Sync
 on:
   schedule:
     - cron: '30 17 * * *' 
@@ -17,11 +17,11 @@ jobs:
 
       - name: Fetch Latest Prices
         run: |
-          # Pings API to trigger BullionByPost scrape and saves to prices.json
-          curl -s "https://jewelry-price-calculator-gamma.vercel.app//api/gold-price" > prices.json
+          # Pings API (fetches from spreadsheet) and saves to prices.json
+          curl -s "https://jewelry-price-calculator-gamma.vercel.app/api/gold-price" > prices.json
 
       - name: Commit and Push Changes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "💎 Daily BullionByPost Market Update (10:30 AM MT)"
+          commit_message: "💎 Daily Market Update (10:30 AM MT)"
           file_pattern: 'prices.json'
