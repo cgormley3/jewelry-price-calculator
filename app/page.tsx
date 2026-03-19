@@ -167,7 +167,8 @@ export default function Home() {
   const [resendingConfirmation, setResendingConfirmation] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [activeTab, setActiveTab] = useState<'calculator' | 'vault' | 'logic' | 'formulas' | 'time'>('calculator');
+  const [activeTab, setActiveTab] = useState<'calculator' | 'vault' | 'compare' | 'logic' | 'formulas' | 'time'>('calculator');
+  const [compareFormulas, setCompareFormulas] = useState<{ a: boolean; b: boolean; customIds: string[] }>({ a: true, b: true, customIds: [] });
 
   // Saved formulas (fetched when logged in)
   const [formulas, setFormulas] = useState<any[]>([]);
@@ -599,6 +600,38 @@ export default function Home() {
     }
     return { wholesale: breakdown.wholesaleA, retail: breakdown.retailA };
   }, []);
+
+  // Get prices for an item across multiple formulas (for Compare tab)
+  const getPricesForFormulas = useCallback((item: any, selected: { a: boolean; b: boolean; customIds: string[] }) => {
+    const stonesArray = convertStonesToArray(item);
+    const breakdown = calculateFullBreakdown(
+      item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0,
+      stonesArray, item.overhead_cost || 0, (item.overhead_type as 'flat' | 'percent') || 'flat',
+      item.multiplier, item.markup_b
+    );
+    const result: Record<string, { wholesale: number; retail: number }> = {};
+    if (selected.a) result['A'] = { wholesale: breakdown.wholesaleA, retail: breakdown.retailA };
+    if (selected.b) result['B'] = { wholesale: breakdown.wholesaleB, retail: breakdown.retailB };
+    for (const id of selected.customIds) {
+      const formula = formulas.find((f: any) => f.id === id);
+      if (formula?.formula_base && formula?.formula_wholesale && formula?.formula_retail) {
+        const ctx = {
+          metalCost: breakdown.metalCost,
+          labor: breakdown.labor,
+          other: breakdown.other,
+          stoneCost: breakdown.stones,
+          stoneRetail: breakdown.stoneRetail,
+          overhead: breakdown.overhead,
+          totalMaterials: breakdown.metalCost + breakdown.other + breakdown.stones,
+        };
+        try {
+          const r = evaluateCustomModel(formula, ctx);
+          result[formula.name] = { wholesale: r.wholesale, retail: r.retail };
+        } catch { /* fallback: skip */ }
+      }
+    }
+    return result;
+  }, [calculateFullBreakdown, formulas]);
 
   // Auto-expand custom formula section when user first loads with saved formulas (so it shows first as default)
   const hasAutoExpandedForFormulasRef = useRef(false);
@@ -3918,6 +3951,12 @@ export default function Home() {
               )}
             </button>
             <button
+              onClick={() => setActiveTab('compare')}
+              className={`flex-shrink-0 py-3 md:py-3 px-3 md:px-4 text-xs md:text-sm font-black uppercase tracking-tighter transition-all rounded-xl md:flex-1 min-w-0 ${activeTab === 'compare' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400 hover:text-stone-600'}`}
+            >
+              Compare
+            </button>
+            <button
               onClick={() => setActiveTab('time')}
               className={`flex-shrink-0 py-3 md:py-3 px-3 md:px-4 text-xs md:text-sm font-black uppercase tracking-tighter transition-all rounded-xl md:flex-1 min-w-0 ${activeTab === 'time' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400 hover:text-stone-600'}`}
             >
@@ -5205,6 +5244,102 @@ export default function Home() {
                     </div>
                   );
                 })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* COMPARE PANEL */}
+          <div className={`bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm flex flex-col flex-1 min-h-0 min-h-[50vh] lg:min-h-0 lg:max-h-[calc(100vh-5rem)] overflow-hidden ${activeTab !== 'compare' ? 'hidden' : ''}`}>
+            <div className="p-6 border-b border-stone-100 bg-white space-y-4 rounded-t-[2.5rem] shrink-0">
+              <h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Compare Prices</h2>
+              <p className="text-[10px] text-stone-500">Compare vault item prices across different formulas. Uses same filters as Vault — <button type="button" onClick={() => setActiveTab('vault')} className="text-[#A5BEAC] font-bold hover:underline">switch to Vault</button> to adjust.</p>
+              <div className="flex flex-wrap gap-2 items-center">
+                <span className="text-[9px] font-bold text-stone-400 uppercase">Formulas:</span>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" checked={compareFormulas.a} onChange={e => setCompareFormulas(p => ({ ...p, a: e.target.checked }))} className="rounded border-stone-300" />
+                  <span className="text-xs font-bold">Formula A</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" checked={compareFormulas.b} onChange={e => setCompareFormulas(p => ({ ...p, b: e.target.checked }))} className="rounded border-stone-300" />
+                  <span className="text-xs font-bold">Formula B</span>
+                </label>
+                {formulas.map((f: any) => (
+                  <label key={f.id} className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={compareFormulas.customIds.includes(f.id)}
+                      onChange={e => {
+                        if (e.target.checked) setCompareFormulas(p => ({ ...p, customIds: [...p.customIds, f.id] }));
+                        else setCompareFormulas(p => ({ ...p, customIds: p.customIds.filter(id => id !== f.id) }));
+                      }}
+                      className="rounded border-stone-300"
+                    />
+                    <span className="text-xs font-bold truncate max-w-[120px]" title={f.name}>{f.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="flex-1 overflow-x-auto overflow-y-auto p-6">
+              {filteredInventory.length === 0 ? (
+                <div className="text-center py-12 text-stone-500 text-sm">
+                  Add items to your vault to compare prices. Use the Vault tab to add items.
+                </div>
+              ) : !compareFormulas.a && !compareFormulas.b && compareFormulas.customIds.length === 0 ? (
+                <div className="text-center py-12 text-stone-500 text-sm">
+                  Select at least one formula to compare.
+                </div>
+              ) : (
+                <div className="min-w-max">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b-2 border-stone-200">
+                        <th className="py-2 pr-4 text-[10px] font-black uppercase text-stone-500 sticky left-0 bg-white z-10">Item</th>
+                        <th className="py-2 px-3 text-[10px] font-black uppercase text-stone-500 whitespace-nowrap">Saved</th>
+                        {compareFormulas.a && <th className="py-2 px-3 text-[10px] font-black uppercase text-stone-500 whitespace-nowrap">Formula A</th>}
+                        {compareFormulas.b && <th className="py-2 px-3 text-[10px] font-black uppercase text-stone-500 whitespace-nowrap">Formula B</th>}
+                        {compareFormulas.customIds.map(id => {
+                          const f = formulas.find((x: any) => x.id === id);
+                          return f ? <th key={f.id} className="py-2 px-3 text-[10px] font-black uppercase text-stone-500 whitespace-nowrap truncate max-w-[100px]" title={f.name}>{f.name}</th> : null;
+                        })}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredInventory.map((item: any) => {
+                        const pricesByFormula = getPricesForFormulas(item, compareFormulas);
+                        const itemStrategy = item.strategy === 'custom' && item.custom_formula?.formula_name ? item.custom_formula.formula_name : item.strategy;
+                        return (
+                          <tr key={item.id} className="border-b border-stone-100 hover:bg-stone-50/50">
+                            <td className="py-2 pr-4 text-xs font-bold text-slate-800 sticky left-0 bg-white z-10">{item.name || 'Untitled'}</td>
+                            <td className="py-2 px-3 text-[11px] text-stone-600 whitespace-nowrap">
+                              ${roundForDisplay(Number(item.wholesale)).toFixed(2)} / ${roundForDisplay(Number(item.retail)).toFixed(2)}
+                            </td>
+                            {compareFormulas.a && (
+                              <td className={`py-2 px-3 text-[11px] whitespace-nowrap ${itemStrategy === 'A' ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
+                                ${roundForDisplay(pricesByFormula['A']?.wholesale ?? 0).toFixed(2)} / ${roundForDisplay(pricesByFormula['A']?.retail ?? 0).toFixed(2)}
+                              </td>
+                            )}
+                            {compareFormulas.b && (
+                              <td className={`py-2 px-3 text-[11px] whitespace-nowrap ${itemStrategy === 'B' ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
+                                ${roundForDisplay(pricesByFormula['B']?.wholesale ?? 0).toFixed(2)} / ${roundForDisplay(pricesByFormula['B']?.retail ?? 0).toFixed(2)}
+                              </td>
+                            )}
+                            {compareFormulas.customIds.map(id => {
+                              const f = formulas.find((x: any) => x.id === id);
+                              if (!f) return null;
+                              const p = pricesByFormula[f.name];
+                              const isCurrent = itemStrategy === f.name;
+                              return (
+                                <td key={f.id} className={`py-2 px-3 text-[11px] whitespace-nowrap ${isCurrent ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
+                                  ${roundForDisplay(p?.wholesale ?? 0).toFixed(2)} / ${roundForDisplay(p?.retail ?? 0).toFixed(2)}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </div>
