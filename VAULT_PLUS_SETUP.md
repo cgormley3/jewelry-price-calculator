@@ -48,6 +48,24 @@ STRIPE_WEBHOOK_SECRET=whsec_xxxxx
 STRIPE_VAULT_PLUS_PRICE_ID=price_xxxxx
 ```
 
+### Payment Link (optional, recommended for promo codes)
+
+If you use a **Stripe Payment Link** instead of embedded Checkout from the API:
+
+1. Add your link URL (same in `.env.local` and Vercel):
+
+   ```
+   NEXT_PUBLIC_STRIPE_VAULT_PLUS_PAYMENT_LINK=https://buy.stripe.com/xxxxx
+   ```
+
+2. When this variable is set, **Get Vault+** sends users to that link and appends:
+   - `client_reference_id` = Supabase user id (required so the webhook can attach the subscription to the right user)
+   - `prefilled_email` = signed-in user’s email when available
+
+3. In the Payment Link settings, set the **after-payment redirect** to your site, e.g. `https://yourdomain.com?vaultplus=1` (matches the old checkout success URL).
+
+4. Keep **`STRIPE_VAULT_PLUS_PRICE_ID`** only if you still need `/api/stripe/create-checkout` (e.g. local dev without the payment link env). If `NEXT_PUBLIC_STRIPE_VAULT_PLUS_PAYMENT_LINK` is unset, the app falls back to API checkout.
+
 ## 5. Set Up the Stripe Webhook
 
 ### For local development

@@ -40,6 +40,8 @@ export async function POST(request: Request) {
       const session = event.data.object as Stripe.Checkout.Session;
       const userId = (session.metadata?.supabase_user_id || session.client_reference_id) as string;
       const subId = session.subscription as string;
+      const c = session.customer;
+      const stripeCustomerId = typeof c === 'string' ? c : c && typeof c === 'object' && 'id' in c ? String((c as { id: string }).id) : null;
       if (!userId || !subId) {
         console.warn('checkout.session.completed missing userId or subscriptionId');
         return NextResponse.json({ received: true });
@@ -49,16 +51,18 @@ export async function POST(request: Request) {
       const sub = await stripe.subscriptions.retrieve(subId);
       const periodEnd = new Date(((sub as any).current_period_end || 0) * 1000).toISOString();
 
-      await supabase.from('subscriptions').upsert(
-        {
-          user_id: userId,
-          stripe_subscription_id: subId,
-          status: 'active',
-          current_period_end: periodEnd,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'user_id' }
-      );
+      const row: Record<string, unknown> = {
+        user_id: userId,
+        stripe_subscription_id: subId,
+        status: 'active',
+        current_period_end: periodEnd,
+        updated_at: new Date().toISOString(),
+      };
+      if (stripeCustomerId) {
+        row.stripe_customer_id = stripeCustomerId;
+      }
+
+      await supabase.from('subscriptions').upsert(row, { onConflict: 'user_id' });
     } else if (event.type === 'customer.subscription.updated' || event.type === 'customer.subscription.deleted') {
       const sub = event.data.object as any;
       const { data: row } = await supabase.from('subscriptions').select('user_id').eq('stripe_subscription_id', sub.id).single();

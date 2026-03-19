@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -179,6 +179,8 @@ export default function Home() {
   const [showPassword, setShowPassword] = useState(false);
   const [activeTab, setActiveTab] = useState<'calculator' | 'vault' | 'compare' | 'logic' | 'formulas' | 'time'>('calculator');
   const [compareFormulas, setCompareFormulas] = useState<{ a: boolean; b: boolean; customIds: string[] }>({ a: true, b: true, customIds: [] });
+  const [compareSpotEnabled, setCompareSpotEnabled] = useState(false);
+  const [compareCustomSpots, setCompareCustomSpots] = useState({ gold: 0, silver: 0, platinum: 0, palladium: 0 });
 
   // Saved formulas (fetched when logged in)
   const [formulas, setFormulas] = useState<any[]>([]);
@@ -636,12 +638,12 @@ export default function Home() {
   }, []);
 
   // Get prices for an item across multiple formulas (for Compare tab)
-  const getPricesForFormulas = useCallback((item: any, selected: { a: boolean; b: boolean; customIds: string[] }) => {
+  const getPricesForFormulas = useCallback((item: any, selected: { a: boolean; b: boolean; customIds: string[] }, priceOverride?: { gold: number; silver: number; platinum: number; palladium: number }) => {
     const stonesArray = convertStonesToArray(item);
     const breakdown = calculateFullBreakdown(
       item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0,
       stonesArray, item.overhead_cost || 0, (item.overhead_type as 'flat' | 'percent') || 'flat',
-      item.multiplier, item.markup_b
+      item.multiplier, item.markup_b, priceOverride
     );
     const result: Record<string, { wholesale: number; retail: number }> = {};
     if (selected.a) result['A'] = { wholesale: breakdown.wholesaleA, retail: breakdown.retailA };
@@ -2285,6 +2287,15 @@ export default function Home() {
     }
     try {
       const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+      const paymentLink = (process.env.NEXT_PUBLIC_STRIPE_VAULT_PLUS_PAYMENT_LINK || '').trim();
+      if (paymentLink) {
+        const url = new URL(paymentLink);
+        url.searchParams.set('client_reference_id', user.id);
+        const email = (user as { email?: string })?.email;
+        if (email) url.searchParams.set('prefilled_email', email);
+        window.location.href = url.toString();
+        return;
+      }
       const res = await fetch('/api/stripe/create-checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -5351,14 +5362,16 @@ export default function Home() {
           <div className={`bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm flex flex-col flex-1 min-h-0 min-h-[50vh] lg:min-h-0 lg:max-h-[calc(100vh-5rem)] overflow-hidden ${activeTab !== 'compare' ? 'hidden' : ''}`}>
             <div className="p-6 border-b border-stone-100 bg-white space-y-4 rounded-t-[2.5rem] shrink-0">
               <h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Compare Prices</h2>
-              <p className="text-[10px] text-stone-500">Compare vault item prices across different formulas.</p>
+              <p className="text-[10px] text-stone-500">
+                Compare vault item prices across different formulas. Use {'"'}What-if spot prices{'"'} to recalculate columns at custom or loaded live metal spots.
+              </p>
               {(!user || (subscriptionStatus && !subscriptionStatus.subscribed)) ? (
                 <div className="py-8 px-4 rounded-xl bg-stone-50 border border-stone-200 text-center space-y-4">
-                  <p className="text-stone-600 font-bold uppercase text-xs tracking-wider">
-                    {!user
-                      ? 'Sign in to compare prices. With a vault and Vault+, you can compare item prices across different formulas.'
-                      : 'Compare prices is a Vault+ feature. Save items to your vault and upgrade to compare prices across formulas.'}
-                  </p>
+                  {!user && (
+                    <p className="text-stone-600 font-bold uppercase text-xs tracking-wider">
+                      Sign in to compare prices. With a vault and Vault+, you can compare item prices across different formulas.
+                    </p>
+                  )}
                   <div className="flex flex-col sm:flex-row gap-2 items-center justify-center">
                     {!user ? (
                       <button onClick={() => setShowAuth(true)} className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-[#A5BEAC] text-white hover:bg-slate-900 transition shadow-sm">
@@ -5453,6 +5466,60 @@ export default function Home() {
                   </div>
                 </div>
               </div>
+              <div className="rounded-xl border-2 border-dashed border-amber-200/90 bg-amber-50/40 p-3 space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[9px] font-black uppercase text-amber-900 tracking-wide">What-if spot prices</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !compareSpotEnabled;
+                      setCompareSpotEnabled(next);
+                      if (next && compareCustomSpots.gold === 0 && compareCustomSpots.silver === 0) {
+                        setCompareCustomSpots({ gold: prices.gold || 0, silver: prices.silver || 0, platinum: prices.platinum || 0, palladium: prices.palladium || 0 });
+                      }
+                    }}
+                    className={`py-2 px-3 rounded-lg text-[10px] font-black uppercase border-2 transition-all ${compareSpotEnabled ? 'bg-slate-900 text-white border-slate-900' : 'bg-white border-amber-300 text-amber-900 hover:bg-amber-100'}`}
+                  >
+                    {compareSpotEnabled ? 'Scenario on — extra columns' : 'Enable scenario columns'}
+                  </button>
+                  <span className="text-[9px] text-stone-500 max-w-[220px] leading-tight">
+                    Adds amber columns next to each formula vs. live spot pricing.
+                  </span>
+                </div>
+                {compareSpotEnabled && (
+                  <div className="flex flex-wrap items-end gap-3 pt-1 border-t border-amber-200/80">
+                    {(['gold', 'silver', 'platinum', 'palladium'] as const).map(metal => (
+                      <div key={metal} className="flex flex-col gap-0.5">
+                        <label className="text-[8px] font-black uppercase text-stone-500">{metal}</label>
+                        <div className="relative">
+                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-stone-400">$</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={compareCustomSpots[metal] === 0 ? '' : compareCustomSpots[metal]}
+                            onChange={e => setCompareCustomSpots(p => ({ ...p, [metal]: Number(e.target.value) || 0 }))}
+                            className="w-[100px] pl-5 pr-2 py-1.5 bg-white border border-stone-200 rounded-lg text-xs font-bold outline-none focus:border-[#A5BEAC] transition-all"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setCompareCustomSpots({ gold: prices.gold || 0, silver: prices.silver || 0, platinum: prices.platinum || 0, palladium: prices.palladium || 0 })}
+                      className="py-1.5 px-3 rounded-lg text-[9px] font-black uppercase text-[#A5BEAC] border border-[#A5BEAC]/40 hover:bg-[#A5BEAC]/10 transition-all"
+                    >
+                      Load live spots
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setCompareSpotEnabled(false); setCompareCustomSpots({ gold: 0, silver: 0, platinum: 0, palladium: 0 }); }}
+                      className="py-1.5 px-3 rounded-lg text-[9px] font-black uppercase text-stone-500 border border-stone-200 hover:bg-stone-100 transition-all"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                )}
+              </div>
               <div className="flex flex-wrap gap-2 items-center">
                 <span className="text-[9px] font-bold text-stone-400 uppercase">Formulas:</span>
                 <button
@@ -5508,17 +5575,31 @@ export default function Home() {
                         <th className="py-2 pr-4 text-[10px] font-black uppercase text-stone-500 sticky left-0 bg-white z-10">Item</th>
                         <th className="py-2 px-3 text-[10px] font-black uppercase text-stone-500 whitespace-nowrap bg-stone-100">Saved</th>
                         {compareFormulas.a && <th className="py-2 px-3 text-[10px] font-black uppercase text-stone-500 whitespace-nowrap bg-white">Formula A</th>}
+                        {compareSpotEnabled && compareFormulas.a && <th className="py-2 px-3 text-[10px] font-black uppercase text-amber-600 whitespace-nowrap bg-amber-50">A @ Scenario</th>}
                         {compareFormulas.b && <th className="py-2 px-3 text-[10px] font-black uppercase text-stone-500 whitespace-nowrap bg-white">Formula B</th>}
+                        {compareSpotEnabled && compareFormulas.b && <th className="py-2 px-3 text-[10px] font-black uppercase text-amber-600 whitespace-nowrap bg-amber-50">B @ Scenario</th>}
                         {compareFormulas.customIds.map(id => {
                           const f = formulas.find((x: any) => x.id === id);
-                          return f ? <th key={f.id} className="py-2 px-3 text-[10px] font-black uppercase text-stone-500 whitespace-nowrap truncate max-w-[100px] bg-white" title={f.name}>{f.name}</th> : null;
+                          if (!f) return null;
+                          return (<React.Fragment key={f.id}>
+                            <th className="py-2 px-3 text-[10px] font-black uppercase text-stone-500 whitespace-nowrap truncate max-w-[100px] bg-white" title={f.name}>{f.name}</th>
+                            {compareSpotEnabled && <th className="py-2 px-3 text-[10px] font-black uppercase text-amber-600 whitespace-nowrap bg-amber-50 truncate max-w-[100px]" title={`${f.name} @ Scenario`}>{f.name} @ Scn</th>}
+                          </React.Fragment>);
                         })}
                       </tr>
                     </thead>
                     <tbody>
                       {compareFilteredInventory.map((item: any) => {
                         const pricesByFormula = getPricesForFormulas(item, compareFormulas);
+                        const scenarioPrices = compareSpotEnabled ? getPricesForFormulas(item, compareFormulas, compareCustomSpots) : null;
                         const itemStrategy = item.strategy === 'custom' && item.custom_formula?.formula_name ? item.custom_formula.formula_name : item.strategy;
+                        const renderDelta = (live: number, scenario: number) => {
+                          if (!live || !scenario) return null;
+                          const diff = scenario - live;
+                          const pct = live !== 0 ? (diff / live) * 100 : 0;
+                          if (Math.abs(pct) < 0.01) return null;
+                          return <span className={`block text-[9px] font-bold ${diff > 0 ? 'text-emerald-600' : 'text-red-500'}`}>{diff > 0 ? '+' : ''}{pct.toFixed(1)}%</span>;
+                        };
                         return (
                           <tr key={item.id} className="border-b border-stone-100 hover:bg-stone-50/50">
                             <td className="py-2 pr-4 text-xs font-bold text-slate-800 sticky left-0 bg-white z-10">{(item.name || 'Untitled').toUpperCase()}</td>
@@ -5530,21 +5611,40 @@ export default function Home() {
                                 ${roundForDisplay(pricesByFormula['A']?.wholesale ?? 0).toFixed(2)} / ${roundForDisplay(pricesByFormula['A']?.retail ?? 0).toFixed(2)}
                               </td>
                             )}
+                            {compareSpotEnabled && compareFormulas.a && scenarioPrices && (
+                              <td className="py-2 px-3 text-[11px] whitespace-nowrap bg-amber-50">
+                                <span>${roundForDisplay(scenarioPrices['A']?.wholesale ?? 0).toFixed(2)} / ${roundForDisplay(scenarioPrices['A']?.retail ?? 0).toFixed(2)}</span>
+                                {renderDelta(pricesByFormula['A']?.wholesale ?? 0, scenarioPrices['A']?.wholesale ?? 0)}
+                              </td>
+                            )}
                             {compareFormulas.b && (
                               <td className={`py-2 px-3 text-[11px] whitespace-nowrap bg-white ${itemStrategy === 'B' ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
                                 ${roundForDisplay(pricesByFormula['B']?.wholesale ?? 0).toFixed(2)} / ${roundForDisplay(pricesByFormula['B']?.retail ?? 0).toFixed(2)}
+                              </td>
+                            )}
+                            {compareSpotEnabled && compareFormulas.b && scenarioPrices && (
+                              <td className="py-2 px-3 text-[11px] whitespace-nowrap bg-amber-50">
+                                <span>${roundForDisplay(scenarioPrices['B']?.wholesale ?? 0).toFixed(2)} / ${roundForDisplay(scenarioPrices['B']?.retail ?? 0).toFixed(2)}</span>
+                                {renderDelta(pricesByFormula['B']?.wholesale ?? 0, scenarioPrices['B']?.wholesale ?? 0)}
                               </td>
                             )}
                             {compareFormulas.customIds.map(id => {
                               const f = formulas.find((x: any) => x.id === id);
                               if (!f) return null;
                               const p = pricesByFormula[f.name];
+                              const sp = scenarioPrices?.[f.name];
                               const isCurrent = itemStrategy === f.name;
-                              return (
-                                <td key={f.id} className={`py-2 px-3 text-[11px] whitespace-nowrap bg-white ${isCurrent ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
+                              return (<React.Fragment key={f.id}>
+                                <td className={`py-2 px-3 text-[11px] whitespace-nowrap bg-white ${isCurrent ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
                                   ${roundForDisplay(p?.wholesale ?? 0).toFixed(2)} / ${roundForDisplay(p?.retail ?? 0).toFixed(2)}
                                 </td>
-                              );
+                                {compareSpotEnabled && sp && (
+                                  <td className="py-2 px-3 text-[11px] whitespace-nowrap bg-amber-50">
+                                    <span>${roundForDisplay(sp.wholesale ?? 0).toFixed(2)} / ${roundForDisplay(sp.retail ?? 0).toFixed(2)}</span>
+                                    {renderDelta(p?.wholesale ?? 0, sp.wholesale ?? 0)}
+                                  </td>
+                                )}
+                              </React.Fragment>);
                             })}
                           </tr>
                         );
