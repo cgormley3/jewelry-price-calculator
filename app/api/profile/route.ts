@@ -85,8 +85,8 @@ export async function POST(request: Request) {
         .single();
 
       if (error) {
-        console.error('Profile update error:', error);
-        return NextResponse.json({ error: error.message }, { status: 400 });
+        console.error('Profile update error:', error.code, error.message, error.details);
+        return NextResponse.json({ error: error.message, code: error.code }, { status: 400 });
       }
       return NextResponse.json(data);
     }

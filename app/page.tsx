@@ -67,6 +67,7 @@ export default function Home() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileLogoUploading, setProfileLogoUploading] = useState(false);
   const [profileDraft, setProfileDraft] = useState<{ display_name: string; company_name: string; logo_url: string | null }>({ display_name: '', company_name: '', logo_url: null });
+  const [profileLogoPreviewUrl, setProfileLogoPreviewUrl] = useState<string | null>(null);
   const profileLogoInputRef = useRef<HTMLInputElement>(null);
 
   // Vault+ subscription
@@ -239,15 +240,31 @@ export default function Home() {
   type PriceRoundingOption = 'none' | 1 | 5 | 10 | 25;
   const [priceRounding, setPriceRounding] = useState<PriceRoundingOption>(1);
 
+  const prevShowProfileModalRef = useRef(false);
   useEffect(() => {
-    if (showProfileModal) {
+    const justOpened = showProfileModal && !prevShowProfileModalRef.current;
+    prevShowProfileModalRef.current = showProfileModal;
+    if (justOpened) {
       setProfileDraft({
         display_name: profile?.display_name ?? '',
         company_name: profile?.company_name ?? '',
         logo_url: profile?.logo_url ?? null,
       });
+      setProfileLogoPreviewUrl(prev => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
     }
   }, [showProfileModal, profile?.display_name, profile?.company_name, profile?.logo_url]);
+
+  useEffect(() => {
+    if (!showProfileModal) {
+      setProfileLogoPreviewUrl(prev => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+    }
+  }, [showProfileModal]);
 
   useEffect(() => {
     const stored = localStorage.getItem('price_rounding');
@@ -2997,8 +3014,8 @@ export default function Home() {
               <div>
                 <label className="block text-[10px] font-black uppercase text-stone-500 mb-1">Logo</label>
                 <div className="flex items-center gap-4">
-                  {profileDraft.logo_url && (
-                    <img src={profileDraft.logo_url} alt="" className="w-12 h-12 rounded-full object-cover border-2 border-stone-200" />
+                  {(profileLogoPreviewUrl || profileDraft.logo_url) && (
+                    <img src={profileLogoPreviewUrl || profileDraft.logo_url!} alt="" className="w-12 h-12 rounded-full object-cover border-2 border-stone-200" />
                   )}
                   <div className="flex flex-col gap-1">
                     <input
@@ -3009,6 +3026,10 @@ export default function Home() {
                       onChange={async e => {
                         const file = e.target?.files?.[0];
                         if (!file || !user?.id) return;
+                        setProfileLogoPreviewUrl(prev => {
+                          if (prev) URL.revokeObjectURL(prev);
+                          return URL.createObjectURL(file);
+                        });
                         setProfileLogoUploading(true);
                         try {
                           const img = new Image();
@@ -3039,6 +3060,10 @@ export default function Home() {
                               }
                               const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(fileName);
                               setProfileDraft(p => ({ ...p, logo_url: publicUrl }));
+                              setProfileLogoPreviewUrl(prev => {
+                                if (prev) URL.revokeObjectURL(prev);
+                                return null;
+                              });
                             } finally {
                               setProfileLogoUploading(false);
                             }
@@ -3047,6 +3072,10 @@ export default function Home() {
                         } catch (err: any) {
                           setNotification({ title: 'Upload Failed', message: err?.message || 'Could not process image.', type: 'error' });
                           setProfileLogoUploading(false);
+                          setProfileLogoPreviewUrl(prev => {
+                            if (prev) URL.revokeObjectURL(prev);
+                            return null;
+                          });
                           e.target.value = '';
                         }
                       }}
@@ -3059,10 +3088,16 @@ export default function Home() {
                     >
                       {profileLogoUploading ? 'Uploading…' : profileDraft.logo_url ? 'Change logo' : 'Upload logo'}
                     </button>
-                    {profileDraft.logo_url && (
+                    {(profileLogoPreviewUrl || profileDraft.logo_url) && (
                       <button
                         type="button"
-                        onClick={() => setProfileDraft(p => ({ ...p, logo_url: null }))}
+                        onClick={() => {
+                          setProfileLogoPreviewUrl(prev => {
+                            if (prev) URL.revokeObjectURL(prev);
+                            return null;
+                          });
+                          setProfileDraft(p => ({ ...p, logo_url: null }));
+                        }}
                         className="text-[10px] font-black uppercase text-stone-400 hover:text-red-600 transition"
                       >
                         Remove logo
@@ -3094,7 +3129,8 @@ export default function Home() {
                   });
                   if (!res.ok) {
                     const err = await res.json().catch(() => ({}));
-                    setNotification({ title: 'Save Failed', message: err?.error || 'Could not save profile.', type: 'error' });
+                    const msg = err?.error || 'Could not save profile.';
+                    setNotification({ title: 'Save Failed', message: msg + (err?.code ? ` (${err.code})` : ''), type: 'error' });
                     return;
                   }
                   setProfile({
