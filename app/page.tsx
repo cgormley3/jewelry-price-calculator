@@ -792,7 +792,7 @@ export default function Home() {
         return;
       }
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 12000);
+      const timeoutId = setTimeout(() => controller.abort(), 25000);
       let res = await fetch('/api/fetch-inventory', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -903,7 +903,7 @@ export default function Home() {
       console.warn('Error fetching inventory:', error);
       const retry = () => { setLoading(true); fetchInventory(); };
       if (error?.name === 'AbortError') {
-        setNotification({ title: 'Vault Load Timeout', message: 'Connection is slow.', type: 'info', onConfirm: retry });
+        setNotification({ title: 'Vault Load Timeout', message: 'Connection is slow. Tap Retry to try again.', type: 'info', onConfirm: retry });
       } else {
         setNotification({ title: 'Vault Load Failed', message: error?.message || 'Could not load vault.', type: 'info', onConfirm: retry });
       }
@@ -1233,7 +1233,7 @@ export default function Home() {
   const syncToMarket = async (item: any) => {
     setNotification({
       title: "Sync Prices",
-      message: `Update "${item.name}" to reflect current market spot prices?`,
+      message: `Update "${(item.name || '').toUpperCase()}" to reflect current market spot prices?`,
       type: 'confirm',
       onConfirm: async () => {
         const stonesArray = convertStonesToArray(item);
@@ -1273,7 +1273,7 @@ export default function Home() {
         if (!error) {
           fetchInventory();
           setOpenMenuId(null);
-          setNotification({ title: "Vault Updated", message: `"${item.name}" has been synced to live market prices.`, type: 'success' });
+          setNotification({ title: "Vault Updated", message: `"${(item.name || '').toUpperCase()}" has been synced to live market prices.`, type: 'success' });
         }
       }
     });
@@ -1468,7 +1468,7 @@ export default function Home() {
 
     setNotification({
       title: "Confirm Update",
-      message: `Overwrite "${recalcItem.name}" with these new prices and costs? This cannot be undone.`,
+      message: `Overwrite "${(recalcItem.name || '').toUpperCase()}" with these new prices and costs? This cannot be undone.`,
       type: 'confirm',
       onConfirm: async () => {
         const laborHours = recalcItem.hours || 1;
@@ -1687,10 +1687,10 @@ export default function Home() {
       } else if (res.ok && data) {
         if (editingItemId) {
           setInventory(prev => prev.map(i => i.id === editingItemId ? { ...i, ...data } : i));
-          setNotification({ title: "Item Updated", message: `"${newItem.name}" now has metals and pricing.`, type: 'success' });
+          setNotification({ title: "Item Updated", message: `"${(newItem.name || '').toUpperCase()}" now has metals and pricing.`, type: 'success' });
         } else {
           setInventory(prev => [data, ...prev]);
-          setNotification({ title: "Item Saved", message: `"${newItem.name}" is now stored in your Vault.`, type: 'success' });
+          setNotification({ title: "Item Saved", message: `"${(newItem.name || '').toUpperCase()}" is now stored in your Vault.`, type: 'success' });
         }
         setEditingItemId(null);
         // Reset calculator to original state
@@ -2117,7 +2117,7 @@ export default function Home() {
       const stoneMarkup = stoneCost > 0 ? stoneRetail / stoneCost : 1.5;
 
       return [
-        `"${item.name}"`,
+        `"${(item.name || '').toUpperCase()}"`,
         `"${item.status || 'active'}"`,
         `"${item.tag || ''}"`,
         `"${item.location || 'Main Vault'}"`,
@@ -3568,7 +3568,7 @@ export default function Home() {
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-5">
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">{editingTimeEntryId ? 'Edit Time Entry' : 'Log Time'}</h3>
             <p className="text-[10px] text-stone-400 font-bold uppercase">
-              {editingTimeEntryId ? (logTimeItemId ? `Assigned to: ${inventory.find(i => i.id === logTimeItemId)?.name || 'Piece'}` : 'General / unassigned') : (logTimeItemId ? `Add time to: ${inventory.find(i => i.id === logTimeItemId)?.name || 'Piece'}` : 'Log general shop time (unassigned)')}
+              {editingTimeEntryId ? (logTimeItemId ? `Assigned to: ${(inventory.find(i => i.id === logTimeItemId)?.name || 'Piece').toUpperCase()}` : 'General / unassigned') : (logTimeItemId ? `Add time to: ${(inventory.find(i => i.id === logTimeItemId)?.name || 'Piece').toUpperCase()}` : 'Log general shop time (unassigned)')}
             </p>
             {logTimeAllowItemSelect && (
               <div>
@@ -3580,7 +3580,7 @@ export default function Home() {
                 >
                   <option value="">General / unassigned</option>
                   {inventory.map((i: any) => (
-                    <option key={i.id} value={i.id}>{i.name}</option>
+                    <option key={i.id} value={i.id}>{(i.name || '').toUpperCase()}</option>
                   ))}
                 </select>
               </div>
@@ -3939,6 +3939,12 @@ export default function Home() {
               Calculator
             </button>
             <button
+              onClick={() => setActiveTab('time')}
+              className={`flex-shrink-0 py-3 md:py-3 px-3 md:px-4 text-xs md:text-sm font-black uppercase tracking-tighter transition-all rounded-xl md:flex-1 min-w-0 ${activeTab === 'time' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400 hover:text-stone-600'}`}
+            >
+              Timer
+            </button>
+            <button
               onClick={() => setActiveTab('vault')}
               className={`flex-shrink-0 py-3 md:py-3 px-3 md:px-4 text-xs md:text-sm font-black uppercase tracking-tighter transition-all rounded-xl md:flex-1 min-w-0 flex items-center justify-center gap-1.5 ${activeTab === 'vault' ? 'bg-[#A5BEAC] text-white shadow-inner' : inventory.length > 0 ? 'text-stone-500 relative' : 'text-stone-400 hover:text-stone-600'}`}
             >
@@ -3955,12 +3961,6 @@ export default function Home() {
               className={`flex-shrink-0 py-3 md:py-3 px-3 md:px-4 text-xs md:text-sm font-black uppercase tracking-tighter transition-all rounded-xl md:flex-1 min-w-0 ${activeTab === 'compare' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400 hover:text-stone-600'}`}
             >
               Compare
-            </button>
-            <button
-              onClick={() => setActiveTab('time')}
-              className={`flex-shrink-0 py-3 md:py-3 px-3 md:px-4 text-xs md:text-sm font-black uppercase tracking-tighter transition-all rounded-xl md:flex-1 min-w-0 ${activeTab === 'time' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400 hover:text-stone-600'}`}
-            >
-              Timer
             </button>
             <button
               onClick={() => setActiveTab('formulas')}
@@ -4844,7 +4844,7 @@ export default function Home() {
                             {/* Circular 64x64 thumbnail - square crop stored for Shopify export */}
                             {item.image_url && (
                               <div className="shrink-0 w-16 h-16 rounded-full overflow-hidden border border-stone-200 shadow-sm">
-                                <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
+                                <img src={item.image_url} alt={(item.name || '').toUpperCase()} className="w-full h-full object-cover" />
                               </div>
                             )}
 
@@ -4868,7 +4868,7 @@ export default function Home() {
                               ) : (
                                 <div className="flex items-start flex-nowrap gap-2 w-full">
                                   <h3 className={`text-lg font-black leading-tight uppercase tracking-tight break-words flex-1 ${isSold ? 'line-through text-stone-400' : 'text-slate-900'}`}>
-                                    {item.name}
+                                    {(item.name || '').toUpperCase()}
                                   </h3>
                                   <div className="relative shrink-0 pt-0.5 item-menu-container">
                                     <button
@@ -4959,7 +4959,7 @@ export default function Home() {
                                         <div className="border-t border-stone-100 py-0.5">
                                           <button
                                             onClick={() => {
-                                              deleteInventoryItem(item.id, item.name);
+                                              deleteInventoryItem(item.id, (item.name || 'Untitled').toUpperCase());
                                               setOpenMenuId(null);
                                             }}
                                             className="w-full px-4 py-2 text-left text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors flex items-center gap-3"
@@ -5256,28 +5256,37 @@ export default function Home() {
               <p className="text-[10px] text-stone-500">Compare vault item prices across different formulas. Uses same filters as Vault — <button type="button" onClick={() => setActiveTab('vault')} className="text-[#A5BEAC] font-bold hover:underline">switch to Vault</button> to adjust.</p>
               <div className="flex flex-wrap gap-2 items-center">
                 <span className="text-[9px] font-bold text-stone-400 uppercase">Formulas:</span>
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input type="checkbox" checked={compareFormulas.a} onChange={e => setCompareFormulas(p => ({ ...p, a: e.target.checked }))} className="rounded border-stone-300" />
-                  <span className="text-xs font-bold">Formula A</span>
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input type="checkbox" checked={compareFormulas.b} onChange={e => setCompareFormulas(p => ({ ...p, b: e.target.checked }))} className="rounded border-stone-300" />
-                  <span className="text-xs font-bold">Formula B</span>
-                </label>
-                {formulas.map((f: any) => (
-                  <label key={f.id} className="flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={compareFormulas.customIds.includes(f.id)}
-                      onChange={e => {
-                        if (e.target.checked) setCompareFormulas(p => ({ ...p, customIds: [...p.customIds, f.id] }));
-                        else setCompareFormulas(p => ({ ...p, customIds: p.customIds.filter(id => id !== f.id) }));
+                <button
+                  type="button"
+                  onClick={() => setCompareFormulas(p => ({ ...p, a: !p.a }))}
+                  className={`py-2 px-3 rounded-xl text-[10px] font-black uppercase border transition-all ${compareFormulas.a ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-500 hover:border-stone-300'}`}
+                >
+                  Formula A
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCompareFormulas(p => ({ ...p, b: !p.b }))}
+                  className={`py-2 px-3 rounded-xl text-[10px] font-black uppercase border transition-all ${compareFormulas.b ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-500 hover:border-stone-300'}`}
+                >
+                  Formula B
+                </button>
+                {formulas.map((f: any) => {
+                  const isSelected = compareFormulas.customIds.includes(f.id);
+                  return (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => {
+                        if (isSelected) setCompareFormulas(p => ({ ...p, customIds: p.customIds.filter(id => id !== f.id) }));
+                        else setCompareFormulas(p => ({ ...p, customIds: [...p.customIds, f.id] }));
                       }}
-                      className="rounded border-stone-300"
-                    />
-                    <span className="text-xs font-bold truncate max-w-[120px]" title={f.name}>{f.name}</span>
-                  </label>
-                ))}
+                      title={f.name}
+                      className={`py-2 px-3 rounded-xl text-[10px] font-black uppercase border transition-all truncate max-w-[140px] ${isSelected ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-500 hover:border-stone-300'}`}
+                    >
+                      {f.name}
+                    </button>
+                  );
+                })}
               </div>
             </div>
             <div className="flex-1 overflow-x-auto overflow-y-auto p-6">
@@ -5295,12 +5304,12 @@ export default function Home() {
                     <thead>
                       <tr className="border-b-2 border-stone-200">
                         <th className="py-2 pr-4 text-[10px] font-black uppercase text-stone-500 sticky left-0 bg-white z-10">Item</th>
-                        <th className="py-2 px-3 text-[10px] font-black uppercase text-stone-500 whitespace-nowrap">Saved</th>
-                        {compareFormulas.a && <th className="py-2 px-3 text-[10px] font-black uppercase text-stone-500 whitespace-nowrap">Formula A</th>}
-                        {compareFormulas.b && <th className="py-2 px-3 text-[10px] font-black uppercase text-stone-500 whitespace-nowrap">Formula B</th>}
+                        <th className="py-2 px-3 text-[10px] font-black uppercase text-stone-500 whitespace-nowrap bg-stone-100">Saved</th>
+                        {compareFormulas.a && <th className="py-2 px-3 text-[10px] font-black uppercase text-stone-500 whitespace-nowrap bg-white">Formula A</th>}
+                        {compareFormulas.b && <th className="py-2 px-3 text-[10px] font-black uppercase text-stone-500 whitespace-nowrap bg-white">Formula B</th>}
                         {compareFormulas.customIds.map(id => {
                           const f = formulas.find((x: any) => x.id === id);
-                          return f ? <th key={f.id} className="py-2 px-3 text-[10px] font-black uppercase text-stone-500 whitespace-nowrap truncate max-w-[100px]" title={f.name}>{f.name}</th> : null;
+                          return f ? <th key={f.id} className="py-2 px-3 text-[10px] font-black uppercase text-stone-500 whitespace-nowrap truncate max-w-[100px] bg-white" title={f.name}>{f.name}</th> : null;
                         })}
                       </tr>
                     </thead>
@@ -5310,17 +5319,17 @@ export default function Home() {
                         const itemStrategy = item.strategy === 'custom' && item.custom_formula?.formula_name ? item.custom_formula.formula_name : item.strategy;
                         return (
                           <tr key={item.id} className="border-b border-stone-100 hover:bg-stone-50/50">
-                            <td className="py-2 pr-4 text-xs font-bold text-slate-800 sticky left-0 bg-white z-10">{item.name || 'Untitled'}</td>
-                            <td className="py-2 px-3 text-[11px] text-stone-600 whitespace-nowrap">
+                            <td className="py-2 pr-4 text-xs font-bold text-slate-800 sticky left-0 bg-white z-10">{(item.name || 'Untitled').toUpperCase()}</td>
+                            <td className="py-2 px-3 text-[11px] text-stone-600 whitespace-nowrap bg-stone-100">
                               ${roundForDisplay(Number(item.wholesale)).toFixed(2)} / ${roundForDisplay(Number(item.retail)).toFixed(2)}
                             </td>
                             {compareFormulas.a && (
-                              <td className={`py-2 px-3 text-[11px] whitespace-nowrap ${itemStrategy === 'A' ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
+                              <td className={`py-2 px-3 text-[11px] whitespace-nowrap bg-white ${itemStrategy === 'A' ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
                                 ${roundForDisplay(pricesByFormula['A']?.wholesale ?? 0).toFixed(2)} / ${roundForDisplay(pricesByFormula['A']?.retail ?? 0).toFixed(2)}
                               </td>
                             )}
                             {compareFormulas.b && (
-                              <td className={`py-2 px-3 text-[11px] whitespace-nowrap ${itemStrategy === 'B' ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
+                              <td className={`py-2 px-3 text-[11px] whitespace-nowrap bg-white ${itemStrategy === 'B' ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
                                 ${roundForDisplay(pricesByFormula['B']?.wholesale ?? 0).toFixed(2)} / ${roundForDisplay(pricesByFormula['B']?.retail ?? 0).toFixed(2)}
                               </td>
                             )}
@@ -5330,7 +5339,7 @@ export default function Home() {
                               const p = pricesByFormula[f.name];
                               const isCurrent = itemStrategy === f.name;
                               return (
-                                <td key={f.id} className={`py-2 px-3 text-[11px] whitespace-nowrap ${isCurrent ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
+                                <td key={f.id} className={`py-2 px-3 text-[11px] whitespace-nowrap bg-white ${isCurrent ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
                                   ${roundForDisplay(p?.wholesale ?? 0).toFixed(2)} / ${roundForDisplay(p?.retail ?? 0).toFixed(2)}
                                 </td>
                               );
@@ -5717,7 +5726,7 @@ export default function Home() {
                       <option value="">All pieces</option>
                       <option value="_unassigned">General / unassigned</option>
                       {inventory.map((i: any) => (
-                        <option key={i.id} value={i.id}>{i.name}</option>
+                        <option key={i.id} value={i.id}>{(i.name || '').toUpperCase()}</option>
                       ))}
                     </select>
                     {(timeFilterDateFrom || timeFilterDateTo || timeFilterItemId) && (
@@ -5740,7 +5749,7 @@ export default function Home() {
                       <div className="space-y-2">
                         {filteredTimeEntries.map((e: any) => {
                           const date = new Date(e.created_at);
-                          const itemName = e.inventory_id ? (inventory.find((i: any) => i.id === e.inventory_id)?.name || 'Piece') : 'General';
+                          const itemName = e.inventory_id ? ((inventory.find((i: any) => i.id === e.inventory_id)?.name || 'Piece').toUpperCase()) : 'General';
                           const hrs = (Number(e.duration_minutes) / 60).toFixed(2);
                           const isDeleting = deletingTimeEntryId === e.id;
                           return (
