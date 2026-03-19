@@ -21,6 +21,12 @@ const UNIT_TO_GRAMS: { [key: string]: number } = {
 // Fallback spot prices ($/troy oz) when API hasn't loaded — used only when live price is 0
 const FALLBACK_SPOT: Record<string, number> = { gold: 2600, silver: 28, platinum: 950, palladium: 1000 };
 
+/** Original file size limit before crop; saved image is 256×256 PNG (small). iPhone Pro / 48MP HEIC can be large. */
+const MAX_VAULT_PHOTO_UPLOAD_BYTES = 45 * 1024 * 1024;
+
+/** File picker: include HEIC/HEIF so iOS Photos offers all pictures (not only JPEG). */
+const VAULT_PHOTO_ACCEPT = 'image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif,image/*';
+
 /** Live $/oz troy for a metal row (matches calculateFullBreakdown spot resolution). */
 function resolveSpotOzForMetal(m: any, livePrices: { gold?: number; silver?: number; platinum?: number; palladium?: number }): number {
   const type = (m.type || '').toLowerCase();
@@ -281,6 +287,7 @@ export default function Home() {
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
+  const cropBlobUrlRef = useRef<string | null>(null);
 
   // Selection & Location State
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
@@ -1137,22 +1144,33 @@ export default function Home() {
   };
 
   // --- Image Crop Handlers ---
+  const revokeCropBlobUrl = () => {
+    if (cropBlobUrlRef.current) {
+      URL.revokeObjectURL(cropBlobUrlRef.current);
+      cropBlobUrlRef.current = null;
+    }
+  };
+
   const onFileSelect = (event: any, itemId: string) => {
     const file = event.target.files[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      setNotification({ title: "File Too Large", message: "Please select an image under 5MB.", type: 'error' });
+    if (file.size > MAX_VAULT_PHOTO_UPLOAD_BYTES) {
+      const mb = Math.round(MAX_VAULT_PHOTO_UPLOAD_BYTES / (1024 * 1024));
+      setNotification({ title: "File Too Large", message: `Please select an image under ${mb} MB (or pick a smaller export from Photos).`, type: 'error' });
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      setCropImage(reader.result as string);
+    revokeCropBlobUrl();
+    try {
+      const url = URL.createObjectURL(file);
+      cropBlobUrlRef.current = url;
+      setCropImage(url);
       setCropItemId(itemId);
       setRotation(0);
       setOffset({ x: 0, y: 0 });
       setOpenMenuId(null);
-    };
-    reader.readAsDataURL(file);
+    } catch {
+      setNotification({ title: "Could not open photo", message: "Try choosing the same picture again, or use a JPEG/PNG from Photos.", type: 'error' });
+    }
     event.target.value = '';
   };
 
@@ -1190,6 +1208,7 @@ export default function Home() {
     canvas.toBlob(async (blob) => {
       if (!blob) return;
       setUploadingId(cropItemId);
+      revokeCropBlobUrl();
       setCropImage(null);
       const fileName = `${user.id}/${cropItemId}-${Date.now()}.png`;
       const { error: uploadError } = await supabase.storage.from('product-images').upload(fileName, blob);
@@ -3039,6 +3058,9 @@ export default function Home() {
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[500] flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl space-y-4">
             <h3 className="text-lg font-black uppercase text-center text-slate-900">Adjust Photo</h3>
+            <p className="text-[9px] text-stone-500 text-center font-medium">
+              iPhone: choose from Photos or camera — HEIC is OK in Safari. Up to {Math.round(MAX_VAULT_PHOTO_UPLOAD_BYTES / (1024 * 1024))} MB; saved vault image is a small square PNG.
+            </p>
 
             {/* Cropper Container - circular preview matches vault display (square crop saved for Shopify) */}
             <div
@@ -3071,6 +3093,16 @@ export default function Home() {
                   setMinZoom(fitScale);
                   setZoom(fitScale);
                 }}
+                onError={() => {
+                  setNotification({
+                    title: 'Photo format not supported here',
+                    message: 'On iPhone: Settings → Camera → Formats → choose “Most Compatible” for new shots, or export a JPEG from Photos (Duplicate → Share → Save Image).',
+                    type: 'error',
+                  });
+                  revokeCropBlobUrl();
+                  setCropImage(null);
+                  setCropItemId(null);
+                }}
                 draggable={false}
               />
             </div>
@@ -3093,7 +3125,16 @@ export default function Home() {
             </div>
 
             <div className="flex gap-3 pt-2">
-              <button onClick={() => setCropImage(null)} className="flex-1 py-3 bg-stone-100 rounded-xl font-bold text-xs uppercase hover:bg-stone-200 transition">Cancel</button>
+              <button
+                onClick={() => {
+                  revokeCropBlobUrl();
+                  setCropImage(null);
+                  setCropItemId(null);
+                }}
+                className="flex-1 py-3 bg-stone-100 rounded-xl font-bold text-xs uppercase hover:bg-stone-200 transition"
+              >
+                Cancel
+              </button>
               <button onClick={performCropAndUpload} className="flex-1 py-3 bg-slate-900 text-white rounded-xl font-bold text-xs uppercase hover:bg-[#A5BEAC] transition shadow-md">
                 {uploadingId ? 'Saving...' : 'Save Photo'}
               </button>
@@ -3144,7 +3185,7 @@ export default function Home() {
                     <input
                       ref={profileLogoInputRef}
                       type="file"
-                      accept="image/*"
+                      accept={VAULT_PHOTO_ACCEPT}
                       className="hidden"
                       onChange={async e => {
                         const file = e.target?.files?.[0];
@@ -5046,10 +5087,13 @@ export default function Home() {
                                           </button>
                                           <label className="w-full px-4 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-stone-50 transition-colors flex items-center gap-3 cursor-pointer block">
                                             <span className="text-stone-400 w-5 text-center">📷</span>
-                                            Change image
+                                            <span className="flex flex-col items-start gap-0.5">
+                                              <span>Change image</span>
+                                              <span className="text-[9px] font-normal text-stone-400 normal-case">iPhone Photos · max {Math.round(MAX_VAULT_PHOTO_UPLOAD_BYTES / (1024 * 1024))} MB</span>
+                                            </span>
                                             <input
                                               type="file"
-                                              accept="image/*"
+                                              accept={VAULT_PHOTO_ACCEPT}
                                               className="hidden"
                                               disabled={uploadingId === item.id}
                                               onChange={(e) => onFileSelect(e, item.id)}
