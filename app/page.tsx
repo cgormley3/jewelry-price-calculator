@@ -68,6 +68,7 @@ export default function Home() {
   const [profileLogoUploading, setProfileLogoUploading] = useState(false);
   const [profileDraft, setProfileDraft] = useState<{ display_name: string; company_name: string; logo_url: string | null }>({ display_name: '', company_name: '', logo_url: null });
   const [profileLogoPreviewUrl, setProfileLogoPreviewUrl] = useState<string | null>(null);
+  const [profileLogoCacheBuster, setProfileLogoCacheBuster] = useState(() => Date.now());
   const profileLogoInputRef = useRef<HTMLInputElement>(null);
 
   // Vault+ subscription
@@ -283,6 +284,7 @@ export default function Home() {
       if (res.ok) {
         const data = await res.json();
         setProfile({ display_name: data.display_name ?? null, company_name: data.company_name ?? null, logo_url: data.logo_url ?? null });
+        if (data.logo_url) setProfileLogoCacheBuster(Date.now());
       }
     })();
   }, [user?.id, user?.is_anonymous, profile, hasValidSupabaseCredentials]);
@@ -833,6 +835,7 @@ export default function Home() {
             company_name: profileData.company_name ?? null,
             logo_url: profileData.logo_url ?? null,
           });
+          if (profileData.logo_url) setProfileLogoCacheBuster(Date.now());
         }
       } else if (res.status === 401) {
         const err = await res.json().catch(() => ({}));
@@ -857,6 +860,7 @@ export default function Home() {
         if (resProfile.ok) {
           const profileData = await resProfile.json();
           setProfile({ display_name: profileData.display_name ?? null, company_name: profileData.company_name ?? null, logo_url: profileData.logo_url ?? null });
+          if (profileData.logo_url) setProfileLogoCacheBuster(Date.now());
         }
       } else {
         const err = await res.json().catch(() => ({}));
@@ -3015,7 +3019,7 @@ export default function Home() {
                 <label className="block text-[10px] font-black uppercase text-stone-500 mb-1">Logo</label>
                 <div className="flex items-center gap-4">
                   {(profileLogoPreviewUrl || profileDraft.logo_url) && (
-                    <img src={profileLogoPreviewUrl || profileDraft.logo_url!} alt="" className="w-12 h-12 rounded-full object-cover border-2 border-stone-200" />
+                    <img src={profileLogoPreviewUrl || `${profileDraft.logo_url!}${profileDraft.logo_url!.includes('?') ? '&' : '?'}t=${profileLogoCacheBuster}`} alt="" className="w-12 h-12 rounded-full object-cover border-2 border-stone-200" />
                   )}
                   <div className="flex flex-col gap-1">
                     <input
@@ -3138,6 +3142,7 @@ export default function Home() {
                     company_name: profileDraft.company_name || null,
                     logo_url: profileDraft.logo_url,
                   });
+                  if (profileDraft.logo_url) setProfileLogoCacheBuster(Date.now());
                   setShowProfileModal(false);
                 } finally {
                   setProfileSaving(false);
@@ -3768,7 +3773,7 @@ export default function Home() {
                   >
                     <div className={`w-2 h-2 rounded-full shrink-0 ${user ? 'bg-[#A5BEAC] animate-pulse' : 'bg-stone-300'}`} />
                     {profile?.logo_url ? (
-                      <img src={profile.logo_url} alt="" className="w-6 h-6 rounded-full object-cover shrink-0" />
+                      <img src={`${profile.logo_url}${profile.logo_url.includes('?') ? '&' : '?'}t=${profileLogoCacheBuster}`} alt="" className="w-6 h-6 rounded-full object-cover shrink-0" />
                     ) : null}
                     {profile?.company_name || profile?.display_name || user.email?.split('@')[0] || 'Account'} {showAccountMenu ? '▲' : '▼'}
                   </button>
