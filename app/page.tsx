@@ -19,6 +19,18 @@ const UNIT_TO_GRAMS: { [key: string]: number } = {
   "Ounces (std)": 28.3495
 };
 
+/** Fine metal fraction by alloy; spot math uses $/troy oz (same as live market quotes). */
+const METAL_PURITIES: Record<string, number> = {
+  '10K Gold': 0.417,
+  '14K Gold': 0.583,
+  '18K Gold': 0.75,
+  '22K Gold': 0.916,
+  '24K Gold': 0.999,
+  'Sterling Silver': 0.925,
+  'Platinum 950': 0.95,
+  'Palladium': 0.95,
+};
+
 // Fallback spot prices ($/troy oz) when API hasn't loaded — used only when live price is 0
 const FALLBACK_SPOT: Record<string, number> = { gold: 2600, silver: 28, platinum: 950, palladium: 1000 };
 
@@ -49,7 +61,7 @@ function entryWorkLocalDay(e: { logged_on?: string | null; created_at: string })
   return new Date(e.created_at);
 }
 
-/** Live $/oz troy for a metal row (matches calculateFullBreakdown spot resolution). */
+/** Live $/ozt for a metal row (matches calculateFullBreakdown spot resolution). */
 function resolveSpotOzForMetal(m: any, livePrices: { gold?: number; silver?: number; platinum?: number; palladium?: number }): number {
   const type = (m.type || '').toLowerCase();
   let spot = 0;
@@ -67,13 +79,17 @@ function resolveSpotOzForMetal(m: any, livePrices: { gold?: number; silver?: num
   return spot;
 }
 
+/** Metal line $ value from a spot quote in USD per troy ounce (matches live market). */
+function metalRowDollarValueFromSpotOzt(m: any, spotOzt: number): number {
+  const purity = METAL_PURITIES[m.type] || 1;
+  const gramWeight = Number(m.weight) * (UNIT_TO_GRAMS[m.unit as keyof typeof UNIT_TO_GRAMS] || 1);
+  return (spotOzt / 31.1035) * purity * gramWeight;
+}
+
 /** Dollar value of one metal line at current live + saved-spot logic (vault display). */
 function metalRowLiveDollarValue(m: any, livePrices: { gold?: number; silver?: number; platinum?: number; palladium?: number }): number {
   const spot = resolveSpotOzForMetal(m, livePrices);
-  const purities: Record<string, number> = { '10K Gold': 0.417, '14K Gold': 0.583, '18K Gold': 0.75, '22K Gold': 0.916, '24K Gold': 0.999, 'Sterling Silver': 0.925, 'Platinum 950': 0.95, 'Palladium': 0.95 };
-  const purity = purities[m.type] || 1;
-  const gramWeight = m.weight * (UNIT_TO_GRAMS[m.unit as keyof typeof UNIT_TO_GRAMS] || 1);
-  return (spot / 31.1035) * purity * gramWeight;
+  return metalRowDollarValueFromSpotOzt(m, spot);
 }
 
 /**
@@ -691,12 +707,13 @@ export default function Home() {
     let rawMaterialCost = 0;
     /** Compare-tab scenario: revalue from scenario/live spots only */
     const useScenarioSpotPath = priceOverride !== undefined && priceOverride !== null;
-    /** First-time vault save only: honor manual $/unit for metal cost so saved wholesale/retail match what the user entered */
+    /** First-time vault save only: honor custom spot ($/ozt) for metal cost so saved wholesale/retail match what the user entered */
     const useManualBranch = !useScenarioSpotPath && !!useManualMetalForInitialSaveOnly && metals.some((x: any) => x?.isManual && x?.manualPrice);
     metals.forEach(m => {
       let pricePerGram = 0;
-      if (useManualBranch && m.isManual && m.manualPrice) {
-        pricePerGram = m.manualPrice / (UNIT_TO_GRAMS[m.unit] || 1);
+      if (useManualBranch && m.isManual && m.manualPrice != null && Number(m.manualPrice) > 0) {
+        const spotOzt = Number(m.manualPrice);
+        pricePerGram = (spotOzt / 31.1035) * (METAL_PURITIES[m.type] || 1.0);
       } else {
         let spot = 0;
         const type = (m.type || '').toLowerCase();
@@ -715,8 +732,7 @@ export default function Home() {
           else if (type.includes('palladium')) spot = FALLBACK_SPOT.palladium;
         }
 
-        const purities: any = { '10K Gold': 0.417, '14K Gold': 0.583, '18K Gold': 0.75, '22K Gold': 0.916, '24K Gold': 0.999, 'Sterling Silver': 0.925, 'Platinum 950': 0.95, 'Palladium': 0.95 };
-        pricePerGram = (spot / 31.1035) * (purities[m.type] || 1.0);
+        pricePerGram = (spot / 31.1035) * (METAL_PURITIES[m.type] || 1.0);
       }
       rawMaterialCost += pricePerGram * (m.weight * UNIT_TO_GRAMS[m.unit]);
     });
@@ -1535,13 +1551,14 @@ export default function Home() {
     else if (type.includes('platinum')) currentSpot = prices.platinum;
     else if (type.includes('palladium')) currentSpot = prices.palladium;
 
+    const customSpotOzt = useManualPrice && manualPriceInput !== '' ? Number(manualPriceInput) : null;
     setMetalList(prev => [...prev, {
       type: tempMetal,
       weight: w,
       unit: tempUnit,
       isManual: useManualPrice,
-      manualPrice: useManualPrice && manualPriceInput !== '' ? Number(manualPriceInput) : undefined,
-      spotSaved: currentSpot
+      manualPrice: customSpotOzt != null && Number.isFinite(customSpotOzt) && customSpotOzt > 0 ? customSpotOzt : undefined,
+      spotSaved: customSpotOzt != null && Number.isFinite(customSpotOzt) && customSpotOzt > 0 ? customSpotOzt : currentSpot
     }]);
     setTempWeight(0); setManualPriceInput(''); setUseManualPrice(false);
   };
@@ -2971,7 +2988,7 @@ export default function Home() {
       const savedSpotParts = Object.entries(savedSpotByMetal)
         .map(([name, val]) => `${name} $${Number(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
         .filter(Boolean);
-      if (savedSpotParts.length > 0) metalLines.push(`Saved spot ($/oz): ${savedSpotParts.join(' | ')}`);
+      if (savedSpotParts.length > 0) metalLines.push(`Saved spot ($/ozt): ${savedSpotParts.join(' | ')}`);
 
       const stoneLines: string[] = [];
       if (stonesArray.length > 0) {
@@ -3063,7 +3080,7 @@ export default function Home() {
         doc.setDrawColor(220, 220, 220);
         doc.rect(pdfMargin, currentY, pdfContentWidth, 14, 'S');
         doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.setTextColor(neutralDark[0], neutralDark[1], neutralDark[2]);
-        doc.text('Live spot prices ($/oz troy)', pdfMargin + 5, currentY + 5.5);
+        doc.text('Live spot prices ($/ozt)', pdfMargin + 5, currentY + 5.5);
         doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(55, 55, 55);
         const liveParts: string[] = [];
         if (prices.gold > 0) liveParts.push(`Gold $${Number(prices.gold).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
@@ -3176,7 +3193,7 @@ export default function Home() {
         const savedSpotParts = Object.entries(savedSpotByMetal)
           .map(([name, val]) => `${name} $${Number(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
           .filter(Boolean);
-        if (savedSpotParts.length > 0) metalLines.push(`Saved spot ($/oz): ${savedSpotParts.join(' | ')}`);
+        if (savedSpotParts.length > 0) metalLines.push(`Saved spot ($/ozt): ${savedSpotParts.join(' | ')}`);
 
         const stoneLines: string[] = [];
         if (stonesArray.length > 0) {
@@ -3964,19 +3981,19 @@ export default function Home() {
             <div className="space-y-4 bg-stone-50 p-4 rounded-2xl border border-stone-100">
               <p className="text-[9px] text-stone-500 italic">Leave blank to keep the previously saved spot price for each metal.</p>
               {recalcItem.metals.some((m: any) => m.type.toLowerCase().includes('gold')) && (
-                <div><label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Gold Spot Price ($/oz)</label>
+                <div><label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Gold spot ($/ozt)</label>
                   <input type="number" placeholder={`${prices.gold}`} className="w-full p-3 bg-white border rounded-xl outline-none focus:border-[#A5BEAC] font-bold text-sm" value={recalcParams.gold} onChange={(e) => setRecalcParams({ ...recalcParams, gold: e.target.value })} /></div>
               )}
               {recalcItem.metals.some((m: any) => m.type.toLowerCase().includes('silver')) && (
-                <div><label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Silver Spot Price ($/oz)</label>
+                <div><label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Silver spot ($/ozt)</label>
                   <input type="number" placeholder={`${prices.silver}`} className="w-full p-3 bg-white border rounded-xl outline-none focus:border-[#A5BEAC] font-bold text-sm" value={recalcParams.silver} onChange={(e) => setRecalcParams({ ...recalcParams, silver: e.target.value })} /></div>
               )}
               {recalcItem.metals.some((m: any) => m.type.toLowerCase().includes('platinum')) && (
-                <div><label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Platinum Spot Price ($/oz)</label>
+                <div><label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Platinum spot ($/ozt)</label>
                   <input type="number" placeholder={`${prices.platinum}`} className="w-full p-3 bg-white border rounded-xl outline-none focus:border-[#A5BEAC] font-bold text-sm" value={recalcParams.platinum} onChange={(e) => setRecalcParams({ ...recalcParams, platinum: e.target.value })} /></div>
               )}
               {recalcItem.metals.some((m: any) => m.type.toLowerCase().includes('palladium')) && (
-                <div><label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Palladium Spot Price ($/oz)</label>
+                <div><label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Palladium spot ($/ozt)</label>
                   <input type="number" placeholder={`${prices.palladium}`} className="w-full p-3 bg-white border rounded-xl outline-none focus:border-[#A5BEAC] font-bold text-sm" value={recalcParams.palladium} onChange={(e) => setRecalcParams({ ...recalcParams, palladium: e.target.value })} /></div>
               )}
 
@@ -4227,16 +4244,16 @@ export default function Home() {
               >
                 Fill with current spot prices
               </button>
-              <div><label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Gold Spot Price ($/oz)</label>
+              <div><label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Gold spot ($/ozt)</label>
                 <input type="number" placeholder={`${prices.gold}`} className="w-full p-3 bg-white border rounded-xl outline-none focus:border-[#A5BEAC] font-bold text-sm" value={recalcParams.gold} onChange={(e) => setRecalcParams({ ...recalcParams, gold: e.target.value })} /></div>
 
-              <div><label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Silver Spot Price ($/oz)</label>
+              <div><label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Silver spot ($/ozt)</label>
                 <input type="number" placeholder={`${prices.silver}`} className="w-full p-3 bg-white border rounded-xl outline-none focus:border-[#A5BEAC] font-bold text-sm" value={recalcParams.silver} onChange={(e) => setRecalcParams({ ...recalcParams, silver: e.target.value })} /></div>
 
-              <div><label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Platinum Spot Price ($/oz)</label>
+              <div><label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Platinum spot ($/ozt)</label>
                 <input type="number" placeholder={`${prices.platinum}`} className="w-full p-3 bg-white border rounded-xl outline-none focus:border-[#A5BEAC] font-bold text-sm" value={recalcParams.platinum} onChange={(e) => setRecalcParams({ ...recalcParams, platinum: e.target.value })} /></div>
 
-              <div><label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Palladium Spot Price ($/oz)</label>
+              <div><label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Palladium spot ($/ozt)</label>
                 <input type="number" placeholder={`${prices.palladium}`} className="w-full p-3 bg-white border rounded-xl outline-none focus:border-[#A5BEAC] font-bold text-sm" value={recalcParams.palladium} onChange={(e) => setRecalcParams({ ...recalcParams, palladium: e.target.value })} /></div>
 
               <hr className="border-stone-200" />
@@ -4627,9 +4644,30 @@ export default function Home() {
                 </div>
                 <div className="space-y-2">
                   <select className="w-full p-3 border border-stone-200 rounded-xl text-[10px] font-bold bg-white focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none" value={useManualPrice ? "manual" : "spot"} onChange={(e) => setUseManualPrice(e.target.value === "manual")}>
-                    <option value="spot">Use Live Spot Price</option><option value="manual">Use Manual Input</option>
+                    <option value="spot">Use live spot ($/ozt)</option>
+                    <option value="manual">Custom spot ($/ozt)</option>
                   </select>
-                  {useManualPrice && <input type="number" min={0} placeholder={`Price per ${tempUnit}`} className="w-full p-3 border border-[#A5BEAC] rounded-xl text-sm focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none animate-in fade-in" value={manualPriceInput} onChange={(e) => setManualPriceInput(e.target.value === '' ? '' : Number(e.target.value))} />}
+                  {useManualPrice && (
+                    <div className="space-y-1 animate-in fade-in">
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        placeholder={(() => {
+                          const t = tempMetal.toLowerCase();
+                          if (t.includes('gold')) return String(prices.gold || '');
+                          if (t.includes('silver')) return String(prices.silver || '');
+                          if (t.includes('platinum')) return String(prices.platinum || '');
+                          if (t.includes('palladium')) return String(prices.palladium || '');
+                          return 'e.g. 2650';
+                        })()}
+                        className="w-full p-3 border border-[#A5BEAC] rounded-xl text-sm focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none"
+                        value={manualPriceInput}
+                        onChange={(e) => setManualPriceInput(e.target.value === '' ? '' : Number(e.target.value))}
+                      />
+                      <p className="text-[9px] font-bold text-stone-500 normal-case leading-snug">Same unit as market spot: $USD per troy ounce.</p>
+                    </div>
+                  )}
                 </div>
                 <button onClick={addMetalToPiece} className="w-full bg-slate-900 text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#A5BEAC] transition-colors">+ Add metal</button>
                 {metalList.map((m, i) => (
@@ -5828,11 +5866,10 @@ export default function Home() {
                               {item.metals?.map((m: any, idx: number) => {
                                 const spotOz = resolveSpotOzForMetal(m, prices);
                                 const liveLineVal = metalRowLiveDollarValue(m, prices);
-                                const perUnitManual = Number(m.manualPrice) || 0;
-                                const w = Number(m.weight) || 0;
-                                const isManualLine = !!(m.isManual && perUnitManual > 0);
-                                const manualLineTotal = perUnitManual * w;
-                                const displayVal = isManualLine ? manualLineTotal : liveLineVal;
+                                const customSpotOzt = Number(m.manualPrice) || 0;
+                                const isManualLine = !!(m.isManual && customSpotOzt > 0);
+                                const manualLineVal = isManualLine ? metalRowDollarValueFromSpotOzt(m, customSpotOzt) : 0;
+                                const displayVal = isManualLine ? manualLineVal : liveLineVal;
 
                                 return (
                                   <div key={idx} className="flex justify-between items-center text-[10px] font-bold border-b border-stone-100 pb-1.5 uppercase">
@@ -5843,12 +5880,12 @@ export default function Home() {
                                       <span>${(displayVal > 0 ? displayVal : 0).toFixed(2)}</span>
                                       {isManualLine ? (
                                         <span className="block text-[8px] text-stone-500 font-medium normal-case tracking-wide">
-                                          Manual rate: ${perUnitManual.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} per {m.unit}
+                                          Custom spot: ${customSpotOzt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/ozt
                                         </span>
                                       ) : (
-                                        spotOz > 0 && <span className="block text-[8px] text-stone-400 font-medium normal-case tracking-wide">Spot: ${spotOz.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                        spotOz > 0 && <span className="block text-[8px] text-stone-400 font-medium normal-case tracking-wide">Spot: ${spotOz.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/ozt</span>
                                       )}
-                                      {isManualLine && <span className="block text-[8px] text-amber-700/90 font-medium normal-case tracking-wide">First save used this rate; live pricing uses spot</span>}
+                                      {isManualLine && <span className="block text-[8px] text-amber-700/90 font-medium normal-case tracking-wide">First save used this spot; live column uses market spot</span>}
                                     </div>
                                   </div>
                                 );
@@ -6083,9 +6120,10 @@ export default function Home() {
                 </button>
                 {compareSpotEnabled && (
                   <>
+                    <p className="w-full basis-full text-[8px] font-bold text-stone-500 normal-case">Scenario spots: <span className="font-black">US$/ozt</span> (same unit as live).</p>
                     {(['gold', 'silver', 'platinum', 'palladium'] as const).map(metal => (
                       <div key={metal} className="flex flex-col gap-0.5">
-                        <label className="text-[8px] font-black uppercase text-stone-400">{metal}</label>
+                        <label className="text-[8px] font-black uppercase text-stone-400">{metal} ($/ozt)</label>
                         <div className="relative">
                           <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-stone-400">$</span>
                           <input
