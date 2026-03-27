@@ -4665,7 +4665,7 @@ export default function Home() {
                         value={manualPriceInput}
                         onChange={(e) => setManualPriceInput(e.target.value === '' ? '' : Number(e.target.value))}
                       />
-                      <p className="text-[9px] font-bold text-stone-500 normal-case leading-snug">Same unit as market spot: $USD per troy ounce.</p>
+                      <p className="text-[9px] font-bold text-stone-500 normal-case leading-snug">Same unit as market spot: $USD/ozt.</p>
                     </div>
                   )}
                 </div>
