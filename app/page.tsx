@@ -135,6 +135,10 @@ const MAIN_NAV_TABS: { id: MainNavTabId; label: string }[] = [
   { id: 'logic', label: 'Logic' },
 ];
 
+/** Mobile bottom bar: primary sections in left-to-right order (thumb-friendly). */
+const PRIMARY_MOBILE_NAV_IDS: MainNavTabId[] = ['calculator', 'vault', 'time'];
+const SECONDARY_MAIN_NAV = MAIN_NAV_TABS.filter((t) => !PRIMARY_MOBILE_NAV_IDS.includes(t.id));
+
 export default function Home() {
   // Check if Turnstile is configured (for human verification)
   const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '';
@@ -348,10 +352,10 @@ export default function Home() {
   const [showPassword, setShowPassword] = useState(false);
   const [activeTab, setActiveTab] = useState<MainNavTabId>('calculator');
   const mobileMainNavTriggerLabel = useMemo(() => {
+    if (PRIMARY_MOBILE_NAV_IDS.includes(activeTab)) return 'More';
     const t = MAIN_NAV_TABS.find((x) => x.id === activeTab);
-    if (!t) return 'Calculator';
-    return t.id === 'vault' && inventory.length > 0 ? `${t.label} (${inventory.length})` : t.label;
-  }, [activeTab, inventory.length]);
+    return t?.label ?? 'More';
+  }, [activeTab]);
   const [compareFormulas, setCompareFormulas] = useState<{ a: boolean; b: boolean; customIds: string[] }>({ a: false, b: false, customIds: [] });
   const [compareShowLive, setCompareShowLive] = useState(true);
   const [compareSpotEnabled, setCompareSpotEnabled] = useState(false);
@@ -4893,7 +4897,7 @@ export default function Home() {
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto flex flex-col min-h-[calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] gap-6 md:min-h-0 md:space-y-6 md:gap-0 pb-[env(safe-area-inset-bottom)]">
+      <div className="max-w-7xl mx-auto flex flex-col min-h-[calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] gap-6 md:min-h-0 md:space-y-6 md:gap-0 pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-[env(safe-area-inset-bottom)]">
         {/* HEADER */}
         <div className="flex flex-col md:flex-row justify-between items-center bg-white px-6 py-8 rounded-[2rem] border-2 shadow-sm gap-8 shrink-0 relative border-[#A5BEAC]">
           <div className="hidden md:block md:w-1/4" />
@@ -5070,13 +5074,6 @@ export default function Home() {
         <div className="w-full px-2 shrink-0">
           <div className="bg-white rounded-2xl border border-[#A5BEAC] shadow-sm p-2 w-full max-w-7xl mx-auto">
             <div className="flex md:hidden items-center gap-2 min-h-[48px]">
-              {inventory.length > 0 && activeTab !== 'vault' ? (
-                <span
-                  className="shrink-0 w-2 h-2 rounded-full bg-[#A5BEAC] animate-pulse self-center"
-                  title="Vault has items"
-                  aria-hidden
-                />
-              ) : null}
               <div className="main-nav-menu-container relative flex-1 min-w-0">
                 <button
                   type="button"
@@ -5100,8 +5097,7 @@ export default function Home() {
                     aria-labelledby="main-nav-menu-button"
                     className="max-h-[min(50vh,22rem)] overflow-y-auto overscroll-contain py-1"
                   >
-                    {MAIN_NAV_TABS.map((t) => {
-                      const label = t.id === 'vault' && inventory.length > 0 ? `${t.label} (${inventory.length})` : t.label;
+                    {SECONDARY_MAIN_NAV.map((t) => {
                       const selected = activeTab === t.id;
                       return (
                         <li key={t.id} role="presentation" className="border-b border-stone-100 last:border-b-0">
@@ -5115,11 +5111,8 @@ export default function Home() {
                             }}
                             className={`w-full text-left py-3 px-3 text-xs font-black uppercase tracking-tighter flex items-center justify-between gap-2 transition-colors ${selected ? 'bg-[#A5BEAC]/20 text-slate-900' : 'text-stone-600 hover:bg-stone-50 active:bg-stone-100'}`}
                           >
-                            <span className="truncate">{label}</span>
+                            <span className="truncate">{t.label}</span>
                             {selected ? <span className="text-[#A5BEAC] shrink-0" aria-hidden>✓</span> : null}
-                            {t.id === 'vault' && inventory.length > 0 && !selected ? (
-                              <span className="w-1.5 h-1.5 rounded-full bg-[#A5BEAC] shrink-0" title="Vault has items" aria-hidden />
-                            ) : null}
                           </button>
                         </li>
                       );
@@ -5950,7 +5943,7 @@ export default function Home() {
 
             {/* flex-1 min-h-0 allows scrolling when parent has max-h on desktop; mobile: cap at ~4 cards height */}
             <div className="flex-1 min-h-0 overflow-hidden rounded-b-[2.5rem] bg-stone-50/20 flex flex-col">
-            <div className="flex-1 min-h-0 max-h-[34rem] md:max-h-none overflow-y-auto p-4 md:p-6 pb-[calc(10rem+env(safe-area-inset-bottom))] custom-scrollbar overscroll-behavior-contain touch-pan-y">
+            <div className="flex-1 min-h-0 max-h-[34rem] md:max-h-none overflow-y-auto p-4 md:p-6 pb-[calc(13.5rem+env(safe-area-inset-bottom))] md:pb-[calc(10rem+env(safe-area-inset-bottom))] custom-scrollbar overscroll-behavior-contain touch-pan-y">
               {loading ? (
                 <div className="p-20 text-center text-stone-400 font-bold uppercase text-xs tracking-widest animate-pulse">Opening Vault...</div>
               ) : inventory.length === 0 && hasValidSupabaseCredentials ? (
@@ -7647,6 +7640,43 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      <nav
+        className="md:hidden fixed bottom-0 inset-x-0 z-[270] border-t border-[#A5BEAC]/40 bg-white/95 backdrop-blur-sm pb-[env(safe-area-inset-bottom)]"
+        role="navigation"
+        aria-label="Primary"
+      >
+        <div className="flex items-stretch min-h-[3.25rem]">
+          {PRIMARY_MOBILE_NAV_IDS.map((id) => {
+            const t = MAIN_NAV_TABS.find((x) => x.id === id);
+            if (!t) return null;
+            const selected = activeTab === id;
+            const inactiveVaultPulse = id === 'vault' && inventory.length > 0 && !selected;
+            return (
+              <button
+                key={id}
+                type="button"
+                aria-current={selected ? 'page' : undefined}
+                onClick={() => {
+                  setActiveTab(id);
+                  setMainNavMenuOpen(false);
+                }}
+                className={`flex-1 min-w-0 relative flex flex-col items-center justify-center gap-0.5 py-2 px-1 text-[10px] font-black uppercase tracking-tighter transition-colors outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#A5BEAC] ${selected ? 'bg-[#A5BEAC] text-white shadow-inner' : inactiveVaultPulse ? 'text-stone-600' : 'text-stone-400 hover:text-stone-600 hover:bg-stone-50/90'}`}
+              >
+                <span className="flex items-center justify-center gap-1 max-w-full px-0.5">
+                  <span className="truncate">{t.label}</span>
+                  {id === 'vault' && inventory.length > 0 && selected ? (
+                    <span className="text-[9px] font-bold opacity-90 shrink-0">({inventory.length})</span>
+                  ) : null}
+                </span>
+                {id === 'vault' && inventory.length > 0 && !selected ? (
+                  <span className="absolute top-1 right-2 w-2 h-2 rounded-full bg-[#A5BEAC] animate-pulse" aria-hidden />
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+      </nav>
     </div>
   );
 }
