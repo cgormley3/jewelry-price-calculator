@@ -562,7 +562,7 @@ export default function Home() {
 
   const roundForDisplay = useCallback((num: number): number => {
     if (priceRounding === 'none' || num === 0) return num;
-    return Math.round(num / priceRounding) * priceRounding;
+    return Math.ceil(num / priceRounding) * priceRounding;
   }, [priceRounding]);
 
   /** Compare table: stack W/R on two lines on phones; compact single line from sm+ (narrow columns). */
@@ -4213,7 +4213,7 @@ export default function Home() {
               {(['none', 1, 5, 10, 25] as const).map(opt => (
                 <button key={opt} type="button" onClick={() => {
                   setPriceRoundingWithPersist(opt);
-                  const r = (n: number) => opt === 'none' || n === 0 ? n : Math.round(n / opt) * opt;
+                  const r = (n: number) => opt === 'none' || n === 0 ? n : Math.ceil(n / opt) * opt;
                   setManualRetail(r(Number(editingItem.retail)).toFixed(2));
                   setManualWholesale(r(Number(editingItem.wholesale)).toFixed(2));
                 }}
@@ -4239,7 +4239,8 @@ export default function Home() {
       {/* RECALCULATE MODAL (Individual) */}
       {recalcItem && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-5 max-h-[95vh] overflow-y-auto custom-scrollbar">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] max-h-[95vh] overflow-hidden flex flex-col">
+            <div className="overflow-y-auto flex-1 min-h-0 p-8 space-y-5 custom-scrollbar">
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Scenario Calculator</h3>
             <p className="text-[10px] text-stone-400 font-bold uppercase">Temporarily recalculate logic with custom inputs</p>
 
@@ -4395,6 +4396,7 @@ export default function Home() {
               <button onClick={() => { setRecalcItem(null); setRecalcParams({ gold: '', silver: '', platinum: '', palladium: '', laborRate: '' }); setRecalcItemFormulaMode('keep'); }} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Close Calculator</button>
               <button onClick={handleRecalcSync} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition shadow-lg">Sync to Vault</button>
             </div>
+            </div>
           </div>
         </div>
       )}
@@ -4516,7 +4518,8 @@ export default function Home() {
       {/* NEW: GLOBAL RECALCULATE MODAL */}
       {showGlobalRecalc && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-5 max-h-[95vh] overflow-y-auto custom-scrollbar">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] max-h-[95vh] overflow-hidden flex flex-col">
+            <div className="overflow-y-auto flex-1 min-h-0 p-8 space-y-5 custom-scrollbar">
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Recalculate all items</h3>
             <p className="text-[10px] text-stone-400 font-bold uppercase">Update spot prices, labor rate, and formula for selected or all items</p>
 
@@ -4585,6 +4588,7 @@ export default function Home() {
             <div className="flex gap-3">
               <button onClick={() => { setShowGlobalRecalc(false); setRecalcParams({ gold: '', silver: '', platinum: '', palladium: '', laborRate: '' }); setGlobalRecalcFormulaMode('keep'); }} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
               <button onClick={handleGlobalRecalcSync} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition shadow-lg">Recalculate</button>
+            </div>
             </div>
           </div>
         </div>
@@ -4803,7 +4807,6 @@ export default function Home() {
         {/* MARKET TICKER — same max width + horizontal alignment as tab bar below (`max-w-7xl mx-auto`) */}
         <div className="w-full px-2 shrink-0">
           <div className="w-full max-w-7xl mx-auto">
-            <p className="sm:hidden text-[9px] font-bold text-stone-400 uppercase tracking-wide mb-1.5 text-center">Spot metals — swipe if needed on small screens</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 lg:gap-4 w-full">
             {(['gold', 'silver', 'platinum', 'palladium'] as const).map((name) => {
               const spot = Number(prices[name]) || 0;
@@ -4864,11 +4867,12 @@ export default function Home() {
                   </span>
                 </button>
                 {mainNavMenuOpen ? (
+                  <div className="absolute left-0 right-0 top-full mt-1 z-[280] max-h-[min(50vh,22rem)] rounded-xl border-2 border-[#A5BEAC] bg-white shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-1">
                   <ul
                     id="main-nav-menu-list"
                     role="listbox"
                     aria-labelledby="main-nav-menu-button"
-                    className="absolute left-0 right-0 top-full mt-1 z-[280] py-1 rounded-xl border-2 border-[#A5BEAC] bg-white shadow-xl max-h-[min(50vh,22rem)] overflow-y-auto overscroll-contain animate-in fade-in slide-in-from-top-1"
+                    className="max-h-[min(50vh,22rem)] overflow-y-auto overscroll-contain py-1"
                   >
                     {MAIN_NAV_TABS.map((t) => {
                       const label = t.id === 'vault' && inventory.length > 0 ? `${t.label} (${inventory.length})` : t.label;
@@ -4895,6 +4899,7 @@ export default function Home() {
                       );
                     })}
                   </ul>
+                  </div>
                 ) : null}
               </div>
             </div>
@@ -4923,13 +4928,15 @@ export default function Home() {
         <div className="w-full max-w-7xl mx-auto flex-1 min-h-0 flex flex-col overflow-hidden md:flex-initial md:max-h-[calc(100vh-5rem)]">
           {/* CALCULATOR PANEL */}
           <div className={`flex flex-col flex-1 min-h-0 min-h-[50vh] lg:min-h-0 lg:max-h-[calc(100vh-5rem)] ${activeTab !== 'calculator' ? 'hidden' : ''}`}>
-            <div className="bg-white p-8 rounded-[2rem] shadow-xl border-2 border-[#A5BEAC] space-y-4 lg:space-y-4 overflow-y-auto lg:overflow-hidden lg:h-full lg:min-h-0 lg:flex lg:flex-col custom-scrollbar">
+            <div className="bg-white rounded-[2rem] shadow-xl border-2 border-[#A5BEAC] overflow-hidden lg:h-full lg:min-h-0 lg:flex lg:flex-col">
+              <div className="overflow-y-auto lg:overflow-hidden lg:flex-1 lg:min-h-0 lg:flex lg:flex-col p-8 space-y-4 lg:space-y-4 min-h-0 custom-scrollbar">
               <h2 className="text-2xl font-black uppercase italic tracking-tighter text-slate-900 shrink-0">Calculator</h2>
 
               {/* Desktop: side-by-side layout with independent scrolling per column */}
               <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_1fr] lg:gap-10 xl:gap-12 lg:min-h-0 lg:flex-1 lg:overflow-hidden">
               {/* LEFT: Components - metal, stones, labor (overscroll-behavior not contained so scroll chains to page at boundaries) */}
-              <div className="space-y-4 lg:p-5 lg:pr-6 lg:rounded-2xl lg:bg-stone-50/50 lg:border lg:border-stone-100 lg:min-h-0 lg:overflow-y-auto lg:custom-scrollbar">
+              <div className="lg:rounded-2xl lg:bg-stone-50/50 lg:border lg:border-stone-100 lg:min-h-0 lg:overflow-hidden lg:flex lg:flex-col">
+              <div className="space-y-4 lg:p-5 lg:pr-6 lg:overflow-y-auto lg:custom-scrollbar lg:flex-1 lg:min-h-0">
               <p className="text-[10px] font-black uppercase tracking-widest text-[#A5BEAC] lg:mb-1 hidden lg:block">Components</p>
               {/* Calculator section tabs: one visible at a time */}
               <div className="space-y-2">
@@ -5163,8 +5170,10 @@ export default function Home() {
               )}
 
               </div>
+              </div>
               {/* RIGHT: Prices - cost breakdown, formula cards, save */}
-              <div className="mt-6 lg:mt-0 flex flex-col gap-5 min-h-0 lg:min-h-0 lg:overflow-y-auto lg:custom-scrollbar lg:p-6 lg:rounded-2xl lg:bg-white lg:border-2 lg:border-[#A5BEAC]/20 lg:shadow-sm">
+              <div className="mt-6 lg:mt-0 flex flex-col min-h-0 lg:min-h-0 lg:rounded-2xl lg:bg-white lg:border-2 lg:border-[#A5BEAC]/20 lg:shadow-sm lg:overflow-hidden">
+              <div className="flex flex-col gap-5 lg:p-6 lg:overflow-y-auto lg:custom-scrollbar lg:flex-1 lg:min-h-0">
                 <p className="text-[10px] font-black uppercase tracking-widest text-[#A5BEAC] hidden lg:block">Your price</p>
                 <div className="w-full space-y-2">
                   <button
@@ -5497,6 +5506,8 @@ export default function Home() {
                 {isGuest && !token && hasTurnstile && <div className="w-full flex justify-center mt-4 h-auto overflow-hidden animate-in fade-in slide-in-from-top-1"><Turnstile siteKey={turnstileSiteKey} onSuccess={(token) => setToken(token)} options={{ theme: 'light', appearance: 'interaction-only' }} /></div>}
               </div>
               </div>
+              </div>
+            </div>
             </div>
           </div>
 
@@ -5529,9 +5540,10 @@ export default function Home() {
                     {/* Filter Menu Dropdown - rendered via portal to avoid overflow clipping when vault has no items */}
                     {showFilterMenu && filterDropdownRect && typeof document !== 'undefined' && createPortal(
                       <div
-                        className="filter-menu-dropdown fixed w-[min(18rem,calc(100vw-1rem))] max-h-[min(85dvh,calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-1rem))] overflow-y-auto overscroll-contain touch-pan-y bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[9999] p-4 animate-in fade-in slide-in-from-top-2 space-y-4"
+                        className="filter-menu-dropdown fixed w-[min(18rem,calc(100vw-1rem))] max-h-[min(85dvh,calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-1rem))] bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[9999] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2"
                         style={{ top: filterDropdownRect.top, left: filterDropdownRect.left }}
                       >
+                        <div className="overflow-y-auto overscroll-contain touch-pan-y p-4 space-y-4 min-h-0 flex-1 custom-scrollbar">
                         <div className="flex justify-between items-center">
                           <h4 className="text-xs font-black uppercase text-slate-900">Filters</h4>
                           <button onClick={() => {
@@ -5598,6 +5610,7 @@ export default function Home() {
                             <input type="number" placeholder="Max" value={filterMaxPrice} onChange={e => setFilterMaxPrice(e.target.value)} className="w-full p-2 bg-stone-50 border rounded-lg text-xs font-bold" />
                           </div>
                         </div>
+                        </div>
                       </div>,
                       document.body
                     )}
@@ -5642,7 +5655,8 @@ export default function Home() {
                           More {showVaultMenu ? '▲' : '▼'}
                         </button>
                         {showVaultMenu && (
-                        <div className="vault-menu-dropdown absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[50] overflow-hidden animate-in fade-in max-h-[80vh] overflow-y-auto">
+                        <div className="vault-menu-dropdown absolute right-0 mt-2 w-56 max-h-[80vh] bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[50] overflow-hidden animate-in fade-in flex flex-col">
+                          <div className="overflow-y-auto min-h-0 flex-1 custom-scrollbar">
                           <div className="px-4 py-3 border-b border-stone-100 flex items-center justify-between">
                             <span className="text-[10px] font-black uppercase text-slate-900">Select All</span>
                             <input type="checkbox" onChange={toggleSelectAll} checked={selectedItems.size === filteredInventory.length && filteredInventory.length > 0} className="accent-[#A5BEAC] w-4 h-4 cursor-pointer" />
@@ -5663,6 +5677,7 @@ export default function Home() {
                             <button onClick={() => { exportToCSV(); setShowVaultMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
                               Export CSV {selectedItems.size > 0 && `(${selectedItems.size})`}
                             </button>
+                          </div>
                           </div>
                         </div>
                       )}
@@ -5702,7 +5717,8 @@ export default function Home() {
               </div>
 
             {/* flex-1 min-h-0 allows scrolling when parent has max-h on desktop; mobile: cap at ~4 cards height */}
-            <div className="p-4 md:p-6 overflow-y-auto flex-1 min-h-0 max-h-[34rem] md:max-h-none pb-[calc(10rem+env(safe-area-inset-bottom))] custom-scrollbar overscroll-behavior-contain touch-pan-y bg-stone-50/20 rounded-b-[2.5rem]">
+            <div className="flex-1 min-h-0 overflow-hidden rounded-b-[2.5rem] bg-stone-50/20 flex flex-col">
+            <div className="flex-1 min-h-0 max-h-[34rem] md:max-h-none overflow-y-auto p-4 md:p-6 pb-[calc(10rem+env(safe-area-inset-bottom))] custom-scrollbar overscroll-behavior-contain touch-pan-y">
               {loading ? (
                 <div className="p-20 text-center text-stone-400 font-bold uppercase text-xs tracking-widest animate-pulse">Opening Vault...</div>
               ) : inventory.length === 0 && hasValidSupabaseCredentials ? (
@@ -6328,6 +6344,7 @@ export default function Home() {
                 </div>
               )}
             </div>
+            </div>
           </div>
 
           {/* COMPARE PANEL */}
@@ -6385,9 +6402,10 @@ export default function Home() {
                     </button>
                     {showCompareFilterMenu && compareFilterDropdownRect && typeof document !== 'undefined' && createPortal(
                       <div
-                        className="fixed w-[min(18rem,calc(100vw-1rem))] max-h-[min(85dvh,calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-1rem))] overflow-y-auto overscroll-contain touch-pan-y bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[9999] p-4 animate-in fade-in slide-in-from-top-2 space-y-4"
+                        className="fixed w-[min(18rem,calc(100vw-1rem))] max-h-[min(85dvh,calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-1rem))] bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[9999] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2"
                         style={{ top: compareFilterDropdownRect.top, left: compareFilterDropdownRect.left }}
                       >
+                        <div className="overflow-y-auto overscroll-contain touch-pan-y p-4 space-y-4 min-h-0 flex-1 custom-scrollbar">
                         <div className="flex justify-between items-center">
                           <h4 className="text-xs font-black uppercase text-slate-900">Compare Filters</h4>
                           <button onClick={() => {
@@ -6433,6 +6451,7 @@ export default function Home() {
                               <button key={m} onClick={() => setCompareFilterMetal(m)} className={`py-1.5 rounded-lg text-[9px] font-black uppercase border ${compareFilterMetal === m ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-400'}`}>{m}</button>
                             ))}
                           </div>
+                        </div>
                         </div>
                       </div>,
                       document.body
