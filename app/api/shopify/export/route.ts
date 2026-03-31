@@ -1,42 +1,10 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { buildBodyHtml, SHOPIFY_PRODUCT_VENDOR } from '@/lib/shopifyProductExport';
 
 export const dynamic = 'force-dynamic';
 
 const SHOPIFY_API_VERSION = '2025-01';
-const VENDOR = 'Bear Silver and Stone';
-
-function buildBodyHtml(item: {
-  notes?: string | null;
-  metals?: unknown[];
-  stones?: unknown[];
-}): string {
-  const parts: string[] = [];
-  if (item.notes?.trim()) {
-    parts.push(`<p>${escapeHtml(item.notes.trim())}</p>`);
-  }
-  if (Array.isArray(item.metals) && item.metals.length > 0) {
-    const metalsStr = item.metals
-      .map((m: any) => `${m.type || 'Metal'}: ${m.weight || 0} ${m.unit || 'g'}`)
-      .join(', ');
-    parts.push(`<p><strong>Materials:</strong> ${escapeHtml(metalsStr)}</p>`);
-  }
-  if (Array.isArray(item.stones) && item.stones.length > 0) {
-    const stonesStr = item.stones
-      .map((s: any) => s.name || 'Stone')
-      .join(', ');
-    parts.push(`<p><strong>Stones:</strong> ${escapeHtml(stonesStr)}</p>`);
-  }
-  return parts.length > 0 ? parts.join('\n') : '<p>Handcrafted jewelry</p>';
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
 
 async function shopifyGraphql(
   shopDomain: string,
@@ -254,7 +222,7 @@ export async function POST(request: Request) {
         const productInput: Record<string, unknown> = {
           title,
           productType,
-          vendor: VENDOR,
+          vendor: SHOPIFY_PRODUCT_VENDOR,
           status: 'ACTIVE',
           descriptionHtml: opts.includeDescription ? bodyHtml : '<p>Handcrafted jewelry</p>',
         };

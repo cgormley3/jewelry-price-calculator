@@ -11,6 +11,8 @@ import FormulaBuilder from '../components/FormulaBuilder';
 import { evaluateCustomModel, formulaReferencesBase, formulaToReadableString, formulaToTokens, parseTokensStrict, PRESET_A, type FormulaNode } from '../lib/formula-engine';
 import type { FormulaTokens } from '../components/FormulaBuilder';
 import { VAULT_PLUS_PRICE_PHRASE } from '@/lib/vault-plus-copy';
+import { buildShopifyProductCsv } from '@/lib/shopifyProductCsv';
+import { buildSquarespaceProductCsv } from '@/lib/squarespaceProductCsv';
 
 const UNIT_TO_GRAMS: { [key: string]: number } = {
   "Grams": 1,
@@ -231,6 +233,8 @@ export default function Home() {
   const [shopifyIncludeRetail, setShopifyIncludeRetail] = useState(true);
   const [shopifyIncludeWholesale, setShopifyIncludeWholesale] = useState(true);
   const [shopifyPriceSource, setShopifyPriceSource] = useState<'saved' | 'live'>('saved');
+  const [showSiteProductCsvModal, setShowSiteProductCsvModal] = useState(false);
+  const [siteCsvPlatform, setSiteCsvPlatform] = useState<'shopify' | 'squarespace'>('shopify');
 
   // Form States
   const [manualRetail, setManualRetail] = useState('');
@@ -2814,6 +2818,96 @@ export default function Home() {
     })();
   };
 
+  const exportSiteProductCsv = () => {
+    void (async () => {
+      setBlockingWorkBanner({
+        title: 'Preparing site CSV',
+        subtitle:
+          'Building your product file. Your download should start in a moment — on iPhone, use the share sheet or Files.',
+      });
+      await yieldForWorkBannerPaint();
+      try {
+        const targetItems =
+          selectedItems.size > 0
+            ? filteredInventory.filter((i) => selectedItems.has(i.id))
+            : filteredInventory;
+        if (targetItems.length === 0) {
+          setNotification({
+            title: 'No items',
+            message: 'Select items or add some to the vault first.',
+            type: 'info',
+          });
+          return;
+        }
+
+        let itemPrices: Record<string, { retail: number; wholesale: number }> | undefined;
+        if (siteCsvPlatform === 'shopify' && shopifyPriceSource === 'live') {
+          itemPrices = {};
+          for (const item of targetItems) {
+            const stonesArray = convertStonesToArray(item);
+            const h = item.hours || 0;
+            const laborTotal = item.labor_at_making || 0;
+            const r = h > 0 ? laborTotal / h : laborTotal;
+            const breakdown = calculateFullBreakdown(
+              item.metals || [],
+              h || 1,
+              r,
+              item.other_costs_at_making || 0,
+              stonesArray,
+              item.overhead_cost || 0,
+              (item.overhead_type as 'flat' | 'percent') || 'flat',
+              item.multiplier,
+              item.markup_b,
+              undefined,
+              undefined,
+              undefined,
+              findingsMultFromItem(item)
+            );
+            const prices = getItemPrices(item, breakdown);
+            itemPrices[item.id] = { retail: prices.retail, wholesale: prices.wholesale };
+          }
+        }
+
+        const isShopify = siteCsvPlatform === 'shopify';
+        const csv = isShopify
+          ? buildShopifyProductCsv(targetItems, {
+              includeDescription: shopifyIncludeDescription,
+              includeImage: shopifyIncludeImage,
+              includeRetail: shopifyIncludeRetail,
+              includeWholesale: shopifyIncludeWholesale,
+              priceSource: shopifyPriceSource,
+              itemLivePrices: itemPrices,
+              getQuantity: (item) => vaultItemStockQty(item),
+            })
+          : buildSquarespaceProductCsv(targetItems, {
+              includeDescription: shopifyIncludeDescription,
+            });
+
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = isShopify
+          ? 'bear-vault-shopify-products.csv'
+          : 'bear-vault-squarespace-products.csv';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        setShowSiteProductCsvModal(false);
+        setShowVaultMenu(false);
+      } catch (e: any) {
+        setNotification({
+          title: 'CSV export failed',
+          message: e?.message || 'Could not build the file.',
+          type: 'error',
+        });
+      } finally {
+        setBlockingWorkBanner(null);
+      }
+    })();
+  };
+
   const exportToShopify = async () => {
     const session = (await supabase.auth.getSession()).data.session;
     const accessToken = (session as any)?.access_token;
@@ -4162,6 +4256,90 @@ export default function Home() {
             <div className="flex gap-3">
               <button onClick={() => setShowShopifyExportOptions(false)} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
               <button onClick={() => { setShowShopifyExportOptions(false); exportToShopify(); }} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition shadow-lg">Export</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showSiteProductCsvModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-6 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Export CSV for your site</h3>
+            <p className="text-[10px] text-stone-500 font-bold">Download a product file to import into Shopify or Squarespace (no store connection required).</p>
+
+            <div className="space-y-2">
+              <p className="text-xs font-black uppercase text-slate-900">Platform</p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSiteCsvPlatform('shopify')}
+                  className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase border transition-all ${siteCsvPlatform === 'shopify' ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-500'}`}
+                >
+                  Shopify
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSiteCsvPlatform('squarespace')}
+                  className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase border transition-all ${siteCsvPlatform === 'squarespace' ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-500'}`}
+                >
+                  Squarespace
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setShopifyIncludeDescription(!shopifyIncludeDescription)}>
+                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${shopifyIncludeDescription ? 'bg-[#A5BEAC] border-[#A5BEAC] text-white' : 'bg-white border-stone-300'}`}>{shopifyIncludeDescription && '✓'}</div>
+                <div>
+                  <p className="text-xs font-black uppercase text-slate-900">Include description</p>
+                  <p className="text-[10px] text-stone-400 font-bold">Notes, metals, stones</p>
+                </div>
+              </div>
+
+              {siteCsvPlatform === 'shopify' && (
+                <>
+                  <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setShopifyIncludeImage(!shopifyIncludeImage)}>
+                    <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${shopifyIncludeImage ? 'bg-[#A5BEAC] border-[#A5BEAC] text-white' : 'bg-white border-stone-300'}`}>{shopifyIncludeImage && '✓'}</div>
+                    <div>
+                      <p className="text-xs font-black uppercase text-slate-900">Include image URL</p>
+                      <p className="text-[10px] text-stone-400 font-bold">Shopify import column only</p>
+                    </div>
+                  </div>
+                  <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setShopifyIncludeRetail(!shopifyIncludeRetail)}>
+                    <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${shopifyIncludeRetail ? 'bg-[#A5BEAC] border-[#A5BEAC] text-white' : 'bg-white border-stone-300'}`}>{shopifyIncludeRetail && '✓'}</div>
+                    <div>
+                      <p className="text-xs font-black uppercase text-slate-900">Include retail price</p>
+                      <p className="text-[10px] text-stone-400 font-bold">Shopify only</p>
+                    </div>
+                  </div>
+                  <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setShopifyIncludeWholesale(!shopifyIncludeWholesale)}>
+                    <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${shopifyIncludeWholesale ? 'bg-[#A5BEAC] border-[#A5BEAC] text-white' : 'bg-white border-stone-300'}`}>{shopifyIncludeWholesale && '✓'}</div>
+                    <div>
+                      <p className="text-xs font-black uppercase text-slate-900">Include wholesale → compare-at</p>
+                      <p className="text-[10px] text-stone-400 font-bold">Shopify only</p>
+                    </div>
+                  </div>
+                  <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 space-y-2">
+                    <p className="text-xs font-black uppercase text-slate-900">Price source</p>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => setShopifyPriceSource('saved')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase border transition-all ${shopifyPriceSource === 'saved' ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-500'}`}>Saved</button>
+                      <button type="button" onClick={() => setShopifyPriceSource('live')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase border transition-all ${shopifyPriceSource === 'live' ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-500'}`}>Live</button>
+                    </div>
+                    <p className="text-[10px] text-stone-400 font-bold">Saved = vault values. Live = computed from current metals and formula.</p>
+                  </div>
+                </>
+              )}
+
+              {siteCsvPlatform === 'squarespace' && (
+                <p className="text-[10px] text-stone-500 font-bold px-1">
+                  This Squarespace template includes title, URL slug, description, and SKU (same <span className="font-mono">VAULT-</span> prefix as Shopify). Add price and images in Squarespace after import if needed.
+                </p>
+              )}
+            </div>
+
+            <div className="flex gap-3">
+              <button type="button" onClick={() => setShowSiteProductCsvModal(false)} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
+              <button type="button" onClick={() => { exportSiteProductCsv(); }} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition shadow-lg">Download CSV</button>
             </div>
           </div>
         </div>
@@ -5677,6 +5855,9 @@ export default function Home() {
                             <button onClick={() => { exportToCSV(); setShowVaultMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
                               Export CSV {selectedItems.size > 0 && `(${selectedItems.size})`}
                             </button>
+                            <button onClick={() => { setShowSiteProductCsvModal(true); setShowVaultMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
+                              Export CSV for your site {selectedItems.size > 0 && `(${selectedItems.size})`}
+                            </button>
                           </div>
                           </div>
                         </div>
@@ -5711,6 +5892,9 @@ export default function Home() {
                       </button>
                       <button onClick={() => exportToCSV()} className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase bg-white text-slate-700 border-2 border-stone-200 hover:border-[#A5BEAC] hover:bg-stone-50 transition shadow-sm">
                         Export CSV {selectedItems.size > 0 && `(${selectedItems.size})`}
+                      </button>
+                      <button type="button" onClick={() => setShowSiteProductCsvModal(true)} className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase bg-white text-slate-700 border-2 border-stone-200 hover:border-[#A5BEAC] hover:bg-stone-50 transition shadow-sm">
+                        Export CSV for your site {selectedItems.size > 0 && `(${selectedItems.size})`}
                       </button>
                     </div>
                 )}
