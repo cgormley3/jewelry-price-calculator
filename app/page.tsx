@@ -300,6 +300,18 @@ export default function Home() {
   // App State
   const [inventory, setInventory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  /** Full-screen banner for exports / bulk updates so we don’t reuse “Opening Vault…” (`loading`). */
+  const [blockingWorkBanner, setBlockingWorkBanner] = useState<null | { title: string; subtitle: string }>(null);
+  /** Lets React paint the work banner before heavy synchronous work (CSV rows, PDF layout). */
+  const yieldForWorkBannerPaint = useCallback(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => resolve());
+        });
+      }),
+    []
+  );
   const [pricesLoaded, setPricesLoaded] = useState(false);
   const [user, setUser] = useState<any>(null);
   /** Same as Compare tab’s “Upgrade to Vault+”: signed in + subscription known + not subscribed. */
@@ -535,18 +547,18 @@ export default function Home() {
     return Math.round(num / priceRounding) * priceRounding;
   }, [priceRounding]);
 
-  /** Compare table: stack W/R on two lines on phones; single line from sm+. */
+  /** Compare table: stack W/R on two lines on phones; compact single line from sm+ (narrow columns). */
   const formatCompareWholesaleRetail = useCallback((wh: number, ret: number, alignEnd?: boolean) => {
     const ws = roundForDisplay(Number(wh)).toFixed(2);
     const rs = roundForDisplay(Number(ret)).toFixed(2);
     const align = alignEnd ? 'items-end text-right' : 'items-start text-left';
     return (
       <>
-        <span className={`sm:hidden flex flex-col leading-[1.15] tabular-nums gap-0.5 ${align}`}>
+        <span className={`sm:hidden flex flex-col leading-[1.1] tabular-nums gap-0 ${align} text-[9px]`}>
           <span>{`$${ws}`}</span>
-          <span className="text-stone-500 text-[10px]">{`$${rs}`}</span>
+          <span className="text-stone-500 text-[8px]">{`$${rs}`}</span>
         </span>
-        <span className="hidden sm:inline whitespace-nowrap">{`$${ws} / $${rs}`}</span>
+        <span className="hidden sm:inline tabular-nums whitespace-nowrap text-[10px] leading-none tracking-tight">{`$${ws}/$${rs}`}</span>
       </>
     );
   }, [roundForDisplay]);
@@ -581,7 +593,7 @@ export default function Home() {
     return (
       <span
         title={kind === 'retail' ? '% change on retail (wholesale matches after rounding)' : '% change on wholesale'}
-        className={`block text-[9px] font-bold ${diff > 0 ? 'text-emerald-600' : 'text-red-500'}`}
+        className={`block text-[8px] font-bold leading-tight mt-0.5 ${diff > 0 ? 'text-emerald-600' : 'text-red-500'}`}
       >
         {diff > 0 ? '+' : ''}{pct.toFixed(1)}%
         {kind === 'retail' ? <span className="font-normal text-stone-500"> R</span> : null}
@@ -1790,9 +1802,14 @@ export default function Home() {
       message: msg,
       type: 'confirm',
       onConfirm: async () => {
-        setLoading(true);
+        setBlockingWorkBanner({
+          title: 'Updating vault',
+          subtitle: `Saving recalculated prices for ${count} item(s)…`,
+        });
+        await yieldForWorkBannerPaint();
         setShowVaultMenu(false);
 
+        try {
         const selectedCustomFormula = globalRecalcFormulaMode !== 'keep' && globalRecalcFormulaMode !== 'A' && globalRecalcFormulaMode !== 'B'
           ? formulas.find(f => f.id === globalRecalcFormulaMode)
           : null;
@@ -1888,6 +1905,15 @@ export default function Home() {
         setRecalcParams({ gold: '', silver: '', platinum: '', palladium: '', laborRate: '' });
         setGlobalRecalcFormulaMode('keep');
         setNotification({ title: "Update Complete", message: `${count} items have been recalculated.`, type: 'success' });
+        } catch (e: any) {
+          setNotification({
+            title: 'Recalculate failed',
+            message: e?.message || 'Could not save all items. Try again or use a smaller selection.',
+            type: 'error',
+          });
+        } finally {
+          setBlockingWorkBanner(null);
+        }
       }
     });
   };
@@ -2629,6 +2655,14 @@ export default function Home() {
   }, [inventory, prices, calculateFullBreakdown, vaultItemStockQty]);
 
   const exportToCSV = () => {
+    void (async () => {
+      setBlockingWorkBanner({
+        title: 'Preparing CSV',
+        subtitle:
+          'Crunching numbers for your export. Your download should start in a moment — on iPhone, use the share sheet or Files.',
+      });
+      await yieldForWorkBannerPaint();
+      try {
     const targetItems = selectedItems.size > 0
       ? filteredInventory.filter(i => selectedItems.has(i.id))
       : filteredInventory;
@@ -2717,7 +2751,18 @@ export default function Home() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri); link.setAttribute("download", "bear-vault-inventory.csv");
-    document.body.appendChild(link); link.click(); setShowVaultMenu(false);
+    document.body.appendChild(link); link.click();
+    setShowVaultMenu(false);
+      } catch (e: any) {
+        setNotification({
+          title: 'CSV export failed',
+          message: e?.message || 'Could not build the spreadsheet.',
+          type: 'error',
+        });
+      } finally {
+        setBlockingWorkBanner(null);
+      }
+    })();
   };
 
   const exportToShopify = async () => {
@@ -3170,9 +3215,15 @@ export default function Home() {
   };
 
   const exportDetailedPDF = async () => {
-    setLoading(true);
     setShowPDFOptions(false);
+    setBlockingWorkBanner({
+      title: 'Generating PDF',
+      subtitle:
+        'Loading images and laying out pages. Please wait — on phones this may take a little while.',
+    });
+    await yieldForWorkBannerPaint();
 
+    try {
     const targetItems = selectedItems.size > 0
       ? filteredInventory.filter(i => selectedItems.has(i.id))
       : filteredInventory;
@@ -3279,9 +3330,11 @@ export default function Home() {
       const wholesaleRow: any[] = useWholesalePercent
         ? (() => {
             const pct = pdfWholesalePercentOfRetail! / 100;
-            // Exact % of retail (no price-band rounding) — only format to cents for display
-            const wholesaleFromSavedRetail = Number(item.retail) * pct;
-            const wholesaleFromLiveRetail = liveRetail * pct;
+            // Match the retail row above: % is of displayed (rounded) retail, not raw formula $.
+            const displayedSavedRetail = roundForDisplay(Number(item.retail));
+            const displayedLiveRetail = roundForDisplay(liveRetail);
+            const wholesaleFromSavedRetail = displayedSavedRetail * pct;
+            const wholesaleFromLiveRetail = displayedLiveRetail * pct;
             const row: any[] = [`Wholesale (${pdfWholesalePercentOfRetail}% of retail)`, `$${wholesaleFromSavedRetail.toFixed(2)}`];
             if (includeLiveInPDF) row.push(`$${wholesaleFromLiveRetail.toFixed(2)}`);
             return row;
@@ -3402,8 +3455,16 @@ export default function Home() {
 
     drawPDFPageFooter(doc, iconData, pageNum);
     doc.save(`Vault_Report.pdf`);
-    setLoading(false);
-    setShowVaultMenu(false);
+    } catch (e: any) {
+      setNotification({
+        title: 'PDF export failed',
+        message: e?.message || 'Something went wrong while creating the PDF.',
+        type: 'error',
+      });
+    } finally {
+      setBlockingWorkBanner(null);
+      setShowVaultMenu(false);
+    }
   };
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -3878,6 +3939,26 @@ export default function Home() {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Exports & bulk saves — not the same as vault “Opening…” (`loading`). */}
+      {blockingWorkBanner && (
+        <div
+          className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[420] flex items-center justify-center p-4"
+          role="status"
+          aria-live="polite"
+          aria-busy="true"
+        >
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] border-2 border-[#A5BEAC] p-10 space-y-6 shadow-2xl animate-in zoom-in-95 text-center">
+            <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto bg-[#A5BEAC]/20 animate-pulse">
+              <span className="text-3xl" aria-hidden>
+                ⟳
+              </span>
+            </div>
+            <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">{blockingWorkBanner.title}</h3>
+            <p className="text-xs font-bold text-stone-500 uppercase tracking-wide leading-relaxed">{blockingWorkBanner.subtitle}</p>
           </div>
         </div>
       )}
@@ -6391,25 +6472,25 @@ export default function Home() {
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="border-b-2 border-stone-200">
-                        <th className="py-1.5 pr-2 pl-1 sm:py-2 sm:pr-4 sm:pl-0 text-[9px] sm:text-[10px] font-black uppercase text-stone-500 bg-white border-r border-stone-200 relative sm:sticky sm:left-0 sm:z-20 sm:shadow-[4px_0_12px_-6px_rgba(0,0,0,0.12)] max-sm:w-[min(42vw,9rem)] max-sm:max-w-[min(42vw,9rem)] sm:max-w-[12rem] sm:w-auto">Item</th>
-                        <th className="py-1.5 px-2 sm:py-2 sm:px-3 text-[9px] sm:text-[10px] font-black uppercase text-stone-500 whitespace-nowrap bg-stone-100">Saved</th>
+                        <th className="py-1 pr-1.5 pl-1 sm:py-1.5 sm:pr-3 sm:pl-0 text-[9px] sm:text-[10px] font-black uppercase text-stone-500 bg-white border-r border-stone-200 relative sm:sticky sm:left-0 sm:z-20 sm:shadow-[4px_0_12px_-6px_rgba(0,0,0,0.12)] max-sm:w-[min(48vw,10.75rem)] max-sm:max-w-[min(48vw,10.75rem)] sm:max-w-[13rem] sm:w-auto">Item</th>
+                        <th className="py-1 px-1 sm:py-1.5 sm:px-1.5 text-[9px] sm:text-[10px] font-black uppercase text-stone-500 whitespace-nowrap bg-stone-100">Saved</th>
                         {compareSpotEnabled && (
-                          <th className="py-1.5 px-2 sm:py-2 sm:px-3 text-[9px] sm:text-[10px] font-black uppercase text-amber-700 whitespace-nowrap bg-amber-50 border-l border-amber-100" title="Each item’s saved formula (A, B, or custom) recalculated at scenario spot prices">
+                          <th className="py-1 px-1 sm:py-1.5 sm:px-1.5 text-[9px] sm:text-[10px] font-black uppercase text-amber-700 whitespace-nowrap bg-amber-50 border-l border-amber-100" title="Each item’s saved formula (A, B, or custom) recalculated at scenario spot prices">
                             <span className="sm:hidden">V@S</span>
-                            <span className="hidden sm:inline">Vault @ Scenario</span>
+                            <span className="hidden sm:inline">Vault @ Scn</span>
                           </th>
                         )}
-                        {compareShowLive && <th className="py-1.5 px-2 sm:py-2 sm:px-3 text-[9px] sm:text-[10px] font-black uppercase text-slate-700 whitespace-nowrap bg-slate-50 border-l border-stone-100">Live</th>}
-                        {compareFormulas.a && <th className="py-1.5 px-2 sm:py-2 sm:px-3 text-[9px] sm:text-[10px] font-black uppercase text-stone-500 whitespace-nowrap bg-white"><span className="sm:hidden">A</span><span className="hidden sm:inline">Formula A</span></th>}
-                        {compareSpotEnabled && compareFormulas.a && <th className="py-1.5 px-2 sm:py-2 sm:px-3 text-[9px] sm:text-[10px] font-black uppercase text-amber-600 whitespace-nowrap bg-amber-50"><span className="sm:hidden">A*</span><span className="hidden sm:inline">A @ Scenario</span></th>}
-                        {compareFormulas.b && <th className="py-1.5 px-2 sm:py-2 sm:px-3 text-[9px] sm:text-[10px] font-black uppercase text-stone-500 whitespace-nowrap bg-white"><span className="sm:hidden">B</span><span className="hidden sm:inline">Formula B</span></th>}
-                        {compareSpotEnabled && compareFormulas.b && <th className="py-1.5 px-2 sm:py-2 sm:px-3 text-[9px] sm:text-[10px] font-black uppercase text-amber-600 whitespace-nowrap bg-amber-50"><span className="sm:hidden">B*</span><span className="hidden sm:inline">B @ Scenario</span></th>}
+                        {compareShowLive && <th className="py-1 px-1 sm:py-1.5 sm:px-1.5 text-[9px] sm:text-[10px] font-black uppercase text-slate-700 whitespace-nowrap bg-slate-50 border-l border-stone-100">Live</th>}
+                        {compareFormulas.a && <th className="py-1 px-1 sm:py-1.5 sm:px-1.5 text-[9px] sm:text-[10px] font-black uppercase text-stone-500 whitespace-nowrap bg-white"><span className="sm:hidden">A</span><span className="hidden sm:inline">Formula A</span></th>}
+                        {compareSpotEnabled && compareFormulas.a && <th className="py-1 px-1 sm:py-1.5 sm:px-1.5 text-[9px] sm:text-[10px] font-black uppercase text-amber-600 whitespace-nowrap bg-amber-50"><span className="sm:hidden">A*</span><span className="hidden sm:inline">A @ Scn</span></th>}
+                        {compareFormulas.b && <th className="py-1 px-1 sm:py-1.5 sm:px-1.5 text-[9px] sm:text-[10px] font-black uppercase text-stone-500 whitespace-nowrap bg-white"><span className="sm:hidden">B</span><span className="hidden sm:inline">Formula B</span></th>}
+                        {compareSpotEnabled && compareFormulas.b && <th className="py-1 px-1 sm:py-1.5 sm:px-1.5 text-[9px] sm:text-[10px] font-black uppercase text-amber-600 whitespace-nowrap bg-amber-50"><span className="sm:hidden">B*</span><span className="hidden sm:inline">B @ Scn</span></th>}
                         {compareFormulas.customIds.map(id => {
                           const f = formulas.find((x: any) => x.id === id);
                           if (!f) return null;
                           return (<React.Fragment key={f.id}>
-                            <th className="py-1.5 px-2 sm:py-2 sm:px-3 text-[9px] sm:text-[10px] font-black uppercase text-stone-500 whitespace-nowrap truncate max-w-[4.5rem] sm:max-w-[100px] bg-white" title={f.name}><span className="sm:hidden">{f.name.length > 6 ? `${f.name.slice(0, 5)}…` : f.name}</span><span className="hidden sm:inline">{f.name}</span></th>
-                            {compareSpotEnabled && <th className="py-1.5 px-2 sm:py-2 sm:px-3 text-[9px] sm:text-[10px] font-black uppercase text-amber-600 whitespace-nowrap bg-amber-50 truncate max-w-[4.5rem] sm:max-w-[100px]" title={`${f.name} @ Scenario`}><span className="sm:hidden">{f.name.length > 4 ? `${f.name.slice(0, 3)}…*` : `${f.name}*`}</span><span className="hidden sm:inline">{f.name} @ Scn</span></th>}
+                            <th className="py-1 px-1 sm:py-1.5 sm:px-1.5 text-[9px] sm:text-[10px] font-black uppercase text-stone-500 whitespace-nowrap truncate max-w-[3.75rem] sm:max-w-[5.5rem] bg-white" title={f.name}><span className="sm:hidden">{f.name.length > 6 ? `${f.name.slice(0, 5)}…` : f.name}</span><span className="hidden sm:inline">{f.name}</span></th>
+                            {compareSpotEnabled && <th className="py-1 px-1 sm:py-1.5 sm:px-1.5 text-[9px] sm:text-[10px] font-black uppercase text-amber-600 whitespace-nowrap bg-amber-50 truncate max-w-[3.75rem] sm:max-w-[5.5rem]" title={`${f.name} @ Scenario`}><span className="sm:hidden">{f.name.length > 4 ? `${f.name.slice(0, 3)}…*` : `${f.name}*`}</span><span className="hidden sm:inline">{f.name} @ Scn</span></th>}
                           </React.Fragment>);
                         })}
                       </tr>
@@ -6438,17 +6519,17 @@ export default function Home() {
                         return (
                           <tr key={item.id} className="group border-b border-stone-100 hover:bg-stone-50/50">
                             <td
-                              className="py-1.5 pr-2 pl-1 sm:py-2 sm:pr-4 sm:pl-0 text-[10px] sm:text-xs font-bold text-slate-800 bg-white group-hover:bg-stone-50 border-r border-stone-100 relative sm:sticky sm:left-0 sm:z-10 max-sm:shadow-none sm:shadow-[4px_0_12px_-6px_rgba(0,0,0,0.08)] max-sm:w-[min(42vw,9rem)] max-sm:max-w-[min(42vw,9rem)] sm:max-w-[12rem] sm:w-auto align-top overflow-hidden"
+                              className="py-1 pr-1.5 pl-1 sm:py-1.5 sm:pr-3 sm:pl-0 text-[10px] sm:text-xs font-bold text-slate-800 bg-white group-hover:bg-stone-50 border-r border-stone-100 relative sm:sticky sm:left-0 sm:z-10 max-sm:shadow-none sm:shadow-[4px_0_12px_-6px_rgba(0,0,0,0.08)] max-sm:w-[min(48vw,10.75rem)] max-sm:max-w-[min(48vw,10.75rem)] sm:max-w-[13rem] sm:w-auto align-top overflow-hidden"
                               title={itemTitle}
                             >
                               <span className="block truncate sm:truncate-none sm:line-clamp-2 sm:break-words sm:hyphens-auto">{itemTitle}</span>
                             </td>
-                            <td className="py-1.5 px-2 sm:py-2 sm:px-3 text-[10px] sm:text-[11px] text-stone-600 tabular-nums bg-stone-100 group-hover:bg-stone-50 align-top">
+                            <td className="py-1 px-1 sm:py-1.5 sm:px-1.5 text-stone-600 tabular-nums bg-stone-100 group-hover:bg-stone-50 align-top">
                               {formatCompareWholesaleRetail(Number(item.wholesale), Number(item.retail))}
                             </td>
                             {compareSpotEnabled && vaultScenarioPrices && (
                               <td
-                                className="py-1.5 px-2 sm:py-2 sm:px-3 text-[10px] sm:text-[11px] tabular-nums bg-amber-50 border-l border-amber-100 group-hover:bg-amber-50/90 align-top"
+                                className="py-1 px-1 sm:py-1.5 sm:px-1.5 tabular-nums bg-amber-50 border-l border-amber-100 group-hover:bg-amber-50/90 align-top"
                                 title="This piece’s saved pricing strategy at your scenario spot prices (labor, overhead, stones unchanged)"
                               >
                                 {formatCompareWholesaleRetail(vaultScenarioPrices.wholesale, vaultScenarioPrices.retail)}
@@ -6456,17 +6537,17 @@ export default function Home() {
                               </td>
                             )}
                             {compareShowLive && (
-                              <td className="py-1.5 px-2 sm:py-2 sm:px-3 text-[10px] sm:text-[11px] text-slate-800 tabular-nums bg-slate-50 border-l border-stone-100 group-hover:bg-stone-50/90 align-top" title={"At current spot, using this item's saved formula"}>
+                              <td className="py-1 px-1 sm:py-1.5 sm:px-1.5 text-slate-800 tabular-nums bg-slate-50 border-l border-stone-100 group-hover:bg-stone-50/90 align-top" title={"At current spot, using this item's saved formula"}>
                                 {formatCompareWholesaleRetail(liveItemPrices.wholesale, liveItemPrices.retail)}
                               </td>
                             )}
                             {compareFormulas.a && (
-                              <td className={`py-1.5 px-2 sm:py-2 sm:px-3 text-[10px] sm:text-[11px] tabular-nums bg-white group-hover:bg-stone-50/50 align-top ${itemStrategy === 'A' ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
+                              <td className={`py-1 px-1 sm:py-1.5 sm:px-1.5 tabular-nums bg-white group-hover:bg-stone-50/50 align-top ${itemStrategy === 'A' ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
                                 {formatCompareWholesaleRetail(pricesByFormula['A']?.wholesale ?? 0, pricesByFormula['A']?.retail ?? 0)}
                               </td>
                             )}
                             {compareSpotEnabled && compareFormulas.a && scenarioPrices && (
-                              <td className="py-1.5 px-2 sm:py-2 sm:px-3 text-[10px] sm:text-[11px] tabular-nums bg-amber-50 group-hover:bg-amber-50/90 align-top">
+                              <td className="py-1 px-1 sm:py-1.5 sm:px-1.5 tabular-nums bg-amber-50 group-hover:bg-amber-50/90 align-top">
                                 {formatCompareWholesaleRetail(scenarioPrices['A']?.wholesale ?? 0, scenarioPrices['A']?.retail ?? 0)}
                                 {renderComparePriceDelta(
                                   pricesByFormula['A']?.wholesale ?? 0,
@@ -6477,12 +6558,12 @@ export default function Home() {
                               </td>
                             )}
                             {compareFormulas.b && (
-                              <td className={`py-1.5 px-2 sm:py-2 sm:px-3 text-[10px] sm:text-[11px] tabular-nums bg-white group-hover:bg-stone-50/50 align-top ${itemStrategy === 'B' ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
+                              <td className={`py-1 px-1 sm:py-1.5 sm:px-1.5 tabular-nums bg-white group-hover:bg-stone-50/50 align-top ${itemStrategy === 'B' ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
                                 {formatCompareWholesaleRetail(pricesByFormula['B']?.wholesale ?? 0, pricesByFormula['B']?.retail ?? 0)}
                               </td>
                             )}
                             {compareSpotEnabled && compareFormulas.b && scenarioPrices && (
-                              <td className="py-1.5 px-2 sm:py-2 sm:px-3 text-[10px] sm:text-[11px] tabular-nums bg-amber-50 group-hover:bg-amber-50/90 align-top">
+                              <td className="py-1 px-1 sm:py-1.5 sm:px-1.5 tabular-nums bg-amber-50 group-hover:bg-amber-50/90 align-top">
                                 {formatCompareWholesaleRetail(scenarioPrices['B']?.wholesale ?? 0, scenarioPrices['B']?.retail ?? 0)}
                                 {renderComparePriceDelta(
                                   pricesByFormula['B']?.wholesale ?? 0,
@@ -6499,15 +6580,15 @@ export default function Home() {
                               const sp = scenarioPrices?.[f.name];
                               const isCurrent = itemStrategy === f.name;
                               return (<React.Fragment key={f.id}>
-                                <td className={`py-1.5 px-2 sm:py-2 sm:px-3 text-[10px] sm:text-[11px] tabular-nums bg-white group-hover:bg-stone-50/50 align-top ${isCurrent ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
+                                <td className={`py-1 px-1 sm:py-1.5 sm:px-1.5 tabular-nums bg-white group-hover:bg-stone-50/50 align-top max-w-[3.75rem] sm:max-w-[5.5rem] ${isCurrent ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
                                   {formatCompareWholesaleRetail(p?.wholesale ?? 0, p?.retail ?? 0)}
                                 </td>
-                                {compareSpotEnabled && sp && (
-                                  <td className="py-1.5 px-2 sm:py-2 sm:px-3 text-[10px] sm:text-[11px] tabular-nums bg-amber-50 group-hover:bg-amber-50/90 align-top">
+                                {compareSpotEnabled && sp ? (
+                                  <td className="py-1 px-1 sm:py-1.5 sm:px-1.5 tabular-nums bg-amber-50 group-hover:bg-amber-50/90 align-top max-w-[3.75rem] sm:max-w-[5.5rem]">
                                     {formatCompareWholesaleRetail(sp.wholesale ?? 0, sp.retail ?? 0)}
                                     {renderComparePriceDelta(p?.wholesale ?? 0, p?.retail ?? 0, sp.wholesale ?? 0, sp.retail ?? 0)}
                                   </td>
-                                )}
+                                ) : null}
                               </React.Fragment>);
                             })}
                           </tr>
