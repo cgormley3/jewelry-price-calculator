@@ -13,6 +13,11 @@ import type { FormulaTokens } from '../components/FormulaBuilder';
 import { VAULT_PLUS_PRICE_PHRASE } from '@/lib/vault-plus-copy';
 import { buildShopifyProductCsv } from '@/lib/shopifyProductCsv';
 import { buildSquarespaceProductCsv } from '@/lib/squarespaceProductCsv';
+import { vaultExportItemTitle } from '@/lib/shopifyProductExport';
+import {
+  roundPriceForDisplay,
+  type PriceRoundingOption,
+} from '@/lib/priceRounding';
 
 const UNIT_TO_GRAMS: { [key: string]: number } = {
   "Grams": 1,
@@ -232,6 +237,7 @@ export default function Home() {
   const [shopifyIncludeImage, setShopifyIncludeImage] = useState(true);
   const [shopifyIncludeRetail, setShopifyIncludeRetail] = useState(true);
   const [shopifyIncludeWholesale, setShopifyIncludeWholesale] = useState(true);
+  const [shopifyIncludeWholesalePctOfRetail, setShopifyIncludeWholesalePctOfRetail] = useState(true);
   const [shopifyPriceSource, setShopifyPriceSource] = useState<'saved' | 'live'>('saved');
   const [showSiteProductCsvModal, setShowSiteProductCsvModal] = useState(false);
   const [siteCsvPlatform, setSiteCsvPlatform] = useState<'shopify' | 'squarespace'>('shopify');
@@ -432,7 +438,6 @@ export default function Home() {
   const [newLocationInput, setNewLocationInput] = useState('');
   const [newTagInput, setNewTagInput] = useState('');
 
-  type PriceRoundingOption = 'none' | 1 | 5 | 10 | 25;
   const [priceRounding, setPriceRounding] = useState<PriceRoundingOption>(1);
 
   const prevShowProfileModalRef = useRef(false);
@@ -564,10 +569,10 @@ export default function Home() {
     return `${m}:${String(s).padStart(2, '0')}`;
   })();
 
-  const roundForDisplay = useCallback((num: number): number => {
-    if (priceRounding === 'none' || num === 0) return num;
-    return Math.ceil(num / priceRounding) * priceRounding;
-  }, [priceRounding]);
+  const roundForDisplay = useCallback(
+    (num: number): number => roundPriceForDisplay(num, priceRounding),
+    [priceRounding]
+  );
 
   /** Compare table: stack W/R on two lines on phones; compact single line from sm+ (narrow columns). */
   const formatCompareWholesaleRetail = useCallback((wh: number, ret: number, alignEnd?: boolean) => {
@@ -629,6 +634,8 @@ export default function Home() {
   }, []);
 
   const fetchInProgressRef = useRef(false);
+  /** Coalesces overlapping vault loads (dev Strict Mode, auth burst, preview). */
+  const fetchInventoryInFlightRef = useRef<Promise<void> | null>(null);
   const fetchVersionRef = useRef(0);
   const wakeUpTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const vaultAppWasHiddenRef = useRef(false);
@@ -1033,7 +1040,14 @@ export default function Home() {
             setUser(session?.user ?? null);
             // Don’t refetch vault on TOKEN_REFRESHED: refreshSession() (e.g. before Stripe checkout) would
             // trigger a parallel fetch-inventory → 402 → “Vault Load Failed” toast while redirecting to pay.
-            if (session && event !== 'TOKEN_REFRESHED') fetchInventory();
+            const shouldRefreshVault =
+              !!session &&
+              event !== 'TOKEN_REFRESHED' &&
+              (event === 'INITIAL_SESSION' ||
+                event === 'SIGNED_IN' ||
+                event === 'USER_UPDATED' ||
+                event === 'MFA_CHALLENGE_VERIFIED');
+            if (shouldRefreshVault) void fetchInventory();
             if (event === "PASSWORD_RECOVERY") setShowResetModal(true);
           });
           subscription = authSub;
@@ -1128,7 +1142,10 @@ export default function Home() {
       setLoading(false);
       return;
     }
-
+    if (fetchInventoryInFlightRef.current) {
+      return fetchInventoryInFlightRef.current;
+    }
+    const run = (async () => {
     try {
       let session = (await supabase.auth.getSession()).data.session;
       if (!session?.user?.id) {
@@ -1140,13 +1157,11 @@ export default function Home() {
         session = refreshed;
       }
       if (!session?.user?.id) {
-        setLoading(false);
         return;
       }
       let accessToken = (session as any).access_token;
       if (!accessToken) {
         setNotification({ title: 'Session Error', message: 'Could not get access token. Try signing in again.', type: 'info' });
-        setLoading(false);
         return;
       }
       const fetchInvOnce = () => {
@@ -1263,8 +1278,9 @@ export default function Home() {
         const { data: { session: refreshed } } = await supabase.auth.refreshSession();
         if (refreshed?.user && (refreshed as any).access_token) {
           setUser(refreshed.user);
+          fetchInventoryInFlightRef.current = null;
           setLoading(true);
-          fetchInventory();
+          await fetchInventory();
           return;
         }
         setNotification({ title: 'Session expired', message: err?.error || 'Please sign in again.', type: 'info', onConfirm: () => { setLoading(true); fetchInventory(); } });
@@ -1322,7 +1338,7 @@ export default function Home() {
       }
     } catch (error: any) {
       console.warn('Error fetching inventory:', error);
-      const retry = () => { setLoading(true); fetchInventory(); };
+      const retry = () => { setLoading(true); void fetchInventory(); };
       if (error?.name === 'AbortError') {
         setNotification({ title: 'Vault Load Timeout', message: 'Connection is slow. Tap Retry to try again.', type: 'info', onConfirm: retry });
       } else {
@@ -1330,7 +1346,11 @@ export default function Home() {
       }
     } finally {
       setLoading(false);
+      fetchInventoryInFlightRef.current = null;
     }
+    })();
+    fetchInventoryInFlightRef.current = run;
+    return run;
   }
 
   /** If Stripe shows paid but Supabase `subscriptions` is empty, link by matching account email to Stripe customer. */
@@ -2771,7 +2791,7 @@ export default function Home() {
       const stoneMarkup = stoneCost > 0 ? stoneRetail / stoneCost : 1.5;
 
       return [
-        `"${(item.name || '').toUpperCase()}"`,
+        `"${vaultExportItemTitle(item.name)}"`,
         q,
         `"${item.status || 'active'}"`,
         `"${item.tag || ''}"`,
@@ -2841,7 +2861,11 @@ export default function Home() {
         }
 
         let itemPrices: Record<string, { retail: number; wholesale: number }> | undefined;
-        if (siteCsvPlatform === 'shopify' && shopifyPriceSource === 'live') {
+        const needsLivePrices =
+          shopifyPriceSource === 'live' &&
+          (siteCsvPlatform === 'shopify' ||
+            (siteCsvPlatform === 'squarespace' && shopifyIncludeWholesalePctOfRetail));
+        if (needsLivePrices) {
           itemPrices = {};
           for (const item of targetItems) {
             const stonesArray = convertStonesToArray(item);
@@ -2875,12 +2899,18 @@ export default function Home() {
               includeImage: shopifyIncludeImage,
               includeRetail: shopifyIncludeRetail,
               includeWholesale: shopifyIncludeWholesale,
+              includeWholesalePctOfRetail: shopifyIncludeWholesalePctOfRetail,
               priceSource: shopifyPriceSource,
+              priceRounding,
               itemLivePrices: itemPrices,
               getQuantity: (item) => vaultItemStockQty(item),
             })
           : buildSquarespaceProductCsv(targetItems, {
               includeDescription: shopifyIncludeDescription,
+              includeWholesalePctOfRetail: shopifyIncludeWholesalePctOfRetail,
+              priceSource: shopifyPriceSource,
+              priceRounding,
+              itemLivePrices: itemPrices,
             });
 
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -2958,6 +2988,7 @@ export default function Home() {
         includeRetail: shopifyIncludeRetail,
         includeWholesale: shopifyIncludeWholesale,
         priceSource: shopifyPriceSource,
+        priceRounding,
       };
       const res = await fetch('/api/shopify/export', {
         method: 'POST',
@@ -3458,7 +3489,7 @@ export default function Home() {
       const titleMetaGap = 5;
       const titleY = currentY + (itemHeaderHeight > 14 ? 4 : 5);
       doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(dark[0], dark[1], dark[2]);
-      doc.text((item.name || '').toUpperCase(), titleX, titleY);
+      doc.text(vaultExportItemTitle(item.name), titleX, titleY);
       doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(muted[0], muted[1], muted[2]);
       const stockQ = vaultItemStockQty(item);
       const meta = `${item.status === 'archived' || item.status === 'sold' ? 'Archived' : 'Active'}  ·  ${item.location || 'Main Vault'}  ·  QTY: ${stockQ}  ·  Saved ${new Date(item.created_at).toLocaleDateString()}`;
@@ -4295,6 +4326,13 @@ export default function Home() {
                   <p className="text-[10px] text-stone-400 font-bold">Notes, metals, stones</p>
                 </div>
               </div>
+              <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setShopifyIncludeWholesalePctOfRetail(!shopifyIncludeWholesalePctOfRetail)}>
+                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${shopifyIncludeWholesalePctOfRetail ? 'bg-[#A5BEAC] border-[#A5BEAC] text-white' : 'bg-white border-stone-300'}`}>{shopifyIncludeWholesalePctOfRetail && '✓'}</div>
+                <div>
+                  <p className="text-xs font-black uppercase text-slate-900">Wholesale % of retail</p>
+                  <p className="text-[10px] text-stone-400 font-bold">Extra column; % = wholesale ÷ retail using same rounded $ as Price / compare-at</p>
+                </div>
+              </div>
 
               {siteCsvPlatform === 'shopify' && (
                 <>
@@ -4331,9 +4369,19 @@ export default function Home() {
               )}
 
               {siteCsvPlatform === 'squarespace' && (
-                <p className="text-[10px] text-stone-500 font-bold px-1">
-                  This Squarespace template includes title, URL slug, description, and SKU (same <span className="font-mono">VAULT-</span> prefix as Shopify). Add price and images in Squarespace after import if needed.
-                </p>
+                <div className="space-y-2">
+                  <p className="text-[10px] text-stone-500 font-bold px-1">
+                    Template columns: title, URL slug, description, SKU (same <span className="font-mono">VAULT-</span> prefix as Shopify), and optional wholesale % column. Add dollar prices and images in Squarespace after import if needed.
+                  </p>
+                  <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 space-y-2">
+                    <p className="text-xs font-black uppercase text-slate-900">Price source for %</p>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => setShopifyPriceSource('saved')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase border transition-all ${shopifyPriceSource === 'saved' ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-500'}`}>Saved</button>
+                      <button type="button" onClick={() => setShopifyPriceSource('live')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase border transition-all ${shopifyPriceSource === 'live' ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-500'}`}>Live</button>
+                    </div>
+                    <p className="text-[10px] text-stone-400 font-bold">Used when “Wholesale % of retail” is checked. Matches your vault price rounding setting.</p>
+                  </div>
+                </div>
               )}
             </div>
 

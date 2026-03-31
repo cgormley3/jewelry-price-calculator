@@ -2,12 +2,18 @@ import { rowToCsvLine } from '@/lib/csvEscape';
 import {
   buildBodyHtml,
   SHOPIFY_PRODUCT_VENDOR,
+  vaultExportItemTitle,
   vaultSkuFromItemId,
 } from '@/lib/shopifyProductExport';
+import {
+  formatPriceForExport,
+  formatWholesalePctOfRetailExport,
+  type PriceRoundingOption,
+} from '@/lib/priceRounding';
 
-/** First line of Shopify Admin product CSV template (import/export). */
+/** Shopify Admin template columns plus Bear Vault wholesale % (may be ignored on import). */
 const SHOPIFY_HEADER_LINE =
-  'Title,URL handle,Description,Vendor,Product category,Type,Tags,Published on online store,Status,SKU,Barcode,Option1 name,Option1 value,Option1 Linked To,Option2 name,Option2 value,Option2 Linked To,Option3 name,Option3 value,Option3 Linked To,Price,Compare-at price,Cost per item,Charge tax,Tax code,Unit price total measure,Unit price total measure unit,Unit price base measure,Unit price base measure unit,Inventory tracker,Inventory quantity,Continue selling when out of stock,Weight value (grams),Weight unit for display,Requires shipping,Fulfillment service,Product image URL,Image position,Image alt text,Variant image URL,Gift card,SEO title,SEO description,Color (product.metafields.shopify.color-pattern),Google Shopping / Google product category,Google Shopping / Gender,Google Shopping / Age group,Google Shopping / Manufacturer part number (MPN),Google Shopping / Ad group name,Google Shopping / Ads labels,Google Shopping / Condition,Google Shopping / Custom product,Google Shopping / Custom label 0,Google Shopping / Custom label 1,Google Shopping / Custom label 2,Google Shopping / Custom label 3,Google Shopping / Custom label 4';
+  'Title,URL handle,Description,Vendor,Product category,Type,Tags,Published on online store,Status,SKU,Barcode,Option1 name,Option1 value,Option1 Linked To,Option2 name,Option2 value,Option2 Linked To,Option3 name,Option3 value,Option3 Linked To,Price,Compare-at price,Cost per item,Charge tax,Tax code,Unit price total measure,Unit price total measure unit,Unit price base measure,Unit price base measure unit,Inventory tracker,Inventory quantity,Continue selling when out of stock,Weight value (grams),Weight unit for display,Requires shipping,Fulfillment service,Product image URL,Image position,Image alt text,Variant image URL,Gift card,SEO title,SEO description,Color (product.metafields.shopify.color-pattern),Google Shopping / Google product category,Google Shopping / Gender,Google Shopping / Age group,Google Shopping / Manufacturer part number (MPN),Google Shopping / Ad group name,Google Shopping / Ads labels,Google Shopping / Condition,Google Shopping / Custom product,Google Shopping / Custom label 0,Google Shopping / Custom label 1,Google Shopping / Custom label 2,Google Shopping / Custom label 3,Google Shopping / Custom label 4,Wholesale pct of retail';
 
 export const SHOPIFY_PRODUCT_CSV_HEADERS = SHOPIFY_HEADER_LINE.split(',');
 
@@ -33,7 +39,11 @@ export type ShopifyProductCsvOptions = {
   includeImage: boolean;
   includeRetail: boolean;
   includeWholesale: boolean;
+  /** Extra column: wholesale ÷ retail as %, from exported-rounded dollars (see formatWholesalePctOfRetailExport). */
+  includeWholesalePctOfRetail: boolean;
   priceSource: 'saved' | 'live';
+  /** Same rule as vault UI / inventory CSV (Profile price ends in). */
+  priceRounding: PriceRoundingOption;
   itemLivePrices?: Record<string, { retail: number; wholesale: number }>;
   /** Stock quantity per item (vault). */
   getQuantity: (item: SiteProductCsvInventoryItem) => number;
@@ -77,7 +87,7 @@ function itemRow(
   const n = SHOPIFY_PRODUCT_CSV_HEADERS.length;
   const row = Array<string>(n).fill('');
 
-  const title = (item.name || 'Untitled Piece').slice(0, 255);
+  const title = vaultExportItemTitle(item.name);
   const tag = item.tag || 'other';
   const sku = vaultSkuFromItemId(item.id);
   const prices = opts.itemLivePrices?.[item.id];
@@ -110,10 +120,22 @@ function itemRow(
   row[COL['Option1 value']] = 'Default Title';
 
   if (opts.includeRetail) {
-    row[COL['Price']] = retailNum.toFixed(2);
+    row[COL['Price']] = formatPriceForExport(retailNum, opts.priceRounding);
   }
   if (opts.includeWholesale && wholesaleNum > 0) {
-    row[COL['Compare-at price']] = wholesaleNum.toFixed(2);
+    row[COL['Compare-at price']] = formatPriceForExport(
+      wholesaleNum,
+      opts.priceRounding
+    );
+  }
+
+  if (opts.includeWholesalePctOfRetail) {
+    const pct = formatWholesalePctOfRetailExport(
+      retailNum,
+      wholesaleNum,
+      opts.priceRounding
+    );
+    if (pct) row[COL['Wholesale pct of retail']] = pct;
   }
 
   row[COL['Charge tax']] = 'TRUE';

@@ -1,6 +1,15 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { buildBodyHtml, SHOPIFY_PRODUCT_VENDOR } from '@/lib/shopifyProductExport';
+import {
+  buildBodyHtml,
+  SHOPIFY_PRODUCT_VENDOR,
+  vaultExportItemTitle,
+} from '@/lib/shopifyProductExport';
+import {
+  formatPriceForExport,
+  parsePriceRoundingFromExportOptions,
+  type PriceRoundingOption,
+} from '@/lib/priceRounding';
 
 export const dynamic = 'force-dynamic';
 
@@ -114,15 +123,33 @@ export async function POST(request: Request) {
       );
     }
 
-    const opts = rawExportOptions && typeof rawExportOptions === 'object'
-      ? {
-          includeDescription: !!rawExportOptions.includeDescription,
-          includeImage: !!rawExportOptions.includeImage,
-          includeRetail: rawExportOptions.includeRetail !== false,
-          includeWholesale: rawExportOptions.includeWholesale !== false,
-          priceSource: rawExportOptions.priceSource === 'live' ? 'live' : 'saved',
-        }
-      : { includeDescription: true, includeImage: true, includeRetail: true, includeWholesale: true, priceSource: 'saved' as const };
+    const opts: {
+      includeDescription: boolean;
+      includeImage: boolean;
+      includeRetail: boolean;
+      includeWholesale: boolean;
+      priceSource: 'live' | 'saved';
+      priceRounding: PriceRoundingOption;
+    } =
+      rawExportOptions && typeof rawExportOptions === 'object'
+        ? {
+            includeDescription: !!rawExportOptions.includeDescription,
+            includeImage: !!rawExportOptions.includeImage,
+            includeRetail: rawExportOptions.includeRetail !== false,
+            includeWholesale: rawExportOptions.includeWholesale !== false,
+            priceSource: rawExportOptions.priceSource === 'live' ? 'live' : 'saved',
+            priceRounding: parsePriceRoundingFromExportOptions(
+              (rawExportOptions as { priceRounding?: unknown }).priceRounding
+            ),
+          }
+        : {
+            includeDescription: true,
+            includeImage: true,
+            includeRetail: true,
+            includeWholesale: true,
+            priceSource: 'saved' as const,
+            priceRounding: 1,
+          };
     const itemPricesMap = rawItemPrices && typeof rawItemPrices === 'object' ? rawItemPrices : {};
 
     const errors: string[] = [];
@@ -144,7 +171,7 @@ export async function POST(request: Request) {
 
     for (const item of items) {
       try {
-        const title = (item.name || 'Untitled Piece').slice(0, 255);
+        const title = vaultExportItemTitle(item.name);
         const bodyHtml = buildBodyHtml(item);
         const productType = item.tag || 'other';
         const skuPart = (item.id || '').slice(0, 8);
@@ -198,8 +225,10 @@ export async function POST(request: Request) {
           }
 
           const variantInput: Record<string, unknown> = { id: existingVariantId };
-          if (opts.includeRetail) variantInput.price = retail.toFixed(2);
-          if (opts.includeWholesale && wholesale > 0) variantInput.compareAtPrice = wholesale.toFixed(2);
+          if (opts.includeRetail)
+            variantInput.price = formatPriceForExport(retail, opts.priceRounding);
+          if (opts.includeWholesale && wholesale > 0)
+            variantInput.compareAtPrice = formatPriceForExport(wholesale, opts.priceRounding);
           variantInput.inventoryItem = { sku };
 
           const variantUpdateRes = await shopifyGraphql(shopDomain, shopifyToken, `
@@ -263,8 +292,10 @@ export async function POST(request: Request) {
         }
 
         const variantInput: Record<string, unknown> = { id: variantId, inventoryItem: { sku } };
-        if (opts.includeRetail) variantInput.price = retail.toFixed(2);
-        if (opts.includeWholesale && wholesale > 0) variantInput.compareAtPrice = wholesale.toFixed(2);
+        if (opts.includeRetail)
+          variantInput.price = formatPriceForExport(retail, opts.priceRounding);
+        if (opts.includeWholesale && wholesale > 0)
+          variantInput.compareAtPrice = formatPriceForExport(wholesale, opts.priceRounding);
 
         const updateRes = await shopifyGraphql(shopDomain, shopifyToken, `
           mutation UpdateVariants($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {

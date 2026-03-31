@@ -34,3 +34,9 @@ export function buildBodyHtml(item: {
 export function vaultSkuFromItemId(id: string): string {
   return `VAULT-${(id || '').slice(0, 8)}`;
 }
+
+/** Title line for Shopify / Squarespace CSV and Admin API (caps, max 255). */
+export function vaultExportItemTitle(name?: string | null): string {
+  const raw = (name || 'Untitled Piece').trim() || 'Untitled Piece';
+  return raw.toUpperCase().slice(0, 255);
+}
