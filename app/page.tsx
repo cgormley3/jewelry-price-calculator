@@ -92,6 +92,15 @@ function metalRowLiveDollarValue(m: any, livePrices: { gold?: number; silver?: n
   return metalRowDollarValueFromSpotOzt(m, spot);
 }
 
+/** Optional findings/other retail multiplier for Strategy A/B only (undefined = use formula default). */
+function findingsMultFromItem(item: any): number | undefined {
+  if (!item || item.strategy === 'custom') return undefined;
+  const v = item.findings_retail_multiplier;
+  if (v == null || v === '') return undefined;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : undefined;
+}
+
 /**
  * iOS “Add to Home Screen” / WebKit often invalidates decoded `<img>` bitmaps after backgrounding
  * (e.g. PDF preview, app switcher) while leaving the same URL cached as failed. Append a query so
@@ -205,6 +214,7 @@ export default function Home() {
   const [manualWholesale, setManualWholesale] = useState('');
   const [recalcParams, setRecalcParams] = useState({ gold: '', silver: '', platinum: '', palladium: '', laborRate: '' });
   const [globalRecalcFormulaMode, setGlobalRecalcFormulaMode] = useState<'keep' | 'A' | 'B' | string>('keep');
+  const [recalcItemFormulaMode, setRecalcItemFormulaMode] = useState<'keep' | 'A' | 'B' | string>('keep');
   const [editingNameId, setEditingNameId] = useState<string | null>(null);
   const [newNameValue, setNewNameValue] = useState('');
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -217,10 +227,10 @@ export default function Home() {
     [editingItemId, metalList]
   );
   const [tempMetal, setTempMetal] = useState('Sterling Silver');
-  const [tempWeight, setTempWeight] = useState(0);
+  const [tempWeight, setTempWeight] = useState('');
   const [tempUnit, setTempUnit] = useState('Ounces (std)');
   const [useManualPrice, setUseManualPrice] = useState(false);
-  const [manualPriceInput, setManualPriceInput] = useState<number | ''>('');
+  const [manualPriceInput, setManualPriceInput] = useState('');
   const [token, setToken] = useState<string | null>(null);
   const [hours, setHours] = useState<number | ''>('');
   const [rate, setRate] = useState<number | ''>('');
@@ -233,6 +243,8 @@ export default function Home() {
   const [overheadCost, setOverheadCost] = useState<number | ''>('');
   const [overheadType, setOverheadType] = useState<'flat' | 'percent'>('percent');
   const [otherCosts, setOtherCosts] = useState<number | ''>('');
+  /** Findings retail × for Formula A/B; empty = use strategy default (same totals as before optional multiplier). */
+  const [findingsRetailMultInput, setFindingsRetailMultInput] = useState('');
 
   const [strategy, setStrategy] = useState<'A' | 'B' | 'custom'>('A');
   const [retailMultA, setRetailMultA] = useState(2.5);
@@ -266,6 +278,14 @@ export default function Home() {
   const calcOverheadCost = includeLaborSection ? overheadCost : 0;
   // When Stones section is off, price ignores stones until user turns it on
   const calcStoneList = includeStonesSection ? stoneList : [];
+
+  const calculatorFindingsMult = useMemo((): number | undefined => {
+    if (strategy === 'custom') return undefined;
+    const t = findingsRetailMultInput.trim();
+    if (t === '') return undefined;
+    const n = Number(t);
+    return Number.isFinite(n) ? n : undefined;
+  }, [strategy, findingsRetailMultInput]);
 
   // App State
   const [inventory, setInventory] = useState<any[]>([]);
@@ -357,6 +377,7 @@ export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const cropBlobUrlRef = useRef<string | null>(null);
+  const cropSourceFileRef = useRef<File | null>(null);
 
   // Selection & Location State
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
@@ -638,7 +659,7 @@ export default function Home() {
       } catch (_) { /* ignore */ }
     }
 
-    // Fetch prices from API (spreadsheet)
+    // Fetch prices from API (Supabase metal_prices)
     if (fetchInProgressRef.current) return;
     fetchInProgressRef.current = true;
     const myVersion = ++fetchVersionRef.current;
@@ -703,7 +724,7 @@ export default function Home() {
     }
   }, [pricesLoaded]);
 
-  const calculateFullBreakdown = useCallback((metals: any[], h: any, r: any, o: any, stones: any[], ovCost: any, ovType: 'flat' | 'percent', customMult?: number, customMarkup?: number, priceOverride?: any, useManualMetalForInitialSaveOnly?: boolean, skipSpotSavedFallback?: boolean) => {
+  const calculateFullBreakdown = useCallback((metals: any[], h: any, r: any, o: any, stones: any[], ovCost: any, ovType: 'flat' | 'percent', customMult?: number, customMarkup?: number, priceOverride?: any, useManualMetalForInitialSaveOnly?: boolean, skipSpotSavedFallback?: boolean, findingsRetailMult?: number | null) => {
     let rawMaterialCost = 0;
     /** Compare-tab scenario: revalue from scenario/live spots only */
     const useScenarioSpotPath = priceOverride !== undefined && priceOverride !== null;
@@ -763,20 +784,26 @@ export default function Home() {
     const metalCost = rawMaterialCost;
     const totalMaterials = rawMaterialCost + other + totalStoneCost;
 
+    const mult = customMult ?? retailMultA;
+    const mark = customMarkup ?? markupB;
+    const omResolved = findingsRetailMult != null && Number.isFinite(Number(findingsRetailMult))
+      ? Number(findingsRetailMult)
+      : null;
+    const omA = omResolved ?? mult;
+    const omB = omResolved ?? (2 * mark);
+
     // --- FORMULA A (STANDARD MULTIPLIER) ---
-    // Base Cost: Metal + Labor + Other + Overhead (Stones excluded from base)
+    // Base cost (wholesale path): Metal + Labor + Other + Overhead (stones excluded from this sum)
     const baseCostA = metalCost + labor + other + overhead;
-    // Retail Price: (Base Cost × Retail Multiplier) + (Stones × Stone Markup)
-    const retailA = (baseCostA * (customMult ?? retailMultA)) + totalStoneRetail;
-    // Displayed Wholesale: Base Cost + Stone Cost
+    // Retail: findings/other priced separately (like stones) so optional × can differ from main multiplier
+    const baseForRetailMultA = metalCost + labor + overhead;
+    const retailA = (baseForRetailMultA * mult) + (other * omA) + totalStoneRetail;
     const wholesaleA = baseCostA + totalStoneCost;
 
     // --- FORMULA B (MATERIALS MARKUP) ---
-    // Base Cost: ((Metal + Other) × Markup B) + Labor + Overhead
-    const baseCostB = ((metalCost + other) * (customMarkup ?? markupB)) + labor + overhead;
-    // Retail Price: (Base Cost × 2) + (Stones × Stone Markup)
-    const retailB = (baseCostB * 2) + totalStoneRetail;
-    // Displayed Wholesale: Base Cost + Stone Cost
+    const baseCostB = ((metalCost + other) * mark) + labor + overhead;
+    const innerBForRetail = (metalCost * mark) + labor + overhead;
+    const retailB = (innerBForRetail * 2) + (other * omB) + totalStoneRetail;
     const wholesaleB = baseCostB + totalStoneCost;
 
     return { wholesaleA, retailA, wholesaleB, retailB, totalMaterials, labor, metalCost, stones: totalStoneCost, stoneRetail: totalStoneRetail, overhead, other };
@@ -829,7 +856,7 @@ export default function Home() {
     const breakdown = calculateFullBreakdown(
       item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0,
       stonesArray, item.overhead_cost || 0, (item.overhead_type as 'flat' | 'percent') || 'flat',
-      item.multiplier, item.markup_b, priceOverride, false, true
+      item.multiplier, item.markup_b, priceOverride, false, true, findingsMultFromItem(item)
     );
     const result: Record<string, { wholesale: number; retail: number }> = {};
     if (selected.a) result['A'] = { wholesale: breakdown.wholesaleA, retail: breakdown.retailA };
@@ -1443,6 +1470,7 @@ export default function Home() {
       return;
     }
     revokeCropBlobUrl();
+    cropSourceFileRef.current = file;
     setCropIsExistingPhoto(false);
     try {
       const url = URL.createObjectURL(file);
@@ -1463,6 +1491,7 @@ export default function Home() {
     const raw = imageUrl?.trim();
     if (!raw) return;
     setOpenMenuId(null);
+    cropSourceFileRef.current = null;
     setCropIsExistingPhoto(true);
     try {
       const busted = raw.includes('?') ? `${raw}&vaultRecrop=${Date.now()}` : `${raw}?vaultRecrop=${Date.now()}`;
@@ -1521,6 +1550,8 @@ export default function Home() {
     canvas.toBlob(async (blob) => {
       if (!blob) return;
       setUploadingId(cropItemId);
+      const sourceFile = cropSourceFileRef.current;
+      cropSourceFileRef.current = null;
       revokeCropBlobUrl();
       setCropImage(null);
       setCropIsExistingPhoto(false);
@@ -1528,13 +1559,37 @@ export default function Home() {
       const { error: uploadError } = await supabase.storage.from('product-images').upload(fileName, blob);
       if (uploadError) {
         setNotification({ title: "Upload Failed", message: "Could not upload cropped image.", type: 'error' });
-      } else {
-        const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(fileName);
-        const { error: dbError } = await supabase.from('inventory').update({ image_url: publicUrl }).eq('id', cropItemId);
-        if (!dbError) {
-          setInventory(inventory.map(item => item.id === cropItemId ? { ...item, image_url: publicUrl } : item));
-          setNotification({ title: "Image Updated", message: "New photo saved successfully.", type: 'success' });
+        setUploadingId(null);
+        setCropItemId(null);
+        return;
+      }
+      const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(fileName);
+
+      let imageOriginalUrl: string | undefined;
+      const existingRow = inventory.find((it: any) => it.id === cropItemId);
+      if (sourceFile) {
+        const rawExt = (sourceFile.name.split('.').pop() || 'jpg').toLowerCase();
+        const safeExt = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'].includes(rawExt) ? rawExt : 'jpg';
+        const origPath = `${user.id}/${cropItemId}-orig-${Date.now()}.${safeExt}`;
+        const { error: origErr } = await supabase.storage.from('product-images').upload(origPath, sourceFile, {
+          contentType: sourceFile.type || undefined,
+          upsert: false,
+        });
+        if (!origErr) {
+          const { data: { publicUrl: origPublic } } = supabase.storage.from('product-images').getPublicUrl(origPath);
+          imageOriginalUrl = origPublic;
         }
+      } else if (existingRow?.image_original_url) {
+        imageOriginalUrl = existingRow.image_original_url;
+      }
+
+      const dbPayload: Record<string, string> = { image_url: publicUrl };
+      if (imageOriginalUrl) dbPayload.image_original_url = imageOriginalUrl;
+
+      const { error: dbError } = await supabase.from('inventory').update(dbPayload).eq('id', cropItemId);
+      if (!dbError) {
+        setInventory(inventory.map(item => item.id === cropItemId ? { ...item, ...dbPayload } : item));
+        setNotification({ title: "Image Updated", message: "New photo saved successfully.", type: 'success' });
       }
       setUploadingId(null);
       setCropItemId(null);
@@ -1560,7 +1615,7 @@ export default function Home() {
       manualPrice: customSpotOzt != null && Number.isFinite(customSpotOzt) && customSpotOzt > 0 ? customSpotOzt : undefined,
       spotSaved: customSpotOzt != null && Number.isFinite(customSpotOzt) && customSpotOzt > 0 ? customSpotOzt : currentSpot
     }]);
-    setTempWeight(0); setManualPriceInput(''); setUseManualPrice(false);
+    setTempWeight(''); setManualPriceInput(''); setUseManualPrice(false);
   };
 
   const addStoneToPiece = () => {
@@ -1646,6 +1701,11 @@ export default function Home() {
     }
     setIncludeStonesSection((item.stones && item.stones.length > 0) || (Number(item.stone_cost) || 0) > 0);
     setIncludeLaborSection((Number(item.hours) || 0) > 0 || (Number(item.labor_at_making) || 0) > 0);
+    if (item.findings_retail_multiplier != null && item.findings_retail_multiplier !== '') {
+      setFindingsRetailMultInput(String(item.findings_retail_multiplier));
+    } else {
+      setFindingsRetailMultInput('');
+    }
     setActiveTab('calculator');
     setOpenMenuId(null);
   };
@@ -1666,7 +1726,11 @@ export default function Home() {
           item.overhead_cost || 0,
           (item.overhead_type as 'flat' | 'percent') || 'flat',
           item.multiplier,
-          item.markup_b
+          item.markup_b,
+          undefined,
+          undefined,
+          undefined,
+          findingsMultFromItem(item)
         );
 
         const itemPrices = getItemPrices(item, current);
@@ -1742,7 +1806,9 @@ export default function Home() {
             mult,
             mark,
             recalcParams,
-            false
+            false,
+            undefined,
+            findingsMultFromItem(item)
           );
 
           const itemForPricing = applyFormula
@@ -1756,8 +1822,8 @@ export default function Home() {
             : item;
 
           const itemPrices = getItemPrices(itemForPricing, calc);
-          const newWholesale = itemPrices.wholesale;
-          const newRetail = itemPrices.retail;
+          const newWholesale = roundForDisplay(itemPrices.wholesale);
+          const newRetail = roundForDisplay(itemPrices.retail);
 
           const updatedMetals = (item.metals || []).map((m: any) => {
             const type = m.type.toLowerCase();
@@ -1834,57 +1900,108 @@ export default function Home() {
       message: `Overwrite "${(recalcItem.name || '').toUpperCase()}" with these new prices and costs? This cannot be undone.`,
       type: 'confirm',
       onConfirm: async () => {
-        const laborHours = recalcItem.hours || 1;
-        const newLaborCost = recalcParams.laborRate
-          ? Number(recalcParams.laborRate) * laborHours
-          : Number(recalcItem.labor_at_making || 0);
+      const laborHours = recalcItem.hours || 1;
+      const newLaborCost = recalcParams.laborRate
+        ? Number(recalcParams.laborRate) * laborHours
+        : Number(recalcItem.labor_at_making || 0);
 
-        const stonesArray = convertStonesToArray(recalcItem);
-        const calc = calculateFullBreakdown(
-          recalcItem.metals,
-          1,
-          newLaborCost,
-          recalcItem.other_costs_at_making,
-          stonesArray,
-          recalcItem.overhead_cost || 0,
-          (recalcItem.overhead_type as 'flat' | 'percent') || 'flat',
-          recalcItem.multiplier,
-          recalcItem.markup_b,
-          recalcParams,
-          false
-        );
+      const stonesArray = convertStonesToArray(recalcItem);
+      const applyFormula = recalcItemFormulaMode !== 'keep';
+      const selectedCustomFormula = recalcItemFormulaMode !== 'keep' && recalcItemFormulaMode !== 'A' && recalcItemFormulaMode !== 'B'
+        ? formulas.find(f => f.id === recalcItemFormulaMode)
+        : null;
 
-        const itemPrices = getItemPrices(recalcItem, calc);
-        const newWholesale = itemPrices.wholesale;
-        const newRetail = itemPrices.retail;
+      let mult = recalcItem.multiplier;
+      let mark = recalcItem.markup_b;
+      if (applyFormula) {
+        if (recalcItemFormulaMode === 'A') mult = retailMultA;
+        else if (recalcItemFormulaMode === 'B') mark = markupB;
+      }
 
-        const updatedMetals = recalcItem.metals.map((m: any) => {
-          const type = m.type.toLowerCase();
-          let newSpot = m.spotSaved;
+      const calc = calculateFullBreakdown(
+        recalcItem.metals,
+        1,
+        newLaborCost,
+        recalcItem.other_costs_at_making ?? 0,
+        stonesArray,
+        recalcItem.overhead_cost || 0,
+        (recalcItem.overhead_type as 'flat' | 'percent') || 'flat',
+        mult,
+        mark,
+        recalcParams,
+        false,
+        undefined,
+        findingsMultFromItem(recalcItem)
+      );
 
-          if (type.includes('gold') && recalcParams.gold) newSpot = Number(recalcParams.gold);
-          else if (type.includes('silver') && recalcParams.silver) newSpot = Number(recalcParams.silver);
-          else if (type.includes('platinum') && recalcParams.platinum) newSpot = Number(recalcParams.platinum);
-          else if (type.includes('palladium') && recalcParams.palladium) newSpot = Number(recalcParams.palladium);
+      const itemForPricing = applyFormula
+        ? (recalcItemFormulaMode === 'A'
+          ? { ...recalcItem, strategy: 'A', custom_formula: null }
+          : recalcItemFormulaMode === 'B'
+            ? { ...recalcItem, strategy: 'B', custom_formula: null }
+            : selectedCustomFormula
+              ? { ...recalcItem, strategy: 'custom', custom_formula: { formula_base: selectedCustomFormula.formula_base, formula_wholesale: selectedCustomFormula.formula_wholesale, formula_retail: selectedCustomFormula.formula_retail, formula_name: selectedCustomFormula.name } }
+              : recalcItem)
+        : recalcItem;
 
-          return { ...m, spotSaved: newSpot };
-        });
+      const itemPrices = getItemPrices(itemForPricing, calc);
+      const newWholesale = roundForDisplay(itemPrices.wholesale);
+      const newRetail = roundForDisplay(itemPrices.retail);
 
-        const { error } = await supabase.from('inventory').update({
-          wholesale: newWholesale,
-          retail: newRetail,
-          labor_at_making: newLaborCost,
-          metals: updatedMetals
-        }).eq('id', recalcItem.id);
+      const updatedMetals = recalcItem.metals.map((m: any) => {
+        const type = m.type.toLowerCase();
+        let newSpot = m.spotSaved;
 
-        if (!error) {
-          fetchInventory();
-          setRecalcItem(null);
-          setRecalcParams({ gold: '', silver: '', platinum: '', palladium: '', laborRate: '' });
-          setNotification({ title: "Vault Updated", message: "Item prices and costs have been updated successfully.", type: 'success' });
-        } else {
-          setNotification({ title: "Update Failed", message: "Could not sync new prices to Vault.", type: 'error' });
+        if (type.includes('gold') && recalcParams.gold) newSpot = Number(recalcParams.gold);
+        else if (type.includes('silver') && recalcParams.silver) newSpot = Number(recalcParams.silver);
+        else if (type.includes('platinum') && recalcParams.platinum) newSpot = Number(recalcParams.platinum);
+        else if (type.includes('palladium') && recalcParams.palladium) newSpot = Number(recalcParams.palladium);
+
+        return { ...m, spotSaved: newSpot };
+      });
+
+      const updatePayload: Record<string, unknown> = {
+        wholesale: newWholesale,
+        retail: newRetail,
+        labor_at_making: newLaborCost,
+        metals: updatedMetals
+      };
+
+      if (applyFormula) {
+        if (recalcItemFormulaMode === 'A') {
+          updatePayload.strategy = 'A';
+          updatePayload.multiplier = retailMultA;
+          updatePayload.markup_b = recalcItem.markup_b;
+          updatePayload.custom_formula = null;
+        } else if (recalcItemFormulaMode === 'B') {
+          updatePayload.strategy = 'B';
+          updatePayload.multiplier = recalcItem.multiplier;
+          updatePayload.markup_b = markupB;
+          updatePayload.custom_formula = null;
+        } else if (selectedCustomFormula) {
+          updatePayload.strategy = 'custom';
+          updatePayload.multiplier = recalcItem.multiplier;
+          updatePayload.markup_b = recalcItem.markup_b;
+          updatePayload.custom_formula = {
+            formula_base: selectedCustomFormula.formula_base,
+            formula_wholesale: selectedCustomFormula.formula_wholesale,
+            formula_retail: selectedCustomFormula.formula_retail,
+            formula_name: selectedCustomFormula.name
+          };
         }
+      }
+
+      const { error } = await supabase.from('inventory').update(updatePayload).eq('id', recalcItem.id);
+
+      if (!error) {
+        fetchInventory();
+        setRecalcItem(null);
+        setRecalcParams({ gold: '', silver: '', platinum: '', palladium: '', laborRate: '' });
+        setRecalcItemFormulaMode('keep');
+        setNotification({ title: "Vault Updated", message: "Item prices and costs have been updated successfully.", type: 'success' });
+      } else {
+        setNotification({ title: "Update Failed", message: "Could not sync new prices to Vault.", type: 'error' });
+      }
       }
     });
   };
@@ -1973,7 +2090,7 @@ export default function Home() {
       const preserveStock = vaultItemStockQty(
         inventory.find((i) => i.id === editingItemId) ?? { stock_qty: 1 }
       );
-      const a = calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneList, overheadCost, overheadType, undefined, undefined, undefined, false);
+      const a = calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneList, overheadCost, overheadType, undefined, undefined, undefined, false, undefined, calculatorFindingsMult);
       const { wholesale, retail } = getStrategyPrices(a);
       newItem = {
         id: editingItemId,
@@ -1993,13 +2110,14 @@ export default function Home() {
         multiplier: retailMultA,
         markup_b: markupB,
         custom_formula: strategy === 'custom' ? (selectedFormulaId ? { ...customFormulaModel, formula_name: formulas.find(f => f.id === selectedFormulaId)?.name || null } : customFormulaModel) : null,
+        findings_retail_multiplier: strategy === 'custom' ? null : (findingsRetailMultInput.trim() === '' ? null : Number(findingsRetailMultInput)),
         hours: Number(hours) || 0,
         status: 'active',
         stock_qty: preserveStock,
       };
     } else {
       const useManualForInitialSave = metalList.some((m: any) => m.isManual && m.manualPrice);
-      const a = calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneList, overheadCost, overheadType, undefined, undefined, undefined, useManualForInitialSave);
+      const a = calculateFullBreakdown(metalList, hours, rate, otherCosts, stoneList, overheadCost, overheadType, undefined, undefined, undefined, useManualForInitialSave, undefined, calculatorFindingsMult);
       const { wholesale, retail } = getStrategyPrices(a);
       newItem = {
         name: itemName,
@@ -2018,6 +2136,7 @@ export default function Home() {
         multiplier: retailMultA,
         markup_b: markupB,
         custom_formula: strategy === 'custom' ? (selectedFormulaId ? { ...customFormulaModel, formula_name: formulas.find(f => f.id === selectedFormulaId)?.name || null } : customFormulaModel) : null,
+        findings_retail_multiplier: strategy === 'custom' ? null : (findingsRetailMultInput.trim() === '' ? null : Number(findingsRetailMultInput)),
         user_id: currentUser.id,
         notes: '',
         hours: Number(hours) || 0,
@@ -2076,7 +2195,7 @@ export default function Home() {
         setTempStoneCost('');
         setTempStoneMarkup(2);
         setTempMetal('Sterling Silver');
-        setTempWeight(0);
+        setTempWeight('');
         setTempUnit('Ounces (std)');
         setUseManualPrice(false);
         setManualPriceInput('');
@@ -2086,6 +2205,7 @@ export default function Home() {
         setStrategy('A');
         setRetailMultA(2.5);
         setMarkupB(1.8);
+        setFindingsRetailMultInput('');
         setCostBreakdownOpen(false);
         setFormulaAOpen(false);
         setFormulaBOpen(false);
@@ -2388,7 +2508,7 @@ export default function Home() {
 
       if (filterMinPrice || filterMaxPrice) {
         const stonesArray = convertStonesToArray(item);
-        const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, stonesArray, item.overhead_cost || 0, (item.overhead_type as 'flat' | 'percent') || 'flat', item.multiplier, item.markup_b);
+        const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, stonesArray, item.overhead_cost || 0, (item.overhead_type as 'flat' | 'percent') || 'flat', item.multiplier, item.markup_b, undefined, undefined, undefined, findingsMultFromItem(item));
         const itemPrices = getItemPrices(item, current);
         const liveRetail = itemPrices.retail;
 
@@ -2490,7 +2610,7 @@ export default function Home() {
     return inventory.reduce((acc, item) => {
       if (item.status === 'archived' || item.status === 'sold' || item.status === 'draft') return acc;
       const stonesArray = convertStonesToArray(item);
-      const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, stonesArray, item.overhead_cost || 0, (item.overhead_type as 'flat' | 'percent') || 'flat', item.multiplier, item.markup_b);
+      const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, stonesArray, item.overhead_cost || 0, (item.overhead_type as 'flat' | 'percent') || 'flat', item.multiplier, item.markup_b, undefined, undefined, undefined, findingsMultFromItem(item));
       const itemPrices = getItemPrices(item, current);
       const qty = vaultItemStockQty(item);
       return acc + itemPrices.retail * qty;
@@ -2541,7 +2661,7 @@ export default function Home() {
     ];
     const rows = targetItems.map(item => {
       const stonesArray = convertStonesToArray(item);
-      const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, stonesArray, item.overhead_cost || 0, (item.overhead_type as 'flat' | 'percent') || 'flat', item.multiplier, item.markup_b);
+      const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, stonesArray, item.overhead_cost || 0, (item.overhead_type as 'flat' | 'percent') || 'flat', item.multiplier, item.markup_b, undefined, undefined, undefined, findingsMultFromItem(item));
       const itemPrices = getItemPrices(item, current);
       const liveWholesale = itemPrices.wholesale;
       const liveRetail = itemPrices.retail;
@@ -2623,7 +2743,11 @@ export default function Home() {
             item.overhead_cost || 0,
             (item.overhead_type as 'flat' | 'percent') || 'flat',
             item.multiplier,
-            item.markup_b
+            item.markup_b,
+            undefined,
+            undefined,
+            undefined,
+            findingsMultFromItem(item)
           );
           const prices = getItemPrices(item, breakdown);
           itemPrices[item.id] = { retail: prices.retail, wholesale: prices.wholesale };
@@ -2972,7 +3096,7 @@ export default function Home() {
 
     if (includeBreakdownInPDF) {
       const stonesArray = convertStonesToArray(item);
-      const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, stonesArray, item.overhead_cost || 0, (item.overhead_type as 'flat' | 'percent') || 'flat', item.multiplier, item.markup_b);
+      const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, stonesArray, item.overhead_cost || 0, (item.overhead_type as 'flat' | 'percent') || 'flat', item.multiplier, item.markup_b, undefined, undefined, undefined, findingsMultFromItem(item));
 
       const metalLines: string[] = item.metals?.map((m: any) => `${m.weight}${m.unit} ${m.type}`) || [];
       const savedSpotByMetal: Record<string, number> = {};
@@ -3104,7 +3228,7 @@ export default function Home() {
       }
 
       const stonesArray = convertStonesToArray(item);
-      const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, stonesArray, item.overhead_cost || 0, (item.overhead_type as 'flat' | 'percent') || 'flat', item.multiplier, item.markup_b);
+      const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, stonesArray, item.overhead_cost || 0, (item.overhead_type as 'flat' | 'percent') || 'flat', item.multiplier, item.markup_b, undefined, undefined, undefined, findingsMultFromItem(item));
       const itemPrices = getItemPrices(item, current);
       const liveWholesale = itemPrices.wholesale;
       const liveRetail = itemPrices.retail;
@@ -3978,6 +4102,16 @@ export default function Home() {
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Scenario Calculator</h3>
             <p className="text-[10px] text-stone-400 font-bold uppercase">Temporarily recalculate logic with custom inputs</p>
 
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[9px] font-bold text-stone-400 uppercase">Round prices to</span>
+              {(['none', 1, 5, 10, 25] as const).map(opt => (
+                <button key={opt} type="button" onClick={() => setPriceRoundingWithPersist(opt)}
+                  className={`py-1.5 px-2.5 rounded-lg text-[9px] font-black uppercase border transition-all ${priceRounding === opt ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-stone-50 border-stone-200 text-stone-500'}`}>
+                  {opt === 'none' ? 'None' : `$${opt}`}
+                </button>
+              ))}
+            </div>
+
             <div className="space-y-4 bg-stone-50 p-4 rounded-2xl border border-stone-100">
               <p className="text-[9px] text-stone-500 italic">Leave blank to keep the previously saved spot price for each metal.</p>
               {recalcItem.metals.some((m: any) => m.type.toLowerCase().includes('gold')) && (
@@ -4005,15 +4139,20 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Rounding options */}
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[9px] font-bold text-stone-400 uppercase">Round to</span>
-              {(['none', 1, 5, 10, 25] as const).map(opt => (
-                <button key={opt} type="button" onClick={() => setPriceRoundingWithPersist(opt)}
-                  className={`py-1.5 px-2.5 rounded-lg text-[9px] font-black uppercase border transition-all ${priceRounding === opt ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-stone-50 border-stone-200 text-stone-500'}`}>
-                  {opt === 'none' ? 'None' : `$${opt}`}
-                </button>
-              ))}
+            <div>
+              <label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Formula to use</label>
+              <select
+                value={recalcItemFormulaMode}
+                onChange={(e) => setRecalcItemFormulaMode(e.target.value)}
+                className="w-full p-3 rounded-xl border border-stone-200 bg-white text-sm font-bold outline-none focus:border-[#A5BEAC]"
+              >
+                <option value="keep">Keep this item&apos;s current formula</option>
+                <option value="A">Apply Formula A</option>
+                <option value="B">Apply Formula B</option>
+                {formulas.map((f) => (
+                  <option key={f.id} value={f.id}>Apply &quot;{f.name}&quot;</option>
+                ))}
+              </select>
             </div>
 
             {/* LIVE CALCULATION DISPLAY */}
@@ -4026,6 +4165,16 @@ export default function Home() {
                 const newLaborCost = effectiveRate * laborHours;
 
                 const stonesArray = convertStonesToArray(recalcItem);
+                const applyFormula = recalcItemFormulaMode !== 'keep';
+                const selectedCustomFormula = recalcItemFormulaMode !== 'keep' && recalcItemFormulaMode !== 'A' && recalcItemFormulaMode !== 'B'
+                  ? formulas.find(f => f.id === recalcItemFormulaMode)
+                  : null;
+                let mult = recalcItem.multiplier;
+                let mark = recalcItem.markup_b;
+                if (applyFormula) {
+                  if (recalcItemFormulaMode === 'A') mult = retailMultA;
+                  else if (recalcItemFormulaMode === 'B') mark = markupB;
+                }
                 const calc = calculateFullBreakdown(
                   recalcItem.metals,
                   laborHours,
@@ -4034,13 +4183,25 @@ export default function Home() {
                   stonesArray,
                   recalcItem.overhead_cost ?? 0,
                   (recalcItem.overhead_type as 'flat' | 'percent') || 'flat',
-                  recalcItem.multiplier,
-                  recalcItem.markup_b,
+                  mult,
+                  mark,
                   recalcParams,
-                  false
+                  false,
+                  undefined,
+                  findingsMultFromItem(recalcItem)
                 );
 
-                const itemPrices = getItemPrices(recalcItem, calc);
+                const itemForPricing = applyFormula
+                  ? (recalcItemFormulaMode === 'A'
+                    ? { ...recalcItem, strategy: 'A', custom_formula: null }
+                    : recalcItemFormulaMode === 'B'
+                      ? { ...recalcItem, strategy: 'B', custom_formula: null }
+                      : selectedCustomFormula
+                        ? { ...recalcItem, strategy: 'custom', custom_formula: { formula_base: selectedCustomFormula.formula_base, formula_wholesale: selectedCustomFormula.formula_wholesale, formula_retail: selectedCustomFormula.formula_retail, formula_name: selectedCustomFormula.name } }
+                        : recalcItem)
+                  : recalcItem;
+
+                const itemPrices = getItemPrices(itemForPricing, calc);
                 const liveRetail = itemPrices.retail;
                 const liveWholesale = itemPrices.wholesale;
 
@@ -4090,7 +4251,7 @@ export default function Home() {
             </div>
 
             <div className="flex gap-3">
-              <button onClick={() => { setRecalcItem(null); setRecalcParams({ gold: '', silver: '', platinum: '', palladium: '', laborRate: '' }); }} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Close Calculator</button>
+              <button onClick={() => { setRecalcItem(null); setRecalcParams({ gold: '', silver: '', platinum: '', palladium: '', laborRate: '' }); setRecalcItemFormulaMode('keep'); }} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Close Calculator</button>
               <button onClick={handleRecalcSync} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition shadow-lg">Sync to Vault</button>
             </div>
           </div>
@@ -4639,7 +4800,7 @@ export default function Home() {
                   <option>Sterling Silver</option><option>10K Gold</option><option>14K Gold</option><option>18K Gold</option><option>22K Gold</option><option>24K Gold</option><option>Platinum 950</option><option>Palladium</option>
                 </select>
                 <div className="flex gap-2">
-                  <input type="number" min={0} step="any" placeholder="Weight" className="w-full p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none transition-shadow" value={tempWeight || ''} onChange={e => { const v = parseFloat(e.target.value); setTempWeight(Number.isNaN(v) ? 0 : v); }} />
+                  <input type="text" inputMode="decimal" autoComplete="off" placeholder="Weight" className="w-full p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none transition-shadow tabular-nums" value={tempWeight} onChange={e => { const t = e.target.value; if (t === '' || /^[0-9]*\.?[0-9]*$/.test(t)) setTempWeight(t); }} />
                   <select className="p-3 border border-stone-200 rounded-xl text-[10px] font-bold focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none" value={tempUnit} onChange={e => setTempUnit(e.target.value)}>{Object.keys(UNIT_TO_GRAMS).map(u => <option key={u}>{u}</option>)}</select>
                 </div>
                 <div className="space-y-2">
@@ -4663,7 +4824,7 @@ export default function Home() {
                         })()}
                         className="w-full p-3 border border-[#A5BEAC] rounded-xl text-sm focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none"
                         value={manualPriceInput}
-                        onChange={(e) => setManualPriceInput(e.target.value === '' ? '' : Number(e.target.value))}
+                        onChange={(e) => { const t = e.target.value; if (t === '' || /^[0-9]*\.?[0-9]*$/.test(t)) setManualPriceInput(t); }}
                       />
                       <p className="text-[9px] font-bold text-stone-500 normal-case leading-snug">Same unit as market spot: $USD/ozt.</p>
                     </div>
@@ -4782,6 +4943,24 @@ export default function Home() {
                     <label className="block text-[10px] font-bold text-stone-500 uppercase mb-1">Findings / other ($)</label>
                     <input type="number" min={0} placeholder="0" className="w-full p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none" value={otherCosts} onChange={e => { const v = e.target.value === '' ? '' : Number(e.target.value); setOtherCosts(v); if (Number(v) > 0) setIncludeLaborSection(true); }} />
                   </div>
+                  {strategy !== 'custom' && (
+                    <div>
+                      <label className="block text-[10px] font-bold text-stone-500 uppercase mb-1">Findings retail × <span className="normal-case text-stone-400 font-semibold">(optional)</span></label>
+                      <div className="flex items-center border border-stone-200 rounded-xl focus-within:ring-2 focus-within:ring-[#A5BEAC]/30 focus-within:border-[#2d4a22] bg-white">
+                        <span className="pl-3 text-stone-400 font-black text-sm">×</span>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          autoComplete="off"
+                          placeholder={strategy === 'B' ? `e.g. ${(2 * markupB).toFixed(2)} (2× materials markup)` : `e.g. ${retailMultA}`}
+                          className="flex-1 p-3 pl-1 pr-3 text-sm font-bold focus:outline-none bg-transparent min-w-0 tabular-nums"
+                          value={findingsRetailMultInput}
+                          onChange={(e) => { const t = e.target.value; if (t === '' || /^[0-9]*\.?[0-9]*$/.test(t)) setFindingsRetailMultInput(t); }}
+                        />
+                      </div>
+                      <p className="text-[9px] font-medium text-stone-500 mt-1.5 normal-case leading-snug">Leave blank to use your formula&apos;s default on findings (same as before). Formula A uses your retail multiplier; Formula B uses 2× your materials markup.</p>
+                    </div>
+                  )}
                 </div>
               </div>
               )}
@@ -4802,9 +4981,9 @@ export default function Home() {
                   </button>
                 {costBreakdownOpen && (
                 <div className="w-full p-4 rounded-xl bg-stone-100/80 border border-stone-200 space-y-3 text-left">
-                  <div className="flex justify-between items-center py-2 border-b border-stone-200"><span className="text-stone-500 font-bold uppercase text-[10px]">Materials Total (Metal+Stone+Other)</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator).totalMaterials.toFixed(2)}</span></div>
-                  <div className="flex justify-between items-center py-2 border-b border-stone-200"><span className="text-stone-500 font-bold uppercase text-[10px]">Labor Total ({Number(calcHours) || 0}h)</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator).labor.toFixed(2)}</span></div>
-                  <div className="flex justify-between items-center py-2"><span className="text-stone-500 font-bold uppercase text-[10px]">Overhead Total ({overheadType === 'percent' ? `${Number(calcOverheadCost) || 0}%` : 'Flat'})</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator).overhead.toFixed(2)}</span></div>
+                  <div className="flex justify-between items-center py-2 border-b border-stone-200"><span className="text-stone-500 font-bold uppercase text-[10px]">Materials Total (Metal+Stone+Other)</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator, undefined, calculatorFindingsMult).totalMaterials.toFixed(2)}</span></div>
+                  <div className="flex justify-between items-center py-2 border-b border-stone-200"><span className="text-stone-500 font-bold uppercase text-[10px]">Labor Total ({Number(calcHours) || 0}h)</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator, undefined, calculatorFindingsMult).labor.toFixed(2)}</span></div>
+                  <div className="flex justify-between items-center py-2"><span className="text-stone-500 font-bold uppercase text-[10px]">Overhead Total ({overheadType === 'percent' ? `${Number(calcOverheadCost) || 0}%` : 'Flat'})</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator, undefined, calculatorFindingsMult).overhead.toFixed(2)}</span></div>
                 </div>
                 )}
                 </div>
@@ -4860,14 +5039,14 @@ export default function Home() {
                             </div>
                             <p className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums">
                               ${(() => {
-                                const a = calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator);
+                                const a = calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator, undefined, calculatorFindingsMult);
                                 const p = getStrategyPrices(a);
                                 return roundForDisplay(p.retail).toFixed(2);
                               })()}
                             </p>
                             <p className="text-[10px] font-semibold text-stone-500 mt-1">
                               Wholesale ${(() => {
-                                const a = calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator);
+                                const a = calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator, undefined, calculatorFindingsMult);
                                 const p = getStrategyPrices(a);
                                 return roundForDisplay(p.wholesale).toFixed(2);
                               })()}
@@ -4932,8 +5111,8 @@ export default function Home() {
                     >
                       <div className="flex-1 min-w-0">
                         <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter mb-1">Formula A</p>
-                        <p className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums">${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator).retailA).toFixed(2)}</p>
-                        <p className="text-[10px] font-semibold text-stone-500 mt-1">Wholesale ${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator).wholesaleA).toFixed(2)}</p>
+                        <p className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums">${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator, undefined, calculatorFindingsMult).retailA).toFixed(2)}</p>
+                        <p className="text-[10px] font-semibold text-stone-500 mt-1">Wholesale ${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator, undefined, calculatorFindingsMult).wholesaleA).toFixed(2)}</p>
                       </div>
                     </button>
                     <div className="border-t border-stone-200 sm:border-t-0 sm:border-l min-w-0 sm:min-w-[180px]">
@@ -4977,8 +5156,8 @@ export default function Home() {
                     >
                       <div className="flex-1 min-w-0">
                         <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter mb-1">Formula B</p>
-                        <p className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums">${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator).retailB).toFixed(2)}</p>
-                        <p className="text-[10px] font-semibold text-stone-500 mt-1">Wholesale ${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator).wholesaleB).toFixed(2)}</p>
+                        <p className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums">${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator, undefined, calculatorFindingsMult).retailB).toFixed(2)}</p>
+                        <p className="text-[10px] font-semibold text-stone-500 mt-1">Wholesale ${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator, undefined, calculatorFindingsMult).wholesaleB).toFixed(2)}</p>
                       </div>
                     </button>
                     <div className="border-t border-stone-200 sm:border-t-0 sm:border-l min-w-0 sm:min-w-[220px]">
@@ -5059,14 +5238,14 @@ export default function Home() {
                             </div>
                             <p className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums">
                               ${(() => {
-                                const a = calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator);
+                                const a = calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator, undefined, calculatorFindingsMult);
                                 const p = getStrategyPrices(a);
                                 return roundForDisplay(p.retail).toFixed(2);
                               })()}
                             </p>
                             <p className="text-[10px] font-semibold text-stone-500 mt-1">
                               Wholesale ${(() => {
-                                const a = calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator);
+                                const a = calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator, undefined, calculatorFindingsMult);
                                 const p = getStrategyPrices(a);
                                 return roundForDisplay(p.wholesale).toFixed(2);
                               })()}
@@ -5111,7 +5290,7 @@ export default function Home() {
                   )}
                   <div className="flex gap-2">
                     {editingItemId && (
-                      <button type="button" onClick={() => { setEditingItemId(null); setItemName(''); setMetalList([]); setStoneList([]); setHours(''); setRate(''); setOtherCosts(''); setOverheadCost(''); setActiveTab('vault'); }} className="flex-1 py-4 rounded-2xl font-black uppercase tracking-[0.12em] text-sm bg-stone-200 text-stone-600 hover:bg-stone-300 transition-all">Cancel</button>
+                      <button type="button" onClick={() => { setEditingItemId(null); setItemName(''); setMetalList([]); setStoneList([]); setHours(''); setRate(''); setOtherCosts(''); setOverheadCost(''); setFindingsRetailMultInput(''); setActiveTab('vault'); }} className="flex-1 py-4 rounded-2xl font-black uppercase tracking-[0.12em] text-sm bg-stone-200 text-stone-600 hover:bg-stone-300 transition-all">Cancel</button>
                     )}
                     <button type="button" onClick={addToInventory} disabled={(isGuest && !token && hasTurnstile) || savingToVault} className={`${editingItemId ? 'flex-1' : 'w-full'} py-4 rounded-2xl font-black uppercase tracking-[0.12em] text-sm transition-all ${(isGuest && !token && hasTurnstile) || savingToVault ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-[#A5BEAC] text-white shadow-lg hover:bg-slate-900 hover:shadow-xl active:scale-[0.98]'}`}>{(isGuest && !token && hasTurnstile) ? "Verifying…" : savingToVault ? "Saving…" : editingItemId ? "Update item" : "Save to vault"}</button>
                   </div>
@@ -5407,7 +5586,7 @@ export default function Home() {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {filteredInventory.map(item => {
                   const stonesArray = convertStonesToArray(item);
-                  const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, stonesArray, item.overhead_cost || 0, (item.overhead_type as 'flat' | 'percent') || 'flat', item.multiplier, item.markup_b);
+                  const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, stonesArray, item.overhead_cost || 0, (item.overhead_type as 'flat' | 'percent') || 'flat', item.multiplier, item.markup_b, undefined, undefined, undefined, findingsMultFromItem(item));
                   const labor = item.labor_at_making || 0;
                   const itemPrices = getItemPrices(item, current);
                   const liveWholesale = itemPrices.wholesale;
@@ -5531,7 +5710,7 @@ export default function Home() {
                                             <button
                                               type="button"
                                               onClick={() => {
-                                                void openExistingImageInCropper(item.id, item.image_url);
+                                                void openExistingImageInCropper(item.id, item.image_original_url || item.image_url);
                                               }}
                                               disabled={uploadingId === item.id}
                                               className="w-full px-4 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-stone-50 transition-colors flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -5570,6 +5749,7 @@ export default function Home() {
                                           <button
                                             onClick={() => {
                                               setRecalcItem(item);
+                                              setRecalcItemFormulaMode('keep');
                                               setRecalcParams({ gold: '', silver: '', platinum: '', palladium: '', laborRate: '' });
                                               setOpenMenuId(null);
                                             }}
@@ -5893,7 +6073,18 @@ export default function Home() {
                               {item.other_costs_at_making > 0 && (
                                 <div className="flex justify-between text-[10px] font-bold border-b border-stone-100 pb-1.5 uppercase">
                                   <span>Findings/Other</span>
-                                  <span>${Number(item.other_costs_at_making).toFixed(2)}</span>
+                                  <div className="text-right">
+                                    <span>${Number(item.other_costs_at_making).toFixed(2)}</span>
+                                    {item.strategy !== 'custom' && (() => {
+                                      const om = findingsMultFromItem(item) ?? (item.strategy === 'B' ? 2 * Number(item.markup_b || 0) : Number(item.multiplier || 0));
+                                      const retailPortion = Number(item.other_costs_at_making) * om;
+                                      return (
+                                        <span className="block text-[8px] text-stone-400 font-medium normal-case tracking-wide">
+                                          ×{om.toFixed(2)} retail → ${retailPortion.toFixed(2)}
+                                        </span>
+                                      );
+                                    })()}
+                                  </div>
                                 </div>
                               )}
                               {(() => {
@@ -6201,14 +6392,14 @@ export default function Home() {
                         const liveBreakdownForItem = calculateFullBreakdown(
                           item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0,
                           stonesForRow, item.overhead_cost || 0, (item.overhead_type as 'flat' | 'percent') || 'flat',
-                          item.multiplier, item.markup_b, undefined, false, true
+                          item.multiplier, item.markup_b, undefined, false, true, findingsMultFromItem(item)
                         );
                         const liveItemPrices = getItemPrices(item, liveBreakdownForItem);
                         const scenarioBreakdownForItem = compareSpotEnabled
                           ? calculateFullBreakdown(
                               item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0,
                               stonesForRow, item.overhead_cost || 0, (item.overhead_type as 'flat' | 'percent') || 'flat',
-                              item.multiplier, item.markup_b, compareCustomSpots, false, true
+                              item.multiplier, item.markup_b, compareCustomSpots, false, true, findingsMultFromItem(item)
                             )
                           : null;
                         const vaultScenarioPrices = scenarioBreakdownForItem ? getItemPrices(item, scenarioBreakdownForItem) : null;
@@ -6370,7 +6561,7 @@ export default function Home() {
                     onValidationChange={setFormulaValid}
                     roundForDisplay={roundForDisplay}
                     previewContext={(() => {
-                      const a = calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator);
+                      const a = calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator, undefined, calculatorFindingsMult);
                       return {
                         metalCost: a.metalCost,
                         labor: a.labor,

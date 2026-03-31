@@ -69,6 +69,9 @@ export async function POST(request: Request) {
         status: newItem.status ?? 'active',
         stock_qty: normalizeStockQty(newItem.stock_qty),
       };
+      if ('findings_retail_multiplier' in newItem) {
+        updatePayload.findings_retail_multiplier = newItem.findings_retail_multiplier ?? null;
+      }
 
       const { data, error } = await supabase
         .from('inventory')
