@@ -122,7 +122,17 @@ export default function Home() {
   const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '';
   const hasTurnstile = !!turnstileSiteKey;
 
-  const [prices, setPrices] = useState<any>({ gold: 0, silver: 0, platinum: 0, palladium: 0, updated_at: null });
+  const [prices, setPrices] = useState<any>({
+    gold: 0,
+    silver: 0,
+    platinum: 0,
+    palladium: 0,
+    gold_pct: null,
+    silver_pct: null,
+    platinum_pct: null,
+    palladium_pct: null,
+    updated_at: null,
+  });
   const [itemName, setItemName] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -683,15 +693,16 @@ export default function Home() {
       }
 
       if (priceData.gold || priceData.silver || priceData.platinum || priceData.palladium) {
+        const nPct = (v: unknown) => (v != null && v !== '' && Number.isFinite(Number(v)) ? Number(v) : null);
         const freshPrices = {
           gold: priceData.gold || 0,
           silver: priceData.silver || 0,
           platinum: priceData.platinum || 0,
           palladium: priceData.palladium || 0,
-          gold_pct: priceData.gold_pct ?? null,
-          silver_pct: priceData.silver_pct ?? null,
-          platinum_pct: priceData.platinum_pct ?? null,
-          palladium_pct: priceData.palladium_pct ?? null,
+          gold_pct: nPct(priceData.gold_pct),
+          silver_pct: nPct(priceData.silver_pct),
+          platinum_pct: nPct(priceData.platinum_pct),
+          palladium_pct: nPct(priceData.palladium_pct),
           updated_at: priceData.updated_at
         };
         setPrices(freshPrices);
@@ -4661,17 +4672,34 @@ export default function Home() {
 
         {/* MARKET TICKER - MODIFIED: Increased mb-2 to mb-6 for spacing */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 px-2 shrink-0">
-          {['gold', 'silver', 'platinum', 'palladium'].map((name) => (
-            <div key={name} className="bg-white p-4 rounded-xl border-l-4 border-[#A5BEAC] shadow-sm text-center lg:text-left">
-              <p className="text-[10px] font-black uppercase text-stone-400">{name}</p>
-              <p className="text-xl font-bold">{prices[name] > 0 ? `$${prices[name].toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "--.--"}</p>
-              {prices[`${name}_pct`] != null && (
-                <p className={`text-xs font-semibold mt-0.5 ${prices[`${name}_pct`] >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {prices[`${name}_pct`] >= 0 ? '+' : ''}{prices[`${name}_pct`].toFixed(2)}% today
+          {(['gold', 'silver', 'platinum', 'palladium'] as const).map((name) => {
+            const spot = Number(prices[name]) || 0;
+            const rawPct = prices[`${name}_pct`];
+            const pct = rawPct == null || rawPct === '' ? NaN : Number(rawPct);
+            const showPct = Number.isFinite(pct);
+            return (
+              <div
+                key={name}
+                className="bg-white p-4 rounded-xl border-l-4 border-[#A5BEAC] shadow-sm text-center lg:text-left"
+                title={showPct ? "Today's % vs prior session close (from live data)" : undefined}
+              >
+                <p className="text-[10px] font-black uppercase text-stone-400">{name}</p>
+                <p className="text-xl font-bold tabular-nums">
+                  {spot > 0 ? `$${spot.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '--.--'}
                 </p>
-              )}
-            </div>
-          ))}
+                {showPct ? (
+                  <p
+                    className={`text-[11px] font-bold tabular-nums mt-1 ${pct >= 0 ? 'text-emerald-700' : 'text-red-600'}`}
+                  >
+                    {pct >= 0 ? '+' : ''}
+                    {pct.toFixed(2)}% <span className="text-[9px] font-semibold text-stone-400 uppercase tracking-wide">today</span>
+                  </p>
+                ) : spot > 0 ? (
+                  <p className="text-[10px] font-medium text-stone-300 mt-1 tabular-nums">—</p>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
 
         {/* Tab Navigation - same width as panels below */}

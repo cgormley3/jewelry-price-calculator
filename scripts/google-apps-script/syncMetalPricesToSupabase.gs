@@ -12,6 +12,7 @@
  * PRICE_SOURCE
  * ---------------------------------------------------------------------------
  * YAHOO_JSON — UrlFetchApp reads Yahoo Finance chart JSON (no spreadsheet).
+ *   Fills gold_pct…palladium_pct = today’s session % vs prior close (Yahoo meta / chart).
  *   Use a standalone Apps Script project (script.google.com) OR a bound script;
  *   SpreadsheetApp is not used. Google Finance does not offer a stable public
  *   JSON quote URL; these Yahoo symbols are the usual COMEX-style proxies:
@@ -104,6 +105,10 @@ function syncMetalPricesToSupabase() {
     var silver = 0;
     var platinum = 0;
     var palladium = 0;
+    var gold_pct = null;
+    var silver_pct = null;
+    var platinum_pct = null;
+    var palladium_pct = null;
 
     if (PRICE_SOURCE === 'YAHOO_JSON') {
       var y = fetchPricesFromYahooJson_();
@@ -111,6 +116,10 @@ function syncMetalPricesToSupabase() {
       silver = y.silver;
       platinum = y.platinum;
       palladium = y.palladium;
+      gold_pct = y.gold_pct;
+      silver_pct = y.silver_pct;
+      platinum_pct = y.platinum_pct;
+      palladium_pct = y.palladium_pct;
     } else if (PRICE_SOURCE === 'SHEET') {
       refreshImportXmlInSheet_();
       if (DELAY_MS_AFTER_REFRESH > 0) {
@@ -133,15 +142,26 @@ function syncMetalPricesToSupabase() {
       );
     }
 
-    logMetalPricesDebug_(gold, silver, platinum, palladium);
+    logMetalPricesDebug_(gold, silver, platinum, palladium, gold_pct, silver_pct, platinum_pct, palladium_pct);
 
-    patchSupabaseMetalPrices_(base, key, gold, silver, platinum, palladium);
+    patchSupabaseMetalPrices_(
+      base,
+      key,
+      gold,
+      silver,
+      platinum,
+      palladium,
+      gold_pct,
+      silver_pct,
+      platinum_pct,
+      palladium_pct
+    );
   } finally {
     lock.releaseLock();
   }
 }
 
-function patchSupabaseMetalPrices_(base, key, gold, silver, platinum, palladium) {
+function patchSupabaseMetalPrices_(base, key, gold, silver, platinum, palladium, gold_pct, silver_pct, platinum_pct, palladium_pct) {
   var updatedAt = new Date().toISOString();
   /** POST + merge-duplicates inserts or updates row id=1. Plain PATCH with id=eq.1 updates 0 rows if the row does not exist and still returns 2xx. */
   var url = base + '/rest/v1/metal_prices';
@@ -153,6 +173,10 @@ function patchSupabaseMetalPrices_(base, key, gold, silver, platinum, palladium)
     palladium: palladium,
     updated_at: updatedAt,
   };
+  if (gold_pct != null) payload.gold_pct = gold_pct;
+  if (silver_pct != null) payload.silver_pct = silver_pct;
+  if (platinum_pct != null) payload.platinum_pct = platinum_pct;
+  if (palladium_pct != null) payload.palladium_pct = palladium_pct;
 
   var res = UrlFetchApp.fetch(url, {
     method: 'post',
@@ -177,6 +201,8 @@ function patchSupabaseMetalPrices_(base, key, gold, silver, platinum, palladium)
         code +
         ' | g,s,pt,pd=' +
         [gold, silver, platinum, palladium].join(',') +
+        ' | pct=' +
+        [gold_pct, silver_pct, platinum_pct, palladium_pct].join(',') +
         ' | row=' +
         body.slice(0, 400)
     );
@@ -189,37 +215,58 @@ function fetchPricesFromYahooJson_() {
     throw new Error('YAHOO_BY_METAL must define gold, silver, platinum, palladium');
   }
 
-  var gold = yahooLastPrice_(M.gold, 'gold');
+  var gq = yahooQuote_(M.gold, 'gold');
+  var gold = gq.price;
+  var gold_pct = gq.changePct;
   if (gold === 0 && YAHOO_GOLD_FALLBACKS && YAHOO_GOLD_FALLBACKS.length) {
     for (var gi = 0; gi < YAHOO_GOLD_FALLBACKS.length; gi++) {
       Utilities.sleep(YAHOO_FETCH_SLEEP_MS);
-      gold = yahooLastPrice_(YAHOO_GOLD_FALLBACKS[gi], 'gold-fallback');
+      gq = yahooQuote_(YAHOO_GOLD_FALLBACKS[gi], 'gold-fallback');
+      gold = gq.price;
+      gold_pct = gq.changePct;
       if (gold > 0) break;
     }
   }
   Utilities.sleep(YAHOO_FETCH_SLEEP_MS);
 
-  var silver = yahooLastPrice_(M.silver, 'silver');
+  var sq = yahooQuote_(M.silver, 'silver');
+  var silver = sq.price;
+  var silver_pct = sq.changePct;
   Utilities.sleep(YAHOO_FETCH_SLEEP_MS);
 
-  var plPx = yahooLastPrice_(M.platinum, 'platinum-PL');
+  var plQ = yahooQuote_(M.platinum, 'platinum-PL');
   Utilities.sleep(YAHOO_FETCH_SLEEP_MS);
-  var paPx = yahooLastPrice_(M.palladium, 'palladium-PA');
+  var paQ = yahooQuote_(M.palladium, 'palladium-PA');
 
   var platinum;
   var palladium;
+  var platinum_pct;
+  var palladium_pct;
   if (SWAP_PLATINUM_PALLADIUM_YAHOO) {
-    platinum = paPx;
-    palladium = plPx;
+    platinum = paQ.price;
+    platinum_pct = paQ.changePct;
+    palladium = plQ.price;
+    palladium_pct = plQ.changePct;
   } else {
-    platinum = plPx;
-    palladium = paPx;
+    platinum = plQ.price;
+    platinum_pct = plQ.changePct;
+    palladium = paQ.price;
+    palladium_pct = paQ.changePct;
   }
 
-  return { gold: gold, silver: silver, platinum: platinum, palladium: palladium };
+  return {
+    gold: gold,
+    silver: silver,
+    platinum: platinum,
+    palladium: palladium,
+    gold_pct: gold_pct,
+    silver_pct: silver_pct,
+    platinum_pct: platinum_pct,
+    palladium_pct: palladium_pct,
+  };
 }
 
-function yahooLastPrice_(symbol, debugLabel) {
+function yahooQuote_(symbol, debugLabel) {
   var enc = encodeURIComponent(symbol);
   var url =
     'https://query1.finance.yahoo.com/v8/finance/chart/' +
@@ -237,20 +284,21 @@ function yahooLastPrice_(symbol, debugLabel) {
   var code = res.getResponseCode();
   if (code !== 200) {
     console.warn((debugLabel || symbol) + ' HTTP ' + code + ' ' + symbol);
-    return 0;
+    return { price: 0, changePct: null };
   }
   try {
     var data = JSON.parse(res.getContentText());
     var r = data.chart && data.chart.result && data.chart.result[0];
-    if (!r) return 0;
+    if (!r) return { price: 0, changePct: null };
     var p = extractYahooQuotePrice_(r);
+    var pct = extractYahooTodayChangePct_(r, p);
     if (YAHOO_LOG_EACH_PRICE) {
-      console.log((debugLabel || symbol) + ' ' + symbol + ' → ' + p);
+      console.log((debugLabel || symbol) + ' ' + symbol + ' → price=' + p + ' todayPct=' + pct);
     }
-    return p;
+    return { price: p, changePct: pct };
   } catch (e) {
     console.warn((debugLabel || symbol) + ' JSON: ' + e + ' ' + symbol);
-    return 0;
+    return { price: 0, changePct: null };
   }
 }
 
@@ -271,6 +319,96 @@ function extractYahooQuotePrice_(r) {
     }
   }
   return 0;
+}
+
+/**
+ * Today’s % — align with Yahoo Finance headline (1D): regularMarketChange ÷ previousClose × 100
+ * (same as “(+6.95%)”). Avoid using (price − chartPreviousClose) first; that baseline often != UI.
+ */
+function extractYahooTodayChangePct_(r, price) {
+  var m = r.meta || {};
+  var prev =
+    numForPrevClose_(m.regularMarketPreviousClose) ||
+    numForPrevClose_(m.previousClose) ||
+    numForPrevClose_(m.chartPreviousClose);
+  var chg = m.regularMarketChange;
+  if (prev > 0 && chg != null && !isNaN(Number(chg))) {
+    return roundPct_((Number(chg) / prev) * 100);
+  }
+
+  var rm = m.regularMarketChangePercent;
+  if (rm != null && !isNaN(Number(rm))) {
+    return normalizeYahooChangePercentRaw_(Number(rm), chg, prev);
+  }
+
+  if (!price || price <= 0) return null;
+  if (prev > 0) {
+    return roundPct_(((price - prev) / prev) * 100);
+  }
+  if (r.indicators && r.indicators.quote && r.indicators.quote[0]) {
+    var closes = r.indicators.quote[0].close || [];
+    var iLast = -1;
+    var last = 0;
+    for (var i = closes.length - 1; i >= 0; i--) {
+      var c = closes[i];
+      if (c != null && !isNaN(c) && Number(c) > 0) {
+        last = Number(c);
+        iLast = i;
+        break;
+      }
+    }
+    if (iLast > 0) {
+      for (var j = iLast - 1; j >= 0; j--) {
+        var cj = closes[j];
+        if (cj != null && !isNaN(cj) && Number(cj) > 0) {
+          var p2 = Number(cj);
+          if (p2 > 0) return roundPct_(((last - p2) / p2) * 100);
+          break;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Yahoo may send regularMarketChangePercent as percent points (6.95) or decimal (0.0695).
+ * When change/previousClose exists, prefer the interpretation closest to implied %.
+ */
+function normalizeYahooChangePercentRaw_(raw, chg, prev) {
+  if (raw == null || isNaN(raw)) return null;
+  var implied = null;
+  if (prev > 0 && chg != null && !isNaN(Number(chg))) {
+    implied = (Number(chg) / prev) * 100;
+  }
+  var asPoints = raw;
+  var asFromDecimal = raw * 100;
+  if (implied != null && Number.isFinite(implied)) {
+    var errPts = Math.abs(asPoints - implied);
+    var errDec = Math.abs(asFromDecimal - implied);
+    if (errDec < errPts && errDec < Math.max(0.08, Math.abs(implied) * 0.02)) {
+      return roundPct_(asFromDecimal);
+    }
+    if (errPts <= errDec || errPts < Math.max(0.08, Math.abs(implied) * 0.02)) {
+      return roundPct_(asPoints);
+    }
+    return roundPct_(implied);
+  }
+  if (Math.abs(raw) < 1 && Math.abs(raw) > 1e-8) {
+    return roundPct_(raw * 100);
+  }
+  return roundPct_(raw);
+}
+
+function numForPrevClose_(v) {
+  if (v == null || v === '') return 0;
+  var n = Number(v);
+  return isNaN(n) || n <= 0 ? 0 : n;
+}
+
+function roundPct_(x) {
+  if (x == null || isNaN(x)) return null;
+  return Math.round(x * 1000000) / 1000000;
 }
 
 function numOnly_(v) {
@@ -312,22 +450,24 @@ function num_(v) {
 }
 
 /** Runs before Supabase write. View in Apps Script → Executions. */
-function logMetalPricesDebug_(gold, silver, platinum, palladium) {
+function logMetalPricesDebug_(gold, silver, platinum, palladium, gold_pct, silver_pct, platinum_pct, palladium_pct) {
   if (!LOG_METAL_PRICES) {
     return;
   }
   var fmt = function (n) {
     return n === 0 || n == null ? String(n) : Number(n).toFixed(4).replace(/\.?0+$/, '');
   };
+  var fmtPct = function (p) {
+    if (p == null) return 'n/a';
+    return Number(p).toFixed(3) + '%';
+  };
   var ts = new Date().toISOString();
   console.log('=== metal_prices debug ' + ts + ' source=' + PRICE_SOURCE + ' ===');
-  console.log('  Gold      : ' + fmt(gold));
-  console.log('  Silver    : ' + fmt(silver));
-  console.log('  Platinum  : ' + fmt(platinum));
-  console.log('  Palladium : ' + fmt(palladium));
-  console.log(
-    '  (Supabase columns: gold, silver, platinum, palladium — USD-style quote per Yahoo/sheet as configured)'
-  );
+  console.log('  Gold      : ' + fmt(gold) + '  (today ' + fmtPct(gold_pct) + ')');
+  console.log('  Silver    : ' + fmt(silver) + '  (today ' + fmtPct(silver_pct) + ')');
+  console.log('  Platinum  : ' + fmt(platinum) + '  (today ' + fmtPct(platinum_pct) + ')');
+  console.log('  Palladium : ' + fmt(palladium) + '  (today ' + fmtPct(palladium_pct) + ')');
+  console.log('  (today % = vs Yahoo prior close / session, not a rolling 24h window.)');
 }
 
 /** Map four sheet rows to gold, silver, platinum, palladium using SHEET_METAL_ROW_OFFSETS. */

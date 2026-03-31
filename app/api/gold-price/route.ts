@@ -4,6 +4,12 @@ import { createClient } from '@supabase/supabase-js';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+function pctFromDb(v: unknown): number | null {
+  if (v == null || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 /**
  * Spot prices for the app: read-only from Supabase (`metal_prices` row id=1).
  * Google Sheets should push updates to Supabase on a schedule (e.g. Apps Script every minute).
@@ -87,10 +93,10 @@ export async function GET() {
         silver: Number(row.silver) || 0,
         platinum: Number(row.platinum) || 0,
         palladium: Number(row.palladium) || 0,
-        gold_pct: row.gold_pct != null ? Number(row.gold_pct) : null,
-        silver_pct: row.silver_pct != null ? Number(row.silver_pct) : null,
-        platinum_pct: row.platinum_pct != null ? Number(row.platinum_pct) : null,
-        palladium_pct: row.palladium_pct != null ? Number(row.palladium_pct) : null,
+        gold_pct: pctFromDb(row.gold_pct),
+        silver_pct: pctFromDb(row.silver_pct),
+        platinum_pct: pctFromDb(row.platinum_pct),
+        palladium_pct: pctFromDb(row.palladium_pct),
         updated_at:
           typeof row.updated_at === 'string'
             ? row.updated_at
