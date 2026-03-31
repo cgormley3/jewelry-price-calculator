@@ -7,6 +7,7 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
+    "splash:ios": "python3 scripts/generate-ios-splash.py",
     "shopify:link": "shopify app config link",
     "shopify:deploy": "shopify app deploy"
   },

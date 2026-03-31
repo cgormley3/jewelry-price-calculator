@@ -351,6 +351,9 @@ export default function Home() {
   const [newPassword, setNewPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [activeTab, setActiveTab] = useState<MainNavTabId>('calculator');
+  /** Mobile Vault: pull-to-refresh spot prices (touch; max ~md breakpoint). */
+  const [vaultPullPx, setVaultPullPx] = useState(0);
+  const [vaultPullRefreshing, setVaultPullRefreshing] = useState(false);
   const mobileMainNavTriggerLabel = useMemo(() => {
     if (PRIMARY_MOBILE_NAV_IDS.includes(activeTab)) return 'More';
     const t = MAIN_NAV_TABS.find((x) => x.id === activeTab);
@@ -647,6 +650,11 @@ export default function Home() {
   const [filterDropdownRect, setFilterDropdownRect] = useState<{ top: number; left: number } | null>(null);
   const compareFilterButtonRef = useRef<HTMLButtonElement>(null);
   const [compareFilterDropdownRect, setCompareFilterDropdownRect] = useState<{ top: number; left: number } | null>(null);
+  const vaultPullScrollRef = useRef<HTMLDivElement>(null);
+  const vaultPullPxRef = useRef(0);
+  const activeTabForPullRef = useRef(activeTab);
+  const loadingForPullRef = useRef(loading);
+  const vaultPullRefreshingForRef = useRef(false);
 
   const [notification, setNotification] = useState<{
     title: string;
@@ -810,6 +818,126 @@ export default function Home() {
       }
     }
   }, [pricesLoaded]);
+
+  useEffect(() => {
+    vaultPullPxRef.current = vaultPullPx;
+  }, [vaultPullPx]);
+
+  useEffect(() => {
+    activeTabForPullRef.current = activeTab;
+  }, [activeTab]);
+
+  useEffect(() => {
+    loadingForPullRef.current = loading;
+  }, [loading]);
+
+  useEffect(() => {
+    vaultPullRefreshingForRef.current = vaultPullRefreshing;
+  }, [vaultPullRefreshing]);
+
+  const fetchPricesRef = useRef(fetchPrices);
+  useEffect(() => {
+    fetchPricesRef.current = fetchPrices;
+  }, [fetchPrices]);
+
+  useEffect(() => {
+    const el = vaultPullScrollRef.current;
+    if (!el) return;
+
+    const THRESHOLD = 64;
+    const MAX_PULL = 100;
+    const dampen = (d: number) => Math.min(MAX_PULL, d * 0.45);
+
+    let tracking = false;
+    let startY = 0;
+
+    const allowPull = () =>
+      typeof window !== 'undefined' &&
+      window.matchMedia('(max-width: 767.98px)').matches;
+
+    const onStart = (e: TouchEvent) => {
+      if (!allowPull()) return;
+      if (activeTabForPullRef.current !== 'vault' || loadingForPullRef.current || vaultPullRefreshingForRef.current) return;
+      if (el.scrollTop > 2) return;
+      tracking = true;
+      startY = e.touches[0].clientY;
+    };
+
+    const onMove = (e: TouchEvent) => {
+      if (!tracking || !allowPull()) return;
+      if (activeTabForPullRef.current !== 'vault') {
+        tracking = false;
+        vaultPullPxRef.current = 0;
+        setVaultPullPx(0);
+        return;
+      }
+      if (el.scrollTop > 2) {
+        tracking = false;
+        vaultPullPxRef.current = 0;
+        setVaultPullPx(0);
+        return;
+      }
+      const y = e.touches[0].clientY;
+      const delta = y - startY;
+      if (delta <= 0) {
+        vaultPullPxRef.current = 0;
+        setVaultPullPx(0);
+        return;
+      }
+      e.preventDefault();
+      const px = dampen(delta);
+      vaultPullPxRef.current = px;
+      setVaultPullPx(px);
+    };
+
+    const onEnd = () => {
+      if (!tracking) return;
+      tracking = false;
+      const px = vaultPullPxRef.current;
+      if (
+        px >= THRESHOLD &&
+        allowPull() &&
+        activeTabForPullRef.current === 'vault' &&
+        !loadingForPullRef.current &&
+        !vaultPullRefreshingForRef.current
+      ) {
+        vaultPullPxRef.current = THRESHOLD;
+        setVaultPullPx(THRESHOLD);
+        vaultPullRefreshingForRef.current = true;
+        setVaultPullRefreshing(true);
+        try {
+          sessionStorage.removeItem('vault_prices_time');
+        } catch {
+          /* ignore */
+        }
+        void (async () => {
+          try {
+            await fetchPricesRef.current();
+          } finally {
+            vaultPullRefreshingForRef.current = false;
+            setVaultPullRefreshing(false);
+            vaultPullPxRef.current = 0;
+            setVaultPullPx(0);
+          }
+        })();
+      } else {
+        vaultPullPxRef.current = 0;
+        setVaultPullPx(0);
+      }
+    };
+
+    el.addEventListener('touchstart', onStart, { passive: true });
+    el.addEventListener('touchmove', onMove, { passive: false });
+    el.addEventListener('touchend', onEnd);
+    el.addEventListener('touchcancel', onEnd);
+
+    return () => {
+      el.removeEventListener('touchstart', onStart);
+      el.removeEventListener('touchmove', onMove);
+      el.removeEventListener('touchend', onEnd);
+      el.removeEventListener('touchcancel', onEnd);
+    };
+  }, []);
 
   const calculateFullBreakdown = useCallback((metals: any[], h: any, r: any, o: any, stones: any[], ovCost: any, ovType: 'flat' | 'percent', customMult?: number, customMarkup?: number, priceOverride?: any, useManualMetalForInitialSaveOnly?: boolean, skipSpotSavedFallback?: boolean, findingsRetailMult?: number | null) => {
     let rawMaterialCost = 0;
@@ -4897,7 +5025,7 @@ export default function Home() {
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto flex flex-col min-h-[calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] gap-6 md:min-h-0 md:space-y-6 md:gap-0 pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-[env(safe-area-inset-bottom)]">
+      <div className="max-w-7xl mx-auto flex flex-col min-h-[calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] gap-6 md:min-h-0 md:space-y-6 md:gap-0 pb-[calc(4.85rem+env(safe-area-inset-bottom))] md:pb-[env(safe-area-inset-bottom)]">
         {/* HEADER */}
         <div className="flex flex-col md:flex-row justify-between items-center bg-white px-6 py-8 rounded-[2rem] border-2 shadow-sm gap-8 shrink-0 relative border-[#A5BEAC]">
           <div className="hidden md:block md:w-1/4" />
@@ -5751,7 +5879,7 @@ export default function Home() {
                     <button
                       ref={filterButtonRef}
                       onClick={() => setShowFilterMenu(!showFilterMenu)}
-                      className={`filter-menu-trigger w-full h-full min-h-[48px] sm:min-h-0 flex items-center justify-center rounded-xl border transition-all ${showFilterMenu ? 'bg-slate-900 text-white border-slate-900' : 'bg-stone-50 border-stone-200 text-stone-400 hover:border-[#A5BEAC]'}`}
+                      className={`filter-menu-trigger w-full h-full min-h-[48px] sm:min-h-0 flex items-center justify-center rounded-2xl border-2 transition-all ${showFilterMenu ? 'bg-slate-900 text-white border-slate-900' : 'bg-white border-stone-200 text-stone-400 hover:border-[#A5BEAC] shadow-sm'}`}
                     >
                       <span className="text-lg">⚡</span>
                     </button>
@@ -5840,17 +5968,17 @@ export default function Home() {
                     <input
                       type="text"
                       placeholder="Search by name, tag, metal, location..."
-                      className="w-full h-full min-h-[48px] sm:min-h-0 pl-10 pr-4 bg-stone-50 border rounded-xl text-xs font-bold outline-none focus:border-[#A5BEAC] transition-all"
+                      className="w-full h-full min-h-[48px] sm:min-h-0 pl-10 pr-4 bg-white border-2 border-stone-200 rounded-full md:rounded-xl text-xs font-bold outline-none focus:border-[#A5BEAC] focus:ring-2 focus:ring-[#A5BEAC]/25 transition-all shadow-sm"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                     />
                   </div>
                 </div>
 
-                <div className="flex gap-2 shrink-0">
+                <div className="flex gap-2 shrink-0 md:items-stretch">
                   <button
                     onClick={() => setShowQuickAddPiece(true)}
-                    className="min-h-[48px] sm:min-h-0 px-4 rounded-xl text-[10px] font-black uppercase bg-[#A5BEAC] text-white hover:bg-slate-900 transition shadow-sm flex items-center justify-center"
+                    className="min-h-[48px] sm:min-h-0 flex-1 md:flex-initial px-4 rounded-2xl text-[10px] font-black uppercase tracking-wide bg-[#A5BEAC] text-white border-2 border-[#A5BEAC] hover:bg-slate-900 hover:border-slate-900 transition shadow-md flex items-center justify-center"
                   >
                     Quick add piece
                   </button>
@@ -5859,16 +5987,16 @@ export default function Home() {
                       {/* Desktop: Select All as standalone button */}
                       <button
                         onClick={toggleSelectAll}
-                        className="hidden md:flex px-4 rounded-xl text-[10px] font-black uppercase items-center justify-center gap-2 transition shadow-sm bg-stone-100 text-slate-700 hover:bg-stone-200 border border-stone-200"
+                        className="hidden md:flex px-4 rounded-2xl text-[10px] font-black uppercase items-center justify-center gap-2 transition shadow-sm bg-white text-slate-700 hover:bg-stone-50 border-2 border-stone-200 hover:border-[#A5BEAC]/50"
                         title={selectedItems.size === filteredInventory.length && filteredInventory.length > 0 ? 'Deselect all' : 'Select all items'}
                       >
                         {selectedItems.size === filteredInventory.length && filteredInventory.length > 0 ? 'Deselect All' : 'Select All'}
                       </button>
                       {/* Mobile: More dropdown with Select All + actions */}
-                      <div className="md:hidden relative vault-menu-container min-h-[48px] sm:h-full">
+                      <div className="md:hidden relative vault-menu-container min-h-[48px] sm:h-full flex-1 min-w-0">
                         <button
                           onClick={() => setShowVaultMenu(!showVaultMenu)}
-                          className="vault-menu-trigger w-full h-full min-h-[48px] sm:min-h-0 sm:w-auto px-4 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 transition shadow-sm bg-stone-100 text-slate-700 hover:bg-stone-200 border border-stone-200"
+                          className="vault-menu-trigger w-full h-full min-h-[48px] sm:min-h-0 sm:w-auto px-4 rounded-2xl text-[10px] font-black uppercase tracking-wide flex items-center justify-center gap-2 transition shadow-sm bg-white text-slate-700 hover:bg-stone-50 border-2 border-stone-200 hover:border-[#A5BEAC]/50"
                           title="Select All, Export options"
                         >
                           More {showVaultMenu ? '▲' : '▼'}
@@ -5908,7 +6036,7 @@ export default function Home() {
                   ) : (
                     <button
                       disabled
-                      className="min-h-[48px] sm:min-h-0 px-4 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 bg-stone-100 text-stone-400 cursor-not-allowed border border-stone-200"
+                      className="min-h-[48px] sm:min-h-0 flex-1 md:flex-initial px-4 rounded-2xl text-[10px] font-black uppercase tracking-wide flex items-center justify-center gap-2 bg-stone-50 text-stone-400 cursor-not-allowed border-2 border-stone-200"
                       title={SHOPIFY_FEATURE_ENABLED ? "Add items to unlock Recalculate, Export, and Shopify" : "Add items to unlock Recalculate and Export"}
                     >
                       Vault Options
@@ -5943,7 +6071,28 @@ export default function Home() {
 
             {/* flex-1 min-h-0 allows scrolling when parent has max-h on desktop; mobile: cap at ~4 cards height */}
             <div className="flex-1 min-h-0 overflow-hidden rounded-b-[2.5rem] bg-stone-50/20 flex flex-col">
-            <div className="flex-1 min-h-0 max-h-[34rem] md:max-h-none overflow-y-auto p-4 md:p-6 pb-[calc(13.5rem+env(safe-area-inset-bottom))] md:pb-[calc(10rem+env(safe-area-inset-bottom))] custom-scrollbar overscroll-behavior-contain touch-pan-y">
+            <div
+              ref={vaultPullScrollRef}
+              className="flex-1 min-h-0 max-h-[34rem] md:max-h-none overflow-y-auto p-4 md:p-6 pb-[calc(14.25rem+env(safe-area-inset-bottom))] md:pb-[calc(10rem+env(safe-area-inset-bottom))] custom-scrollbar overscroll-behavior-contain touch-pan-y [overflow-anchor:none]"
+            >
+              <div className="will-change-transform" style={{ transform: `translate3d(0, ${vaultPullPx}px, 0)` }}>
+                {(vaultPullPx > 6 || vaultPullRefreshing) && (
+                  <div className="flex flex-col items-center justify-center gap-1 py-1 text-[#A5BEAC] pointer-events-none select-none" aria-hidden>
+                    <span
+                      className={`text-xl leading-none inline-block origin-center ${vaultPullRefreshing ? 'animate-spin' : ''}`}
+                      style={
+                        vaultPullRefreshing
+                          ? undefined
+                          : { transform: `rotate(${(Math.min(vaultPullPx, 64) / 64) * 360}deg)` }
+                      }
+                    >
+                      ↻
+                    </span>
+                    <span className="text-[8px] font-black uppercase tracking-widest text-stone-400">
+                      {vaultPullRefreshing ? 'Updating spots…' : vaultPullPx >= 64 ? 'Release to refresh' : 'Pull for latest spots'}
+                    </span>
+                  </div>
+                )}
               {loading ? (
                 <div className="p-20 text-center text-stone-400 font-bold uppercase text-xs tracking-widest animate-pulse">Opening Vault...</div>
               ) : inventory.length === 0 && hasValidSupabaseCredentials ? (
@@ -6568,6 +6717,7 @@ export default function Home() {
                 })}
                 </div>
               )}
+              </div>
             </div>
             </div>
           </div>
@@ -7642,39 +7792,41 @@ export default function Home() {
       </div>
 
       <nav
-        className="md:hidden fixed bottom-0 inset-x-0 z-[270] border-t border-[#A5BEAC]/40 bg-white/95 backdrop-blur-sm pb-[env(safe-area-inset-bottom)]"
+        className="md:hidden fixed bottom-0 inset-x-0 z-[270] pointer-events-none px-3 pb-[calc(env(safe-area-inset-bottom)+0.45rem)] pt-0"
         role="navigation"
         aria-label="Primary"
       >
-        <div className="flex items-stretch min-h-[3.25rem]">
-          {PRIMARY_MOBILE_NAV_IDS.map((id) => {
-            const t = MAIN_NAV_TABS.find((x) => x.id === id);
-            if (!t) return null;
-            const selected = activeTab === id;
-            const inactiveVaultPulse = id === 'vault' && inventory.length > 0 && !selected;
-            return (
-              <button
-                key={id}
-                type="button"
-                aria-current={selected ? 'page' : undefined}
-                onClick={() => {
-                  setActiveTab(id);
-                  setMainNavMenuOpen(false);
-                }}
-                className={`flex-1 min-w-0 relative flex flex-col items-center justify-center gap-0.5 py-2 px-1 text-[10px] font-black uppercase tracking-tighter transition-colors outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#A5BEAC] ${selected ? 'bg-[#A5BEAC] text-white shadow-inner' : inactiveVaultPulse ? 'text-stone-600' : 'text-stone-400 hover:text-stone-600 hover:bg-stone-50/90'}`}
-              >
-                <span className="flex items-center justify-center gap-1 max-w-full px-0.5">
-                  <span className="truncate">{t.label}</span>
-                  {id === 'vault' && inventory.length > 0 && selected ? (
-                    <span className="text-[9px] font-bold opacity-90 shrink-0">({inventory.length})</span>
+        <div className="pointer-events-auto rounded-[1.35rem] border-2 border-[#A5BEAC]/45 bg-white/92 backdrop-blur-md shadow-[0_-4px_24px_rgba(15,23,42,0.08)] p-1.5">
+          <div className="flex items-stretch gap-1 min-h-[3.35rem]">
+            {PRIMARY_MOBILE_NAV_IDS.map((id) => {
+              const t = MAIN_NAV_TABS.find((x) => x.id === id);
+              if (!t) return null;
+              const selected = activeTab === id;
+              const inactiveVaultPulse = id === 'vault' && inventory.length > 0 && !selected;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  aria-current={selected ? 'page' : undefined}
+                  onClick={() => {
+                    setActiveTab(id);
+                    setMainNavMenuOpen(false);
+                  }}
+                  className={`flex-1 min-w-0 relative flex flex-col items-center justify-center gap-0.5 py-2 px-1 rounded-xl text-[10px] font-black uppercase tracking-wide transition-all outline-none focus-visible:ring-2 focus-visible:ring-[#A5BEAC] focus-visible:ring-offset-2 focus-visible:ring-offset-white ${selected ? 'bg-[#A5BEAC] text-white shadow-md shadow-[#A5BEAC]/35' : inactiveVaultPulse ? 'text-stone-600 bg-stone-50/90' : 'text-stone-500 bg-stone-50/60 hover:bg-stone-100/95 hover:text-stone-700'}`}
+                >
+                  <span className="flex items-center justify-center gap-1 max-w-full px-0.5">
+                    <span className="truncate">{t.label}</span>
+                    {id === 'vault' && inventory.length > 0 && selected ? (
+                      <span className="text-[9px] font-bold opacity-90 shrink-0">({inventory.length})</span>
+                    ) : null}
+                  </span>
+                  {id === 'vault' && inventory.length > 0 && !selected ? (
+                    <span className="absolute top-1.5 right-2.5 w-2 h-2 rounded-full bg-[#A5BEAC] animate-pulse ring-2 ring-white" aria-hidden />
                   ) : null}
-                </span>
-                {id === 'vault' && inventory.length > 0 && !selected ? (
-                  <span className="absolute top-1 right-2 w-2 h-2 rounded-full bg-[#A5BEAC] animate-pulse" aria-hidden />
-                ) : null}
-              </button>
-            );
-          })}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </nav>
     </div>

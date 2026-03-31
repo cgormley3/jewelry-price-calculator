@@ -1,7 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
+  /* stone-50: matches iOS PWA splash + main app shell (layout themeColor) */
+  --background: #fafaf9;
   --foreground: #171717;
 }
 

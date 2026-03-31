@@ -1,6 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { IOS_PWA_STARTUP_IMAGES } from "./pwa-apple-splash";
 import { AuthProvider } from "./providers";
+
+/** Stone-50 — matches splash PNGs and reduces Chrome/system UI flash before paint */
+const PWA_THEME = "#fafaf9";
 
 export const metadata: Metadata = {
   title: "Jewelry Vault - by Bear Silver and Stone",
@@ -10,6 +14,7 @@ export const metadata: Metadata = {
     capable: true,
     title: "The Vault",
     statusBarStyle: "black-translucent",
+    startupImage: IOS_PWA_STARTUP_IMAGES,
   },
   icons: {
     icon: '/icon.png?v=5',
@@ -26,6 +31,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  viewportFit: "cover",
+  themeColor: PWA_THEME,
 };
 
 export default function RootLayout({
