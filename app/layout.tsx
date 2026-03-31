@@ -17,7 +17,10 @@ export const metadata: Metadata = {
   },
 };
 
-// This prevents iOS from zooming in on input fields when typing
+/**
+ * Zoom is locked to reduce frustrating input-zoom on iOS in dense numeric forms.
+ * Tradeoff: users who rely on pinch-to-zoom for readability may need OS accessibility zoom instead.
+ */
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,

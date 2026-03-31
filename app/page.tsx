@@ -117,6 +117,17 @@ function vaultThumbnailSrc(url: string, visibilityEpoch: number, errorRetry: num
   return `${u}${sep}${parts.join('&')}`;
 }
 
+type MainNavTabId = 'calculator' | 'vault' | 'compare' | 'logic' | 'formulas' | 'time';
+
+const MAIN_NAV_TABS: { id: MainNavTabId; label: string }[] = [
+  { id: 'calculator', label: 'Calculator' },
+  { id: 'time', label: 'Timer' },
+  { id: 'vault', label: 'The Vault' },
+  { id: 'compare', label: 'Compare' },
+  { id: 'formulas', label: 'Formulas' },
+  { id: 'logic', label: 'Logic' },
+];
+
 export default function Home() {
   // Check if Turnstile is configured (for human verification)
   const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '';
@@ -140,6 +151,8 @@ export default function Home() {
   const [showVaultMenu, setShowVaultMenu] = useState(false);
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [showAccountMenu, setShowAccountMenu] = useState(false);
+  /** Mobile main nav: custom in-app dropdown (not the OS select sheet). */
+  const [mainNavMenuOpen, setMainNavMenuOpen] = useState(false);
 
   // Filter States
   const [filterLocation, setFilterLocation] = useState('All');
@@ -323,7 +336,12 @@ export default function Home() {
   const [resendingConfirmation, setResendingConfirmation] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [activeTab, setActiveTab] = useState<'calculator' | 'vault' | 'compare' | 'logic' | 'formulas' | 'time'>('calculator');
+  const [activeTab, setActiveTab] = useState<MainNavTabId>('calculator');
+  const mobileMainNavTriggerLabel = useMemo(() => {
+    const t = MAIN_NAV_TABS.find((x) => x.id === activeTab);
+    if (!t) return 'Calculator';
+    return t.id === 'vault' && inventory.length > 0 ? `${t.label} (${inventory.length})` : t.label;
+  }, [activeTab, inventory.length]);
   const [compareFormulas, setCompareFormulas] = useState<{ a: boolean; b: boolean; customIds: string[] }>({ a: false, b: false, customIds: [] });
   const [compareShowLive, setCompareShowLive] = useState(true);
   const [compareSpotEnabled, setCompareSpotEnabled] = useState(false);
@@ -554,9 +572,9 @@ export default function Home() {
     const align = alignEnd ? 'items-end text-right' : 'items-start text-left';
     return (
       <>
-        <span className={`sm:hidden flex flex-col leading-[1.1] tabular-nums gap-0 ${align} text-[9px]`}>
-          <span>{`$${ws}`}</span>
-          <span className="text-stone-500 text-[8px]">{`$${rs}`}</span>
+        <span className={`sm:hidden flex flex-col leading-[1.05] tabular-nums gap-0 ${align} text-[8px]`}>
+          <span className="font-semibold">{`$${ws}`}</span>
+          <span className="text-stone-500 text-[7px]">{`$${rs}`}</span>
         </span>
         <span className="hidden sm:inline tabular-nums whitespace-nowrap text-[10px] leading-none tracking-tight">{`$${ws}/$${rs}`}</span>
       </>
@@ -593,7 +611,7 @@ export default function Home() {
     return (
       <span
         title={kind === 'retail' ? '% change on retail (wholesale matches after rounding)' : '% change on wholesale'}
-        className={`block text-[8px] font-bold leading-tight mt-0.5 ${diff > 0 ? 'text-emerald-600' : 'text-red-500'}`}
+        className={`block text-[8px] max-sm:text-[7px] font-bold leading-tight max-sm:leading-none mt-0.5 max-sm:mt-0 ${diff > 0 ? 'text-emerald-600' : 'text-red-500'}`}
       >
         {diff > 0 ? '+' : ''}{pct.toFixed(1)}%
         {kind === 'retail' ? <span className="font-normal text-stone-500"> R</span> : null}
@@ -638,22 +656,30 @@ export default function Home() {
         setShowAuth(false);
         setPendingVaultPlusAfterAuth(false);
       }
+      if (mainNavMenuOpen && !target.closest('.main-nav-menu-container')) setMainNavMenuOpen(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showFilterMenu, showVaultMenu, showAccountMenu, openMenuId, showLocationMenuId, showTagMenuId, showAuth]);
+  }, [showFilterMenu, showVaultMenu, showAccountMenu, openMenuId, showLocationMenuId, showTagMenuId, showAuth, mainNavMenuOpen]);
 
   // Compute filter dropdown position for portal (avoids overflow clipping when vault has no items)
   useEffect(() => {
+    const clampLeft = (rawLeft: number) => {
+      if (typeof window === 'undefined') return rawLeft;
+      const panelW = Math.min(288, window.innerWidth - 16);
+      const margin = 8;
+      const maxLeft = window.innerWidth - panelW - margin;
+      return Math.max(margin, Math.min(rawLeft, maxLeft));
+    };
     if (showFilterMenu && filterButtonRef.current) {
       const rect = filterButtonRef.current.getBoundingClientRect();
-      setFilterDropdownRect({ top: rect.bottom + 8, left: rect.left });
+      setFilterDropdownRect({ top: rect.bottom + 8, left: clampLeft(rect.left) });
     } else {
       setFilterDropdownRect(null);
     }
     if (showCompareFilterMenu && compareFilterButtonRef.current) {
       const rect = compareFilterButtonRef.current.getBoundingClientRect();
-      setCompareFilterDropdownRect({ top: rect.bottom + 8, left: rect.left });
+      setCompareFilterDropdownRect({ top: rect.bottom + 8, left: clampLeft(rect.left) });
     } else {
       setCompareFilterDropdownRect(null);
     }
@@ -662,6 +688,29 @@ export default function Home() {
   useEffect(() => {
     if (activeTab !== 'compare') setShowCompareFilterMenu(false);
   }, [activeTab]);
+
+  useEffect(() => {
+    setMainNavMenuOpen(false);
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(min-width: 768px)');
+    const onChange = () => {
+      if (mq.matches) setMainNavMenuOpen(false);
+    };
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
+  useEffect(() => {
+    if (!mainNavMenuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMainNavMenuOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [mainNavMenuOpen]);
 
   const fetchPrices = useCallback(async () => {
     const cachedData = sessionStorage.getItem('vault_prices');
@@ -4614,7 +4663,7 @@ export default function Home() {
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto flex flex-col min-h-[calc(100dvh-2rem)] gap-6 md:min-h-0 md:space-y-6 md:gap-0">
+      <div className="max-w-7xl mx-auto flex flex-col min-h-[calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] gap-6 md:min-h-0 md:space-y-6 md:gap-0 pb-[env(safe-area-inset-bottom)]">
         {/* HEADER */}
         <div className="flex flex-col md:flex-row justify-between items-center bg-white px-6 py-8 rounded-[2rem] border-2 shadow-sm gap-8 shrink-0 relative border-[#A5BEAC]">
           <div className="hidden md:block md:w-1/4" />
@@ -4751,83 +4800,122 @@ export default function Home() {
           </div>
         </div>
 
-        {/* MARKET TICKER - MODIFIED: Increased mb-2 to mb-6 for spacing */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 px-2 shrink-0">
-          {(['gold', 'silver', 'platinum', 'palladium'] as const).map((name) => {
-            const spot = Number(prices[name]) || 0;
-            const rawPct = prices[`${name}_pct`];
-            const pct = rawPct == null || rawPct === '' ? NaN : Number(rawPct);
-            const showPct = Number.isFinite(pct);
-            return (
-              <div
-                key={name}
-                className="bg-white p-4 rounded-xl border-l-4 border-[#A5BEAC] shadow-sm text-center lg:text-left"
-                title={showPct ? "Today's % vs prior session close (from live data)" : undefined}
-              >
-                <p className="text-[10px] font-black uppercase text-stone-400">{name}</p>
-                <p className="text-xl font-bold tabular-nums">
-                  {spot > 0 ? `$${spot.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '--.--'}
-                </p>
-                {showPct ? (
-                  <p
-                    className={`text-[11px] font-bold tabular-nums mt-1 ${pct >= 0 ? 'text-emerald-700' : 'text-red-600'}`}
-                  >
-                    {pct >= 0 ? '+' : ''}
-                    {pct.toFixed(2)}% <span className="text-[9px] font-semibold text-stone-400 uppercase tracking-wide">today</span>
+        {/* MARKET TICKER — same max width + horizontal alignment as tab bar below (`max-w-7xl mx-auto`) */}
+        <div className="w-full px-2 shrink-0">
+          <div className="w-full max-w-7xl mx-auto">
+            <p className="sm:hidden text-[9px] font-bold text-stone-400 uppercase tracking-wide mb-1.5 text-center">Spot metals — swipe if needed on small screens</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 lg:gap-4 w-full">
+            {(['gold', 'silver', 'platinum', 'palladium'] as const).map((name) => {
+              const spot = Number(prices[name]) || 0;
+              const rawPct = prices[`${name}_pct`];
+              const pct = rawPct == null || rawPct === '' ? NaN : Number(rawPct);
+              const showPct = Number.isFinite(pct);
+              return (
+                <div
+                  key={name}
+                  className="bg-white p-2.5 sm:p-4 rounded-xl border-l-4 border-[#A5BEAC] shadow-sm text-center md:text-left min-w-0"
+                  title={showPct ? "Today's % vs prior session close (from live data)" : undefined}
+                >
+                  <p className="text-[9px] sm:text-[10px] font-black uppercase text-stone-400 truncate">{name}</p>
+                  <p className="text-base sm:text-xl font-bold tabular-nums">
+                    {spot > 0 ? `$${spot.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '--.--'}
                   </p>
-                ) : spot > 0 ? (
-                  <p className="text-[10px] font-medium text-stone-300 mt-1 tabular-nums">—</p>
-                ) : null}
-              </div>
-            );
-          })}
+                  {showPct ? (
+                    <p
+                      className={`text-[10px] sm:text-[11px] font-bold tabular-nums mt-0.5 sm:mt-1 ${pct >= 0 ? 'text-emerald-700' : 'text-red-600'}`}
+                    >
+                      {pct >= 0 ? '+' : ''}
+                      {pct.toFixed(2)}% <span className="text-[8px] sm:text-[9px] font-semibold text-stone-400 uppercase tracking-wide">today</span>
+                    </p>
+                  ) : spot > 0 ? (
+                    <p className="text-[10px] font-medium text-stone-300 mt-0.5 sm:mt-1 tabular-nums">—</p>
+                  ) : null}
+                </div>
+              );
+            })}
+            </div>
+          </div>
         </div>
 
-        {/* Tab Navigation - same width as panels below */}
+        {/* Tab Navigation — mobile: in-app dropdown; md+: button row */}
         <div className="w-full px-2 shrink-0">
-          <div className="flex overflow-x-auto md:overflow-visible bg-white rounded-2xl border border-[#A5BEAC] shadow-sm p-2 w-full max-w-7xl mx-auto gap-2 md:gap-1 scrollbar-hide">
-            <button
-              onClick={() => setActiveTab('calculator')}
-              className={`flex-shrink-0 py-3 md:py-3 px-3 md:px-4 text-xs md:text-sm font-black uppercase tracking-tighter transition-all rounded-xl md:flex-1 min-w-0 ${activeTab === 'calculator' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400 hover:text-stone-600'}`}
-            >
-              Calculator
-            </button>
-            <button
-              onClick={() => setActiveTab('time')}
-              className={`flex-shrink-0 py-3 md:py-3 px-3 md:px-4 text-xs md:text-sm font-black uppercase tracking-tighter transition-all rounded-xl md:flex-1 min-w-0 ${activeTab === 'time' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400 hover:text-stone-600'}`}
-            >
-              Timer
-            </button>
-            <button
-              onClick={() => setActiveTab('vault')}
-              className={`flex-shrink-0 py-3 md:py-3 px-3 md:px-4 text-xs md:text-sm font-black uppercase tracking-tighter transition-all rounded-xl md:flex-1 min-w-0 flex items-center justify-center gap-1.5 ${activeTab === 'vault' ? 'bg-[#A5BEAC] text-white shadow-inner' : inventory.length > 0 ? 'text-stone-500 relative' : 'text-stone-400 hover:text-stone-600'}`}
-            >
-              The Vault
-              {inventory.length > 0 && activeTab === 'vault' && (
-                <span className="text-[10px] font-bold opacity-90">({inventory.length})</span>
-              )}
-              {inventory.length > 0 && activeTab !== 'vault' && (
-                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#A5BEAC] animate-pulse" aria-hidden />
-              )}
-            </button>
-            <button
-              onClick={() => setActiveTab('compare')}
-              className={`flex-shrink-0 py-3 md:py-3 px-3 md:px-4 text-xs md:text-sm font-black uppercase tracking-tighter transition-all rounded-xl md:flex-1 min-w-0 ${activeTab === 'compare' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400 hover:text-stone-600'}`}
-            >
-              Compare
-            </button>
-            <button
-              onClick={() => setActiveTab('formulas')}
-              className={`flex-shrink-0 py-3 md:py-3 px-3 md:px-4 text-xs md:text-sm font-black uppercase tracking-tighter transition-all rounded-xl md:flex-1 min-w-0 ${activeTab === 'formulas' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400 hover:text-stone-600'}`}
-            >
-              Formulas
-            </button>
-            <button
-              onClick={() => setActiveTab('logic')}
-              className={`flex-shrink-0 py-3 md:py-3 px-3 md:px-4 text-xs md:text-sm font-black uppercase tracking-tighter transition-all rounded-xl md:flex-1 min-w-0 ${activeTab === 'logic' ? 'bg-[#A5BEAC] text-white shadow-inner' : 'text-stone-400 hover:text-stone-600'}`}
-            >
-              Logic
-            </button>
+          <div className="bg-white rounded-2xl border border-[#A5BEAC] shadow-sm p-2 w-full max-w-7xl mx-auto">
+            <div className="flex md:hidden items-center gap-2 min-h-[48px]">
+              {inventory.length > 0 && activeTab !== 'vault' ? (
+                <span
+                  className="shrink-0 w-2 h-2 rounded-full bg-[#A5BEAC] animate-pulse self-center"
+                  title="Vault has items"
+                  aria-hidden
+                />
+              ) : null}
+              <div className="main-nav-menu-container relative flex-1 min-w-0">
+                <button
+                  type="button"
+                  id="main-nav-menu-button"
+                  aria-haspopup="listbox"
+                  aria-expanded={mainNavMenuOpen}
+                  aria-label={`Section, currently ${mobileMainNavTriggerLabel}`}
+                  onClick={() => setMainNavMenuOpen((o) => !o)}
+                  className="w-full min-h-[48px] py-3 px-3 flex items-center justify-between gap-2 text-xs font-black uppercase tracking-tighter rounded-xl border border-stone-200 bg-stone-50 text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-[#A5BEAC] focus-visible:ring-offset-2 transition-colors hover:bg-stone-100/90"
+                >
+                  <span className="truncate text-left">{mobileMainNavTriggerLabel}</span>
+                  <span className={`text-[10px] text-stone-500 font-bold shrink-0 transition-transform ${mainNavMenuOpen ? 'rotate-180' : ''}`} aria-hidden>
+                    ▼
+                  </span>
+                </button>
+                {mainNavMenuOpen ? (
+                  <ul
+                    id="main-nav-menu-list"
+                    role="listbox"
+                    aria-labelledby="main-nav-menu-button"
+                    className="absolute left-0 right-0 top-full mt-1 z-[280] py-1 rounded-xl border-2 border-[#A5BEAC] bg-white shadow-xl max-h-[min(50vh,22rem)] overflow-y-auto overscroll-contain animate-in fade-in slide-in-from-top-1"
+                  >
+                    {MAIN_NAV_TABS.map((t) => {
+                      const label = t.id === 'vault' && inventory.length > 0 ? `${t.label} (${inventory.length})` : t.label;
+                      const selected = activeTab === t.id;
+                      return (
+                        <li key={t.id} role="presentation" className="border-b border-stone-100 last:border-b-0">
+                          <button
+                            type="button"
+                            role="option"
+                            aria-selected={selected}
+                            onClick={() => {
+                              setActiveTab(t.id);
+                              setMainNavMenuOpen(false);
+                            }}
+                            className={`w-full text-left py-3 px-3 text-xs font-black uppercase tracking-tighter flex items-center justify-between gap-2 transition-colors ${selected ? 'bg-[#A5BEAC]/20 text-slate-900' : 'text-stone-600 hover:bg-stone-50 active:bg-stone-100'}`}
+                          >
+                            <span className="truncate">{label}</span>
+                            {selected ? <span className="text-[#A5BEAC] shrink-0" aria-hidden>✓</span> : null}
+                            {t.id === 'vault' && inventory.length > 0 && !selected ? (
+                              <span className="w-1.5 h-1.5 rounded-full bg-[#A5BEAC] shrink-0" title="Vault has items" aria-hidden />
+                            ) : null}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : null}
+              </div>
+            </div>
+            <div className="hidden md:flex md:overflow-visible w-full gap-1">
+              {MAIN_NAV_TABS.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setActiveTab(t.id)}
+                  className={`flex-shrink-0 py-3 px-4 text-sm font-black uppercase tracking-tighter transition-all rounded-xl flex-1 min-w-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A5BEAC] focus-visible:ring-offset-2 ${t.id === 'vault' ? 'relative flex items-center justify-center gap-1.5' : ''} ${activeTab === t.id ? 'bg-[#A5BEAC] text-white shadow-inner' : t.id === 'vault' && inventory.length > 0 ? 'text-stone-500' : 'text-stone-400 hover:text-stone-600'}`}
+                >
+                  {t.label}
+                  {t.id === 'vault' && inventory.length > 0 && activeTab === 'vault' ? (
+                    <span className="text-[10px] font-bold opacity-90">({inventory.length})</span>
+                  ) : null}
+                  {t.id === 'vault' && inventory.length > 0 && activeTab !== 'vault' ? (
+                    <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#A5BEAC] animate-pulse" aria-hidden />
+                  ) : null}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -5441,7 +5529,7 @@ export default function Home() {
                     {/* Filter Menu Dropdown - rendered via portal to avoid overflow clipping when vault has no items */}
                     {showFilterMenu && filterDropdownRect && typeof document !== 'undefined' && createPortal(
                       <div
-                        className="filter-menu-dropdown fixed w-72 bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[9999] p-4 animate-in fade-in slide-in-from-top-2 space-y-4"
+                        className="filter-menu-dropdown fixed w-[min(18rem,calc(100vw-1rem))] max-h-[min(85dvh,calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-1rem))] overflow-y-auto overscroll-contain touch-pan-y bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[9999] p-4 animate-in fade-in slide-in-from-top-2 space-y-4"
                         style={{ top: filterDropdownRect.top, left: filterDropdownRect.left }}
                       >
                         <div className="flex justify-between items-center">
@@ -5614,7 +5702,7 @@ export default function Home() {
               </div>
 
             {/* flex-1 min-h-0 allows scrolling when parent has max-h on desktop; mobile: cap at ~4 cards height */}
-            <div className="p-4 md:p-6 overflow-y-auto flex-1 min-h-0 max-h-[34rem] md:max-h-none pb-40 custom-scrollbar overscroll-behavior-contain touch-pan-y bg-stone-50/20 rounded-b-[2.5rem]">
+            <div className="p-4 md:p-6 overflow-y-auto flex-1 min-h-0 max-h-[34rem] md:max-h-none pb-[calc(10rem+env(safe-area-inset-bottom))] custom-scrollbar overscroll-behavior-contain touch-pan-y bg-stone-50/20 rounded-b-[2.5rem]">
               {loading ? (
                 <div className="p-20 text-center text-stone-400 font-bold uppercase text-xs tracking-widest animate-pulse">Opening Vault...</div>
               ) : inventory.length === 0 && hasValidSupabaseCredentials ? (
@@ -6297,7 +6385,7 @@ export default function Home() {
                     </button>
                     {showCompareFilterMenu && compareFilterDropdownRect && typeof document !== 'undefined' && createPortal(
                       <div
-                        className="fixed w-72 bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[9999] p-4 animate-in fade-in slide-in-from-top-2 space-y-4"
+                        className="fixed w-[min(18rem,calc(100vw-1rem))] max-h-[min(85dvh,calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-1rem))] overflow-y-auto overscroll-contain touch-pan-y bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[9999] p-4 animate-in fade-in slide-in-from-top-2 space-y-4"
                         style={{ top: compareFilterDropdownRect.top, left: compareFilterDropdownRect.left }}
                       >
                         <div className="flex justify-between items-center">
@@ -6473,24 +6561,24 @@ export default function Home() {
                     <thead>
                       <tr className="border-b-2 border-stone-200">
                         <th className="py-1 pr-1.5 pl-1 sm:py-1.5 sm:pr-3 sm:pl-0 text-[9px] sm:text-[10px] font-black uppercase text-stone-500 bg-white border-r border-stone-200 relative sm:sticky sm:left-0 sm:z-20 sm:shadow-[4px_0_12px_-6px_rgba(0,0,0,0.12)] max-sm:w-[min(48vw,10.75rem)] max-sm:max-w-[min(48vw,10.75rem)] sm:max-w-[13rem] sm:w-auto">Item</th>
-                        <th className="py-1 px-1 sm:py-1.5 sm:px-1.5 text-[9px] sm:text-[10px] font-black uppercase text-stone-500 whitespace-nowrap bg-stone-100">Saved</th>
+                        <th className="max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 text-[8px] sm:text-[10px] font-black uppercase text-stone-500 whitespace-nowrap bg-stone-100 max-sm:max-w-[2.75rem] max-sm:min-w-0">Saved</th>
                         {compareSpotEnabled && (
-                          <th className="py-1 px-1 sm:py-1.5 sm:px-1.5 text-[9px] sm:text-[10px] font-black uppercase text-amber-700 whitespace-nowrap bg-amber-50 border-l border-amber-100" title="Each item’s saved formula (A, B, or custom) recalculated at scenario spot prices">
+                          <th className="max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 text-[8px] sm:text-[10px] font-black uppercase text-amber-700 whitespace-nowrap bg-amber-50 border-l border-amber-100 max-sm:max-w-[2.75rem] max-sm:min-w-0" title="Each item’s saved formula (A, B, or custom) recalculated at scenario spot prices">
                             <span className="sm:hidden">V@S</span>
                             <span className="hidden sm:inline">Vault @ Scn</span>
                           </th>
                         )}
-                        {compareShowLive && <th className="py-1 px-1 sm:py-1.5 sm:px-1.5 text-[9px] sm:text-[10px] font-black uppercase text-slate-700 whitespace-nowrap bg-slate-50 border-l border-stone-100">Live</th>}
-                        {compareFormulas.a && <th className="py-1 px-1 sm:py-1.5 sm:px-1.5 text-[9px] sm:text-[10px] font-black uppercase text-stone-500 whitespace-nowrap bg-white"><span className="sm:hidden">A</span><span className="hidden sm:inline">Formula A</span></th>}
-                        {compareSpotEnabled && compareFormulas.a && <th className="py-1 px-1 sm:py-1.5 sm:px-1.5 text-[9px] sm:text-[10px] font-black uppercase text-amber-600 whitespace-nowrap bg-amber-50"><span className="sm:hidden">A*</span><span className="hidden sm:inline">A @ Scn</span></th>}
-                        {compareFormulas.b && <th className="py-1 px-1 sm:py-1.5 sm:px-1.5 text-[9px] sm:text-[10px] font-black uppercase text-stone-500 whitespace-nowrap bg-white"><span className="sm:hidden">B</span><span className="hidden sm:inline">Formula B</span></th>}
-                        {compareSpotEnabled && compareFormulas.b && <th className="py-1 px-1 sm:py-1.5 sm:px-1.5 text-[9px] sm:text-[10px] font-black uppercase text-amber-600 whitespace-nowrap bg-amber-50"><span className="sm:hidden">B*</span><span className="hidden sm:inline">B @ Scn</span></th>}
+                        {compareShowLive && <th className="max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 text-[8px] sm:text-[10px] font-black uppercase text-slate-700 whitespace-nowrap bg-slate-50 border-l border-stone-100 max-sm:max-w-[2.75rem] max-sm:min-w-0">Live</th>}
+                        {compareFormulas.a && <th className="max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 text-[8px] sm:text-[10px] font-black uppercase text-stone-500 whitespace-nowrap bg-white max-sm:max-w-[2.75rem] max-sm:min-w-0"><span className="sm:hidden">A</span><span className="hidden sm:inline">Formula A</span></th>}
+                        {compareSpotEnabled && compareFormulas.a && <th className="max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 text-[8px] sm:text-[10px] font-black uppercase text-amber-600 whitespace-nowrap bg-amber-50 max-sm:max-w-[2.75rem] max-sm:min-w-0"><span className="sm:hidden">A*</span><span className="hidden sm:inline">A @ Scn</span></th>}
+                        {compareFormulas.b && <th className="max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 text-[8px] sm:text-[10px] font-black uppercase text-stone-500 whitespace-nowrap bg-white max-sm:max-w-[2.75rem] max-sm:min-w-0"><span className="sm:hidden">B</span><span className="hidden sm:inline">Formula B</span></th>}
+                        {compareSpotEnabled && compareFormulas.b && <th className="max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 text-[8px] sm:text-[10px] font-black uppercase text-amber-600 whitespace-nowrap bg-amber-50 max-sm:max-w-[2.75rem] max-sm:min-w-0"><span className="sm:hidden">B*</span><span className="hidden sm:inline">B @ Scn</span></th>}
                         {compareFormulas.customIds.map(id => {
                           const f = formulas.find((x: any) => x.id === id);
                           if (!f) return null;
                           return (<React.Fragment key={f.id}>
-                            <th className="py-1 px-1 sm:py-1.5 sm:px-1.5 text-[9px] sm:text-[10px] font-black uppercase text-stone-500 whitespace-nowrap truncate max-w-[3.75rem] sm:max-w-[5.5rem] bg-white" title={f.name}><span className="sm:hidden">{f.name.length > 6 ? `${f.name.slice(0, 5)}…` : f.name}</span><span className="hidden sm:inline">{f.name}</span></th>
-                            {compareSpotEnabled && <th className="py-1 px-1 sm:py-1.5 sm:px-1.5 text-[9px] sm:text-[10px] font-black uppercase text-amber-600 whitespace-nowrap bg-amber-50 truncate max-w-[3.75rem] sm:max-w-[5.5rem]" title={`${f.name} @ Scenario`}><span className="sm:hidden">{f.name.length > 4 ? `${f.name.slice(0, 3)}…*` : `${f.name}*`}</span><span className="hidden sm:inline">{f.name} @ Scn</span></th>}
+                            <th className="max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 text-[8px] sm:text-[10px] font-black uppercase text-stone-500 whitespace-nowrap truncate max-sm:max-w-[2.6rem] max-sm:min-w-0 sm:max-w-[5.5rem] bg-white" title={f.name}><span className="sm:hidden">{f.name.length > 6 ? `${f.name.slice(0, 5)}…` : f.name}</span><span className="hidden sm:inline">{f.name}</span></th>
+                            {compareSpotEnabled && <th className="max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 text-[8px] sm:text-[10px] font-black uppercase text-amber-600 whitespace-nowrap bg-amber-50 truncate max-sm:max-w-[2.6rem] max-sm:min-w-0 sm:max-w-[5.5rem]" title={`${f.name} @ Scenario`}><span className="sm:hidden">{f.name.length > 4 ? `${f.name.slice(0, 3)}…*` : `${f.name}*`}</span><span className="hidden sm:inline">{f.name} @ Scn</span></th>}
                           </React.Fragment>);
                         })}
                       </tr>
@@ -6524,12 +6612,12 @@ export default function Home() {
                             >
                               <span className="block truncate sm:truncate-none sm:line-clamp-2 sm:break-words sm:hyphens-auto">{itemTitle}</span>
                             </td>
-                            <td className="py-1 px-1 sm:py-1.5 sm:px-1.5 text-stone-600 tabular-nums bg-stone-100 group-hover:bg-stone-50 align-top">
+                            <td className="max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 text-stone-600 tabular-nums bg-stone-100 group-hover:bg-stone-50 align-top max-sm:max-w-[2.75rem] max-sm:min-w-0">
                               {formatCompareWholesaleRetail(Number(item.wholesale), Number(item.retail))}
                             </td>
                             {compareSpotEnabled && vaultScenarioPrices && (
                               <td
-                                className="py-1 px-1 sm:py-1.5 sm:px-1.5 tabular-nums bg-amber-50 border-l border-amber-100 group-hover:bg-amber-50/90 align-top"
+                                className="max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 tabular-nums bg-amber-50 border-l border-amber-100 group-hover:bg-amber-50/90 align-top max-sm:max-w-[2.75rem] max-sm:min-w-0"
                                 title="This piece’s saved pricing strategy at your scenario spot prices (labor, overhead, stones unchanged)"
                               >
                                 {formatCompareWholesaleRetail(vaultScenarioPrices.wholesale, vaultScenarioPrices.retail)}
@@ -6537,17 +6625,17 @@ export default function Home() {
                               </td>
                             )}
                             {compareShowLive && (
-                              <td className="py-1 px-1 sm:py-1.5 sm:px-1.5 text-slate-800 tabular-nums bg-slate-50 border-l border-stone-100 group-hover:bg-stone-50/90 align-top" title={"At current spot, using this item's saved formula"}>
+                              <td className="max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 text-slate-800 tabular-nums bg-slate-50 border-l border-stone-100 group-hover:bg-stone-50/90 align-top max-sm:max-w-[2.75rem] max-sm:min-w-0" title={"At current spot, using this item's saved formula"}>
                                 {formatCompareWholesaleRetail(liveItemPrices.wholesale, liveItemPrices.retail)}
                               </td>
                             )}
                             {compareFormulas.a && (
-                              <td className={`py-1 px-1 sm:py-1.5 sm:px-1.5 tabular-nums bg-white group-hover:bg-stone-50/50 align-top ${itemStrategy === 'A' ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
+                              <td className={`max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 tabular-nums bg-white group-hover:bg-stone-50/50 align-top max-sm:max-w-[2.75rem] max-sm:min-w-0 ${itemStrategy === 'A' ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
                                 {formatCompareWholesaleRetail(pricesByFormula['A']?.wholesale ?? 0, pricesByFormula['A']?.retail ?? 0)}
                               </td>
                             )}
                             {compareSpotEnabled && compareFormulas.a && scenarioPrices && (
-                              <td className="py-1 px-1 sm:py-1.5 sm:px-1.5 tabular-nums bg-amber-50 group-hover:bg-amber-50/90 align-top">
+                              <td className="max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 tabular-nums bg-amber-50 group-hover:bg-amber-50/90 align-top max-sm:max-w-[2.75rem] max-sm:min-w-0">
                                 {formatCompareWholesaleRetail(scenarioPrices['A']?.wholesale ?? 0, scenarioPrices['A']?.retail ?? 0)}
                                 {renderComparePriceDelta(
                                   pricesByFormula['A']?.wholesale ?? 0,
@@ -6558,12 +6646,12 @@ export default function Home() {
                               </td>
                             )}
                             {compareFormulas.b && (
-                              <td className={`py-1 px-1 sm:py-1.5 sm:px-1.5 tabular-nums bg-white group-hover:bg-stone-50/50 align-top ${itemStrategy === 'B' ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
+                              <td className={`max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 tabular-nums bg-white group-hover:bg-stone-50/50 align-top max-sm:max-w-[2.75rem] max-sm:min-w-0 ${itemStrategy === 'B' ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
                                 {formatCompareWholesaleRetail(pricesByFormula['B']?.wholesale ?? 0, pricesByFormula['B']?.retail ?? 0)}
                               </td>
                             )}
                             {compareSpotEnabled && compareFormulas.b && scenarioPrices && (
-                              <td className="py-1 px-1 sm:py-1.5 sm:px-1.5 tabular-nums bg-amber-50 group-hover:bg-amber-50/90 align-top">
+                              <td className="max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 tabular-nums bg-amber-50 group-hover:bg-amber-50/90 align-top max-sm:max-w-[2.75rem] max-sm:min-w-0">
                                 {formatCompareWholesaleRetail(scenarioPrices['B']?.wholesale ?? 0, scenarioPrices['B']?.retail ?? 0)}
                                 {renderComparePriceDelta(
                                   pricesByFormula['B']?.wholesale ?? 0,
@@ -6580,11 +6668,11 @@ export default function Home() {
                               const sp = scenarioPrices?.[f.name];
                               const isCurrent = itemStrategy === f.name;
                               return (<React.Fragment key={f.id}>
-                                <td className={`py-1 px-1 sm:py-1.5 sm:px-1.5 tabular-nums bg-white group-hover:bg-stone-50/50 align-top max-w-[3.75rem] sm:max-w-[5.5rem] ${isCurrent ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
+                                <td className={`max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 tabular-nums bg-white group-hover:bg-stone-50/50 align-top max-sm:max-w-[2.6rem] max-sm:min-w-0 sm:max-w-[5.5rem] ${isCurrent ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
                                   {formatCompareWholesaleRetail(p?.wholesale ?? 0, p?.retail ?? 0)}
                                 </td>
                                 {compareSpotEnabled && sp ? (
-                                  <td className="py-1 px-1 sm:py-1.5 sm:px-1.5 tabular-nums bg-amber-50 group-hover:bg-amber-50/90 align-top max-w-[3.75rem] sm:max-w-[5.5rem]">
+                                  <td className="max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 tabular-nums bg-amber-50 group-hover:bg-amber-50/90 align-top max-sm:max-w-[2.6rem] max-sm:min-w-0 sm:max-w-[5.5rem]">
                                     {formatCompareWholesaleRetail(sp.wholesale ?? 0, sp.retail ?? 0)}
                                     {renderComparePriceDelta(p?.wholesale ?? 0, p?.retail ?? 0, sp.wholesale ?? 0, sp.retail ?? 0)}
                                   </td>
