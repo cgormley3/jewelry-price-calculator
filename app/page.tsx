@@ -55,10 +55,6 @@ const MAIN_NAV_TABS: { id: MainNavTabId; label: string }[] = [
   { id: 'logic', label: 'Logic' },
 ];
 
-/** Mobile bottom bar: primary sections in left-to-right order (thumb-friendly). */
-const PRIMARY_MOBILE_NAV_IDS: MainNavTabId[] = ['calculator', 'vault', 'time'];
-const SECONDARY_MAIN_NAV = MAIN_NAV_TABS.filter((t) => !PRIMARY_MOBILE_NAV_IDS.includes(t.id));
-
 /** Cap automatic background metal price fetches (focus/visibility/mount) to once per minute. */
 const PRICE_NETWORK_MIN_INTERVAL_MS = 60_000;
 /** sessionStorage cache max age for hydrating spot UI without a network call */
@@ -142,8 +138,6 @@ export default function Home() {
   const [showVaultMenu, setShowVaultMenu] = useState(false);
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [showAccountMenu, setShowAccountMenu] = useState(false);
-  /** Mobile main nav: custom in-app dropdown (not the OS select sheet). */
-  const [mainNavMenuOpen, setMainNavMenuOpen] = useState(false);
 
   // Filter States
   const [filterLocation, setFilterLocation] = useState('All');
@@ -341,11 +335,6 @@ export default function Home() {
   /** Mobile Vault: pull-to-refresh spot prices (touch; max ~md breakpoint). */
   const [vaultPullPx, setVaultPullPx] = useState(0);
   const [vaultPullRefreshing, setVaultPullRefreshing] = useState(false);
-  const mobileMainNavTriggerLabel = useMemo(() => {
-    if (PRIMARY_MOBILE_NAV_IDS.includes(activeTab)) return 'More';
-    const t = MAIN_NAV_TABS.find((x) => x.id === activeTab);
-    return t?.label ?? 'More';
-  }, [activeTab]);
 
   useEffect(() => {
     if (activeTab === 'vault') setVaultTabVisited(true);
@@ -676,11 +665,10 @@ export default function Home() {
         setShowAuth(false);
         setPendingVaultPlusAfterAuth(false);
       }
-      if (mainNavMenuOpen && !target.closest('.main-nav-menu-container')) setMainNavMenuOpen(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showFilterMenu, showVaultMenu, showAccountMenu, openMenuId, showLocationMenuId, showTagMenuId, showAuth, mainNavMenuOpen]);
+  }, [showFilterMenu, showVaultMenu, showAccountMenu, openMenuId, showLocationMenuId, showTagMenuId, showAuth]);
 
   // Compute filter dropdown position for portal (avoids overflow clipping when vault has no items)
   useEffect(() => {
@@ -708,29 +696,6 @@ export default function Home() {
   useEffect(() => {
     if (activeTab !== 'compare') setShowCompareFilterMenu(false);
   }, [activeTab]);
-
-  useEffect(() => {
-    setMainNavMenuOpen(false);
-  }, [activeTab]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const mq = window.matchMedia('(min-width: 768px)');
-    const onChange = () => {
-      if (mq.matches) setMainNavMenuOpen(false);
-    };
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
-  }, []);
-
-  useEffect(() => {
-    if (!mainNavMenuOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMainNavMenuOpen(false);
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [mainNavMenuOpen]);
 
   useEffect(() => {
     pricesLoadedRef.current = pricesLoaded;
@@ -5044,7 +5009,7 @@ export default function Home() {
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto flex flex-col min-h-[calc(100dvh-2rem-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px))] gap-6 md:min-h-0 md:space-y-6 md:gap-0 pb-[calc(4.85rem+env(safe-area-inset-bottom,0px))] md:pb-[env(safe-area-inset-bottom,0px)]">
+      <div className="max-w-7xl mx-auto flex flex-col min-h-[calc(100dvh-2rem-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px))] gap-6 md:min-h-0 md:space-y-6 md:gap-0 pb-[max(1rem,env(safe-area-inset-bottom,0px))] md:pb-[env(safe-area-inset-bottom,0px)]">
         {/* HEADER */}
         <div className="flex flex-col md:flex-row justify-between items-center bg-white px-6 py-8 rounded-[2rem] border-2 shadow-sm gap-8 shrink-0 relative border-[#A5BEAC]">
           <div className="hidden md:block md:w-1/4" />
@@ -5228,65 +5193,22 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Tab Navigation — mobile: in-app dropdown; md+: button row */}
+        {/* Tab Navigation — horizontal scroll on small screens; even-width row on md+ */}
         <div className="w-full px-2 shrink-0">
           <div className="bg-white rounded-2xl border border-[#A5BEAC] shadow-sm p-2 w-full max-w-7xl mx-auto">
-            <div className="flex md:hidden items-center gap-2 min-h-[48px]">
-              <div className="main-nav-menu-container relative flex-1 min-w-0">
-                <button
-                  type="button"
-                  id="main-nav-menu-button"
-                  aria-haspopup="listbox"
-                  aria-expanded={mainNavMenuOpen}
-                  aria-label={`Section, currently ${mobileMainNavTriggerLabel}`}
-                  onClick={() => setMainNavMenuOpen((o) => !o)}
-                  className="w-full min-h-[48px] py-3 px-3 flex items-center justify-between gap-2 text-xs font-black uppercase tracking-tighter rounded-xl border border-stone-200 bg-stone-50 text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-[#A5BEAC] focus-visible:ring-offset-2 transition-colors hover:bg-stone-100/90"
-                >
-                  <span className="truncate text-left">{mobileMainNavTriggerLabel}</span>
-                  <span className={`text-[10px] text-stone-500 font-bold shrink-0 transition-transform ${mainNavMenuOpen ? 'rotate-180' : ''}`} aria-hidden>
-                    ▼
-                  </span>
-                </button>
-                {mainNavMenuOpen ? (
-                  <div className="absolute left-0 right-0 top-full mt-1 z-[280] max-h-[min(50vh,22rem)] rounded-xl border-2 border-[#A5BEAC] bg-white shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-1">
-                  <ul
-                    id="main-nav-menu-list"
-                    role="listbox"
-                    aria-labelledby="main-nav-menu-button"
-                    className="max-h-[min(50vh,22rem)] overflow-y-auto overscroll-contain py-1"
-                  >
-                    {SECONDARY_MAIN_NAV.map((t) => {
-                      const selected = activeTab === t.id;
-                      return (
-                        <li key={t.id} role="presentation" className="border-b border-stone-100 last:border-b-0">
-                          <button
-                            type="button"
-                            role="option"
-                            aria-selected={selected}
-                            onClick={() => {
-                              setActiveTab(t.id);
-                              setMainNavMenuOpen(false);
-                            }}
-                            className={`w-full text-left py-3 px-3 text-xs font-black uppercase tracking-tighter flex items-center justify-between gap-2 transition-colors ${selected ? 'bg-[#A5BEAC]/20 text-slate-900' : 'text-stone-600 hover:bg-stone-50 active:bg-stone-100'}`}
-                          >
-                            <span className="truncate">{t.label}</span>
-                            {selected ? <span className="text-[#A5BEAC] shrink-0" aria-hidden>✓</span> : null}
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-            <div className="hidden md:flex md:overflow-visible w-full gap-1">
+            <div
+              className="flex w-full gap-1 overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] scroll-smooth md:overflow-visible"
+              role="tablist"
+              aria-label="Sections"
+            >
               {MAIN_NAV_TABS.map((t) => (
                 <button
                   key={t.id}
                   type="button"
+                  role="tab"
+                  aria-selected={activeTab === t.id}
                   onClick={() => setActiveTab(t.id)}
-                  className={`flex-shrink-0 py-3 px-4 text-sm font-black uppercase tracking-tighter transition-all rounded-xl flex-1 min-w-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A5BEAC] focus-visible:ring-offset-2 ${t.id === 'vault' ? 'relative flex items-center justify-center gap-1.5' : ''} ${activeTab === t.id ? 'bg-[#A5BEAC] text-white shadow-inner' : t.id === 'vault' && inventory.length > 0 ? 'text-stone-500' : 'text-stone-400 hover:text-stone-600'}`}
+                  className={`flex-shrink-0 md:flex-1 md:min-w-0 py-3 px-3 md:px-4 text-xs md:text-sm font-black uppercase tracking-tighter transition-all rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A5BEAC] focus-visible:ring-offset-2 ${t.id === 'vault' ? 'relative flex items-center justify-center gap-1.5' : ''} ${activeTab === t.id ? 'bg-[#A5BEAC] text-white shadow-inner' : t.id === 'vault' && inventory.length > 0 ? 'text-stone-500' : 'text-stone-400 hover:text-stone-600'}`}
                 >
                   {t.label}
                   {t.id === 'vault' && inventory.length > 0 && activeTab === 'vault' ? (
@@ -5306,7 +5228,7 @@ export default function Home() {
           {/* CALCULATOR PANEL */}
           <div className={`flex flex-col flex-1 min-h-0 min-h-[50vh] lg:min-h-0 lg:max-h-[calc(100vh-5rem)] ${activeTab !== 'calculator' ? 'hidden' : ''}`}>
             <div className="bg-white rounded-[2rem] shadow-xl border-2 border-[#A5BEAC] overflow-hidden lg:h-full lg:min-h-0 lg:flex lg:flex-col">
-              <div className="overflow-y-auto lg:overflow-hidden lg:flex-1 lg:min-h-0 lg:flex lg:flex-col px-4 pt-5 pb-[calc(6.25rem+env(safe-area-inset-bottom,0px))] md:p-8 md:pb-8 space-y-4 lg:space-y-4 min-h-0 custom-scrollbar">
+              <div className="overflow-y-auto lg:overflow-hidden lg:flex-1 lg:min-h-0 lg:flex lg:flex-col px-4 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom,0px))] md:p-8 md:pb-8 space-y-4 lg:space-y-4 min-h-0 custom-scrollbar">
               <h2 className="text-2xl font-black uppercase italic tracking-tighter text-slate-900 shrink-0">Calculator</h2>
 
               {/* Desktop: side-by-side layout with independent scrolling per column */}
@@ -6208,44 +6130,6 @@ export default function Home() {
         </div>
       </div>
 
-      <nav
-        className="md:hidden fixed bottom-0 left-0 right-0 z-[270] pointer-events-none pt-0 pl-[max(0.75rem,env(safe-area-inset-left,0px))] pr-[max(0.75rem,env(safe-area-inset-right,0px))] pb-[calc(env(safe-area-inset-bottom,0px)+0.625rem)]"
-        role="navigation"
-        aria-label="Primary"
-      >
-        <div className="pointer-events-auto rounded-[1.35rem] border-2 border-[#A5BEAC]/45 bg-white/92 backdrop-blur-md shadow-[0_-4px_24px_rgba(15,23,42,0.08)] p-1.5">
-          <div className="flex items-stretch gap-1 min-h-[3.35rem]">
-            {PRIMARY_MOBILE_NAV_IDS.map((id) => {
-              const t = MAIN_NAV_TABS.find((x) => x.id === id);
-              if (!t) return null;
-              const selected = activeTab === id;
-              const inactiveVaultPulse = id === 'vault' && inventory.length > 0 && !selected;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  aria-current={selected ? 'page' : undefined}
-                  onClick={() => {
-                    setActiveTab(id);
-                    setMainNavMenuOpen(false);
-                  }}
-                  className={`flex-1 min-w-0 relative flex flex-col items-center justify-center gap-0.5 py-2 px-1 rounded-xl text-[10px] font-black uppercase tracking-wide transition-all outline-none focus-visible:ring-2 focus-visible:ring-[#A5BEAC] focus-visible:ring-offset-2 focus-visible:ring-offset-white ${selected ? 'bg-[#A5BEAC] text-white shadow-md shadow-[#A5BEAC]/35' : inactiveVaultPulse ? 'text-stone-600 bg-stone-50/90' : 'text-stone-500 bg-stone-50/60 hover:bg-stone-100/95 hover:text-stone-700'}`}
-                >
-                  <span className="flex items-center justify-center gap-1 max-w-full px-0.5">
-                    <span className="truncate">{t.label}</span>
-                    {id === 'vault' && inventory.length > 0 && selected ? (
-                      <span className="text-[9px] font-bold opacity-90 shrink-0">({inventory.length})</span>
-                    ) : null}
-                  </span>
-                  {id === 'vault' && inventory.length > 0 && !selected ? (
-                    <span className="absolute top-1.5 right-2.5 w-2 h-2 rounded-full bg-[#A5BEAC] animate-pulse ring-2 ring-white" aria-hidden />
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </nav>
     </div>
   );
 }
