@@ -6,6 +6,7 @@
     "dev": "next dev --webpack",
     "build": "next build --webpack",
     "start": "next start",
+    "lighthouse:local": "npx --yes lighthouse@12.8.2 http://127.0.0.1:3000 --preset=perf --only-categories=performance --output=json --output-path=lighthouse-report.json --chrome-flags=\"--headless --no-sandbox\" --quiet",
     "lint": "eslint",
     "splash:ios": "python3 scripts/generate-ios-splash.py",
     "shopify:link": "shopify app config link",

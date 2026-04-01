@@ -68,3 +68,6 @@ Thumbs.db
 
 # Optional: If you use Husky for git hooks
 .husky/_/
+
+# Local Lighthouse output (npm run lighthouse:local after next start)
+lighthouse-report.json

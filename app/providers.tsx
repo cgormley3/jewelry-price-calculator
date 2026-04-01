@@ -1,10 +1,6 @@
 "use client";
-import { GoogleOAuthProvider } from "@react-oauth/google";
 
+/** Layout shell only — `GoogleOAuthProvider` mounts inside the auth UI when opened (see `app/page.tsx`). */
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  return (
-    <GoogleOAuthProvider clientId="643516163366-2p8gonpdt21vmpquegh117raodgcpfci.apps.googleusercontent.com">
-      {children}
-    </GoogleOAuthProvider>
-  );
+  return <>{children}</>;
 };

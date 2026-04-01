@@ -1,13 +1,13 @@
 "use client";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import type { jsPDF } from 'jspdf';
+import dynamic from 'next/dynamic';
+import NextImage from 'next/image';
 import { supabase, hasValidSupabaseCredentials } from '../lib/supabase';
-import { Turnstile } from '@marsidev/react-turnstile';
-import { GoogleLogin, CredentialResponse } from '@react-oauth/google';
+import type { CredentialResponse } from '@react-oauth/google';
+import { GoogleOAuthProvider } from '@react-oauth/google';
 import InstallPrompt from './InstallPrompt';
-import FormulaBuilder from '../components/FormulaBuilder';
 import { evaluateCustomModel, formulaReferencesBase, formulaToReadableString, formulaToTokens, parseTokensStrict, PRESET_A, type FormulaNode } from '../lib/formula-engine';
 import type { FormulaTokens } from '../components/FormulaBuilder';
 import { VAULT_PLUS_PRICE_PHRASE } from '@/lib/vault-plus-copy';
@@ -18,46 +18,22 @@ import {
   roundPriceForDisplay,
   type PriceRoundingOption,
 } from '@/lib/priceRounding';
-
-const UNIT_TO_GRAMS: { [key: string]: number } = {
-  "Grams": 1,
-  "Pennyweights (dwt)": 1.55517,
-  "Troy Ounces": 31.1035,
-  "Ounces (std)": 28.3495
-};
-
-/** Fine metal fraction by alloy; spot math uses $/troy oz (same as live market quotes). */
-const METAL_PURITIES: Record<string, number> = {
-  '10K Gold': 0.417,
-  '14K Gold': 0.583,
-  '18K Gold': 0.75,
-  '22K Gold': 0.916,
-  '24K Gold': 0.999,
-  'Sterling Silver': 0.925,
-  'Platinum 950': 0.95,
-  'Palladium': 0.95,
-};
-
-// Fallback spot prices ($/troy oz) when API hasn't loaded — used only when live price is 0
-const FALLBACK_SPOT: Record<string, number> = { gold: 2600, silver: 28, platinum: 950, palladium: 1000 };
+import { findingsMultFromItem } from '@/lib/findings-mult';
+import { GOOGLE_WEB_CLIENT_ID } from '@/lib/google-oauth';
+import type { LogicTabPanelProps } from '@/components/tab-panels/LogicTabPanel';
+import type { TimeTabPanelProps } from '@/components/tab-panels/TimeTabPanel';
+import type { CompareTabPanelProps } from '@/components/tab-panels/CompareTabPanel';
+import type { FormulasTabPanelProps } from '@/components/tab-panels/FormulasTabPanel';
+import type { VaultTabPanelProps } from '@/components/tab-panels/VaultTabPanel';
+import { appIconHeaderPath, appIconHeaderPathForImage } from '@/lib/app-icon';
+import { formatLocalDateYYYYMMDD, localTodayYYYYMMDD } from '@/lib/local-date';
+import { FALLBACK_SPOT, METAL_PURITIES, UNIT_TO_GRAMS } from '@/lib/vault-metal-display';
 
 /** Original file size limit before crop; saved image is 256×256 PNG (small). iPhone Pro / 48MP HEIC can be large. */
 const MAX_VAULT_PHOTO_UPLOAD_BYTES = 45 * 1024 * 1024;
 
 /** File picker: include HEIC/HEIF so iOS Photos offers all pictures (not only JPEG). */
 const VAULT_PHOTO_ACCEPT = 'image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif,image/*';
-
-/** Local calendar date as YYYY-MM-DD (for `<input type="date" />`). */
-function formatLocalDateYYYYMMDD(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-function localTodayYYYYMMDD(): string {
-  return formatLocalDateYYYYMMDD(new Date());
-}
 
 /** Work day for filters & summaries: explicit logged_on or fall back to created_at. */
 function entryWorkLocalDay(e: { logged_on?: string | null; created_at: string }): Date {
@@ -66,62 +42,6 @@ function entryWorkLocalDay(e: { logged_on?: string | null; created_at: string })
     return new Date(y, mo - 1, d);
   }
   return new Date(e.created_at);
-}
-
-/** Live $/ozt for a metal row (matches calculateFullBreakdown spot resolution). */
-function resolveSpotOzForMetal(m: any, livePrices: { gold?: number; silver?: number; platinum?: number; palladium?: number }): number {
-  const type = (m.type || '').toLowerCase();
-  let spot = 0;
-  if (type.includes('gold')) spot = Number(livePrices.gold) || 0;
-  else if (type.includes('silver')) spot = Number(livePrices.silver) || 0;
-  else if (type.includes('platinum')) spot = Number(livePrices.platinum) || 0;
-  else if (type.includes('palladium')) spot = Number(livePrices.palladium) || 0;
-  if (!spot && m.spotSaved != null && Number(m.spotSaved) > 0) spot = Number(m.spotSaved);
-  else if (!spot) {
-    if (type.includes('gold')) spot = FALLBACK_SPOT.gold;
-    else if (type.includes('silver')) spot = FALLBACK_SPOT.silver;
-    else if (type.includes('platinum')) spot = FALLBACK_SPOT.platinum;
-    else if (type.includes('palladium')) spot = FALLBACK_SPOT.palladium;
-  }
-  return spot;
-}
-
-/** Metal line $ value from a spot quote in USD per troy ounce (matches live market). */
-function metalRowDollarValueFromSpotOzt(m: any, spotOzt: number): number {
-  const purity = METAL_PURITIES[m.type] || 1;
-  const gramWeight = Number(m.weight) * (UNIT_TO_GRAMS[m.unit as keyof typeof UNIT_TO_GRAMS] || 1);
-  return (spotOzt / 31.1035) * purity * gramWeight;
-}
-
-/** Dollar value of one metal line at current live + saved-spot logic (vault display). */
-function metalRowLiveDollarValue(m: any, livePrices: { gold?: number; silver?: number; platinum?: number; palladium?: number }): number {
-  const spot = resolveSpotOzForMetal(m, livePrices);
-  return metalRowDollarValueFromSpotOzt(m, spot);
-}
-
-/** Optional findings/other retail multiplier for Strategy A/B only (undefined = use formula default). */
-function findingsMultFromItem(item: any): number | undefined {
-  if (!item || item.strategy === 'custom') return undefined;
-  const v = item.findings_retail_multiplier;
-  if (v == null || v === '') return undefined;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : undefined;
-}
-
-/**
- * iOS “Add to Home Screen” / WebKit often invalidates decoded `<img>` bitmaps after backgrounding
- * (e.g. PDF preview, app switcher) while leaving the same URL cached as failed. Append a query so
- * the browser requests the image again.
- */
-function vaultThumbnailSrc(url: string, visibilityEpoch: number, errorRetry: number): string {
-  const u = url.trim();
-  if (!u.startsWith('http')) return u;
-  const parts: string[] = [];
-  if (visibilityEpoch > 0) parts.push(`vv=${visibilityEpoch}`);
-  if (errorRetry > 0) parts.push(`vr=${errorRetry}`);
-  if (parts.length === 0) return u;
-  const sep = u.includes('?') ? '&' : '?';
-  return `${u}${sep}${parts.join('&')}`;
 }
 
 type MainNavTabId = 'calculator' | 'vault' | 'compare' | 'logic' | 'formulas' | 'time';
@@ -143,6 +63,61 @@ const SECONDARY_MAIN_NAV = MAIN_NAV_TABS.filter((t) => !PRIMARY_MOBILE_NAV_IDS.i
 const PRICE_NETWORK_MIN_INTERVAL_MS = 60_000;
 /** sessionStorage cache max age for hydrating spot UI without a network call */
 const PRICE_SESSION_MAX_AGE_MS = 60_000;
+
+const Turnstile = dynamic(() => import('@marsidev/react-turnstile').then((m) => m.Turnstile), { ssr: false });
+
+const GoogleLoginButton = dynamic(
+  () => import('@react-oauth/google').then((m) => m.GoogleLogin),
+  { ssr: false }
+);
+
+const LogicTabPanel = dynamic<LogicTabPanelProps>(
+  () => import('@/components/tab-panels/LogicTabPanel'),
+  {
+    ssr: false,
+    loading: () => <div className="min-h-[24rem] rounded-[2rem] bg-stone-100 animate-pulse border-2 border-stone-200/80" aria-hidden />,
+  }
+);
+
+const TimeTabPanel = dynamic<TimeTabPanelProps>(
+  () => import('@/components/tab-panels/TimeTabPanel'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="min-h-[50vh] rounded-[2.5rem] bg-stone-100 animate-pulse border-2 border-[#A5BEAC]/40" aria-hidden />
+    ),
+  }
+);
+
+const CompareTabPanel = dynamic<CompareTabPanelProps>(
+  () => import('@/components/tab-panels/CompareTabPanel'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="min-h-[50vh] rounded-2xl sm:rounded-[2.5rem] bg-stone-100 animate-pulse border-2 border-[#A5BEAC]/40" aria-hidden />
+    ),
+  }
+);
+
+const FormulasTabPanel = dynamic<FormulasTabPanelProps>(
+  () => import('@/components/tab-panels/FormulasTabPanel'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="min-h-[50vh] rounded-[2.5rem] bg-stone-100 animate-pulse border-2 border-[#A5BEAC]/40" aria-hidden />
+    ),
+  }
+);
+
+const VaultTabPanel = dynamic<VaultTabPanelProps>(
+  () => import('@/components/tab-panels/VaultTabPanel'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="min-h-[50vh] rounded-[2.5rem] bg-stone-100 animate-pulse border-2 border-[#A5BEAC]/40" aria-hidden />
+    ),
+  }
+);
 
 export default function Home() {
   // Check if Turnstile is configured (for human verification)
@@ -357,6 +332,12 @@ export default function Home() {
   const [newPassword, setNewPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [activeTab, setActiveTab] = useState<MainNavTabId>('calculator');
+  /** Lazy-load heavy tab chunks after first visit (keeps shell mounted with `hidden`). */
+  const [logicTabVisited, setLogicTabVisited] = useState(false);
+  const [timeTabVisited, setTimeTabVisited] = useState(false);
+  const [compareTabVisited, setCompareTabVisited] = useState(false);
+  const [formulasTabVisited, setFormulasTabVisited] = useState(false);
+  const [vaultTabVisited, setVaultTabVisited] = useState(false);
   /** Mobile Vault: pull-to-refresh spot prices (touch; max ~md breakpoint). */
   const [vaultPullPx, setVaultPullPx] = useState(0);
   const [vaultPullRefreshing, setVaultPullRefreshing] = useState(false);
@@ -364,6 +345,14 @@ export default function Home() {
     if (PRIMARY_MOBILE_NAV_IDS.includes(activeTab)) return 'More';
     const t = MAIN_NAV_TABS.find((x) => x.id === activeTab);
     return t?.label ?? 'More';
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab === 'vault') setVaultTabVisited(true);
+    if (activeTab === 'logic') setLogicTabVisited(true);
+    if (activeTab === 'time') setTimeTabVisited(true);
+    if (activeTab === 'compare') setCompareTabVisited(true);
+    if (activeTab === 'formulas') setFormulasTabVisited(true);
   }, [activeTab]);
   const [compareFormulas, setCompareFormulas] = useState<{ a: boolean; b: boolean; customIds: string[] }>({ a: false, b: false, customIds: [] });
   const [compareShowLive, setCompareShowLive] = useState(true);
@@ -1352,47 +1341,57 @@ export default function Home() {
         const items = Array.isArray(data) ? data : [];
         const uniqueLocs = Array.from(new Set(items.map((i: any) => i.location).filter(Boolean)));
         setLocations(prev => Array.from(new Set([...prev, ...uniqueLocs])));
-        // Fetch formulas for same user
-        const resFormulas = await fetch('/api/fetch-formulas', {
+        const jsonBody = { accessToken, userId: session.user.id };
+        const resFormulasP = fetch('/api/fetch-formulas', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ accessToken, userId: session.user.id }),
+          body: JSON.stringify(jsonBody),
         });
+        const resTagsP = fetch('/api/fetch-user-tags', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(jsonBody),
+        });
+        const resTimeP = fetch('/api/fetch-time-entries', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(jsonBody),
+        });
+        const resShopifyP = SHOPIFY_FEATURE_ENABLED
+          ? fetch('/api/shopify/status', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(jsonBody),
+            })
+          : Promise.resolve(null as Response | null);
+        const resProfileP = fetch('/api/profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessToken }),
+        });
+        const [resFormulas, resTags, resTime, resShopify, resProfile] = await Promise.all([
+          resFormulasP,
+          resTagsP,
+          resTimeP,
+          resShopifyP,
+          resProfileP,
+        ]);
         if (resFormulas.ok) {
           const formulasData = await resFormulas.json();
           setFormulas(Array.isArray(formulasData) ? formulasData : []);
         }
-        // Fetch user's saved tags for filter and dropdown
-        const resTags = await fetch('/api/fetch-user-tags', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ accessToken, userId: session.user.id }),
-        });
         if (resTags.ok) {
           const tagsData = await resTags.json();
           setSavedUserTags(Array.isArray(tagsData) ? tagsData : []);
         }
-        // Fetch time entries for tracked time display
-        const resTime = await fetch('/api/fetch-time-entries', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ accessToken, userId: session.user.id }),
-        });
         if (resTime.ok) {
           const timeData = await resTime.json();
           setTimeEntries(Array.isArray(timeData) ? timeData : []);
         }
-        if (SHOPIFY_FEATURE_ENABLED) {
-          const resShopify = await fetch('/api/shopify/status', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ accessToken, userId: session.user.id }),
-          });
-          if (resShopify.ok) {
-            const shopifyData = await resShopify.json();
-            setShopifyConnected(!!shopifyData.connected);
-            setShopifyShop(shopifyData.shop || null);
-          }
+        if (resShopify?.ok) {
+          const shopifyData = await resShopify.json();
+          setShopifyConnected(!!shopifyData.connected);
+          setShopifyShop(shopifyData.shop || null);
         }
         // fetch-inventory only returns 200 when the server already verified Vault+ — do not let a
         // separate /subscription/status failure or mismatch clear the UI back to "Upgrade".
@@ -1409,11 +1408,6 @@ export default function Home() {
             }
           })
           .catch(() => {});
-        const resProfile = await fetch('/api/profile', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ accessToken }),
-        });
         if (resProfile.ok) {
           const profileData = await resProfile.json();
           setProfile({
@@ -3548,6 +3542,11 @@ export default function Home() {
     await yieldForWorkBannerPaint();
 
     try {
+    const [{ default: JSPDF }, { default: autoTable }] = await Promise.all([
+      import('jspdf'),
+      import('jspdf-autotable'),
+    ]);
+
     const targetItems = selectedItems.size > 0
       ? filteredInventory.filter(i => selectedItems.has(i.id))
       : filteredInventory;
@@ -3571,10 +3570,12 @@ export default function Home() {
       }
     }
 
-    const iconRaw = await getImageData(typeof window !== 'undefined' ? `${window.location.origin}/icon.png?v=2` : '/icon.png?v=2');
+    const iconFetchUrl =
+      typeof window !== 'undefined' ? `${window.location.origin}${appIconHeaderPath()}` : appIconHeaderPath();
+    const iconRaw = await getImageData(iconFetchUrl);
     const iconData = iconRaw ? (await getImageWithRoundedCorners(iconRaw, 32, 0.15)) ?? iconRaw : null;
 
-    const doc = new jsPDF();
+    const doc = new JSPDF();
     const neutralDark = [80, 80, 80] as [number, number, number];
     const muted = [100, 100, 100];
     const dark = [40, 40, 40];
@@ -5048,7 +5049,16 @@ export default function Home() {
         <div className="flex flex-col md:flex-row justify-between items-center bg-white px-6 py-8 rounded-[2rem] border-2 shadow-sm gap-8 shrink-0 relative border-[#A5BEAC]">
           <div className="hidden md:block md:w-1/4" />
           <div className="flex flex-col items-center justify-center text-center w-full md:w-2/4">
-            <img src="/icon.png?v=2" alt="Logo" className="w-12 h-12 object-contain bg-transparent block brightness-110 contrast-125 mb-3" style={{ mixBlendMode: 'multiply' }} />
+            <NextImage
+              src={appIconHeaderPathForImage()}
+              alt="Logo"
+              width={192}
+              height={192}
+              className="w-12 h-12 object-contain bg-transparent block brightness-110 contrast-125 mb-3"
+              style={{ mixBlendMode: 'multiply' }}
+              sizes="48px"
+              priority
+            />
             <div className="flex flex-col items-center leading-none">
               <div className="flex items-center justify-center gap-2 mb-2">
                 <h1 className="text-3xl font-black uppercase italic tracking-[0.1em] text-slate-900 leading-none">THE VAULT</h1>
@@ -5120,6 +5130,7 @@ export default function Home() {
                 </button>
               )}
               {showAuth ? (
+                <GoogleOAuthProvider clientId={GOOGLE_WEB_CLIENT_ID}>
                 <div className="absolute right-0 mt-12 w-full md:w-80 bg-white p-6 rounded-3xl border-2 border-[#A5BEAC] shadow-2xl z-[100] animate-in fade-in slide-in-from-top-2 mx-auto auth-menu-container">
                   <button onClick={() => { setShowAuth(false); setShowPassword(false); setSignUpAwaitingConfirmation(false); setPendingVaultPlusAfterAuth(false); }} className="absolute top-4 right-4 text-stone-300 hover:text-[#A5BEAC] font-black text-sm">✕</button>
                   <h3 className="text-sm font-black uppercase mb-4 text-center text-slate-900">Vault Access</h3>
@@ -5134,7 +5145,7 @@ export default function Home() {
                   ) : (
                     <div className="space-y-0">
                       <div className="w-full flex justify-center mb-4">
-                        <GoogleLogin
+                        <GoogleLoginButton
                           onSuccess={handleGoogleHandshake}
                           onError={() => setNotification({ title: "Error", message: "Google Login Failed", type: 'error' })}
                           theme="outline"
@@ -5175,6 +5186,7 @@ export default function Home() {
                     </div>
                   )}
                 </div>
+                </GoogleOAuthProvider>
               ) : null}
             </div>
           </div>
@@ -5879,1928 +5891,312 @@ export default function Home() {
             </div>
           </div>
 
-          {/* VAULT PANEL */}
-          <div className={`bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm flex flex-col flex-1 min-h-0 min-h-[50vh] lg:min-h-0 lg:max-h-[calc(100vh-5rem)] overflow-hidden ${activeTab !== 'vault' ? 'hidden' : ''}`}>
-            <div className="p-6 border-b border-stone-100 bg-white space-y-4 rounded-t-[2.5rem] shrink-0">
-              <div className="flex justify-between items-center text-left">
-                <div>
-                  <h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Vault Inventory</h2>
-                  <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">{inventory.length} Records Stored</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[9px] font-black text-stone-400 uppercase italic">Total Vault Value</p>
-                  <p className="text-2xl font-black text-slate-900">${pricesLoaded ? roundForDisplay(totalVaultValue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "--.--"}</p>
-                </div>
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 min-h-[48px] sm:h-12"> {/* Responsive height for mobile */}
-                <div className="relative flex-1 flex gap-2 w-full min-h-[48px] sm:h-full">
-                  {/* NEW: Filter Button (Fixed w-12 h-12) */}
-                  <div className="relative filter-menu-container shrink-0 min-h-[48px] sm:h-full w-12"> {/* Explicit w-12 with min-height */}
-                    <button
-                      ref={filterButtonRef}
-                      onClick={() => setShowFilterMenu(!showFilterMenu)}
-                      className={`filter-menu-trigger w-full h-full min-h-[48px] sm:min-h-0 flex items-center justify-center rounded-2xl border-2 transition-all ${showFilterMenu ? 'bg-slate-900 text-white border-slate-900' : 'bg-white border-stone-200 text-stone-400 hover:border-[#A5BEAC] shadow-sm'}`}
-                    >
-                      <span className="text-lg">⚡</span>
-                    </button>
-
-                    {/* Filter Menu Dropdown - rendered via portal to avoid overflow clipping when vault has no items */}
-                    {showFilterMenu && filterDropdownRect && typeof document !== 'undefined' && createPortal(
-                      <div
-                        className="filter-menu-dropdown fixed w-[min(18rem,calc(100vw-1rem))] max-h-[min(85dvh,calc(100dvh-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px)-1rem))] bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[9999] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2"
-                        style={{ top: filterDropdownRect.top, left: filterDropdownRect.left }}
-                      >
-                        <div className="overflow-y-auto overscroll-contain touch-pan-y p-4 space-y-4 min-h-0 flex-1 custom-scrollbar">
-                        <div className="flex justify-between items-center">
-                          <h4 className="text-xs font-black uppercase text-slate-900">Filters</h4>
-                          <button onClick={() => {
-                            setFilterLocation('All'); setFilterTag('All'); setFilterStrategy('All'); setFilterMetal('All'); setFilterStatus('Active');
-                            setFilterMinPrice(''); setFilterMaxPrice(''); setFilterStartDate(''); setFilterEndDate('');
-                          }} className="text-[9px] font-bold text-[#A5BEAC] uppercase hover:text-slate-900">Reset</button>
-                        </div>
-
-                        {/* Location */}
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-stone-400 uppercase">Location</label>
-                          <select value={filterLocation} onChange={e => setFilterLocation(e.target.value)} className="w-full p-2 bg-stone-50 border rounded-lg text-xs font-bold">
-                            <option>All</option>
-                            {locations.map(l => <option key={l}>{l}</option>)}
-                          </select>
-                        </div>
-
-                        {/* Tag */}
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-stone-400 uppercase">Tag</label>
-                          <div className="flex flex-wrap gap-2">
-                            <button key="All" onClick={() => setFilterTag('All')} className={`py-1.5 px-2 rounded-lg text-[9px] font-black uppercase border ${filterTag === 'All' ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-400'}`}>All</button>
-                            {uniqueTags.map(t => (
-                              <button key={t} onClick={() => setFilterTag(t)} className={`py-1.5 px-2 rounded-lg text-[9px] font-black uppercase border ${filterTag === t ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-400'}`}>{t}</button>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Status */}
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-stone-400 uppercase">Item Status</label>
-                          <div className="flex gap-2 bg-stone-100 p-1 rounded-lg flex-wrap">
-                            {['Active', 'Draft', 'Archived', 'All'].map(s => (
-                              <button key={s} onClick={() => setFilterStatus(s)} className={`flex-1 py-1.5 rounded-md text-[8px] font-black uppercase transition-all ${filterStatus === s ? 'bg-white text-slate-900 shadow-sm' : 'text-stone-400 hover:text-stone-600'}`}>{s}</button>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Formula */}
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-stone-400 uppercase">Formula</label>
-                          <div className="flex gap-2">
-                            {['All', 'A', 'B', 'custom'].map(s => (
-                              <button key={s} onClick={() => setFilterStrategy(s)} className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase border ${filterStrategy === s ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-400'}`}>{s === 'custom' ? 'Custom' : s}</button>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Metal */}
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-stone-400 uppercase">Metal Type</label>
-                          <div className="grid grid-cols-2 gap-2">
-                            {['All', 'Gold', 'Silver', 'Platinum'].map(m => (
-                              <button key={m} onClick={() => setFilterMetal(m)} className={`py-1.5 rounded-lg text-[9px] font-black uppercase border ${filterMetal === m ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-400'}`}>{m}</button>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Price Range */}
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-stone-400 uppercase">Live Retail Price ($)</label>
-                          <div className="flex gap-2">
-                            <input type="number" placeholder="Min" value={filterMinPrice} onChange={e => setFilterMinPrice(e.target.value)} className="w-full p-2 bg-stone-50 border rounded-lg text-xs font-bold" />
-                            <input type="number" placeholder="Max" value={filterMaxPrice} onChange={e => setFilterMaxPrice(e.target.value)} className="w-full p-2 bg-stone-50 border rounded-lg text-xs font-bold" />
-                          </div>
-                        </div>
-                        </div>
-                      </div>,
-                      document.body
-                    )}
-                  </div>
-
-                  <div className="relative flex-1 min-w-0 min-h-[48px] sm:h-full"> {/* min-height for mobile */}
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-300 text-xs">🔍</span>
-                    <input
-                      type="text"
-                      placeholder="Search by name, tag, metal, location..."
-                      className="w-full h-full min-h-[48px] sm:min-h-0 pl-10 pr-4 bg-white border-2 border-stone-200 rounded-full md:rounded-xl text-xs font-bold outline-none focus:border-[#A5BEAC] focus:ring-2 focus:ring-[#A5BEAC]/25 transition-all shadow-sm"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="flex gap-2 shrink-0 md:items-stretch">
-                  <button
-                    onClick={() => setShowQuickAddPiece(true)}
-                    className="min-h-[48px] sm:min-h-0 flex-1 md:flex-initial px-4 rounded-2xl text-[10px] font-black uppercase tracking-wide bg-[#A5BEAC] text-white border-2 border-[#A5BEAC] hover:bg-slate-900 hover:border-slate-900 transition shadow-md flex items-center justify-center"
-                  >
-                    Quick add piece
-                  </button>
-                  {filteredInventory.length > 0 ? (
-                    <>
-                      {/* Desktop: Select All as standalone button */}
-                      <button
-                        onClick={toggleSelectAll}
-                        className="hidden md:flex px-4 rounded-2xl text-[10px] font-black uppercase items-center justify-center gap-2 transition shadow-sm bg-white text-slate-700 hover:bg-stone-50 border-2 border-stone-200 hover:border-[#A5BEAC]/50"
-                        title={selectedItems.size === filteredInventory.length && filteredInventory.length > 0 ? 'Deselect all' : 'Select all items'}
-                      >
-                        {selectedItems.size === filteredInventory.length && filteredInventory.length > 0 ? 'Deselect All' : 'Select All'}
-                      </button>
-                      {/* Mobile: More dropdown with Select All + actions */}
-                      <div className="md:hidden relative vault-menu-container min-h-[48px] sm:h-full flex-1 min-w-0">
-                        <button
-                          onClick={() => setShowVaultMenu(!showVaultMenu)}
-                          className="vault-menu-trigger w-full h-full min-h-[48px] sm:min-h-0 sm:w-auto px-4 rounded-2xl text-[10px] font-black uppercase tracking-wide flex items-center justify-center gap-2 transition shadow-sm bg-white text-slate-700 hover:bg-stone-50 border-2 border-stone-200 hover:border-[#A5BEAC]/50"
-                          title="Select All, Export options"
-                        >
-                          More {showVaultMenu ? '▲' : '▼'}
-                        </button>
-                        {showVaultMenu && (
-                        <div className="vault-menu-dropdown absolute right-0 mt-2 w-56 max-h-[80vh] bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[50] overflow-hidden animate-in fade-in flex flex-col">
-                          <div className="overflow-y-auto min-h-0 flex-1 custom-scrollbar">
-                          <div className="px-4 py-3 border-b border-stone-100 flex items-center justify-between">
-                            <span className="text-[10px] font-black uppercase text-slate-900">Select All</span>
-                            <input type="checkbox" onChange={toggleSelectAll} checked={selectedItems.size === filteredInventory.length && filteredInventory.length > 0} className="accent-[#A5BEAC] w-4 h-4 cursor-pointer" />
-                          </div>
-                          {/* Mobile only: action items merged into More */}
-                          <div className="md:hidden">
-                            <button onClick={() => { setShowGlobalRecalc(true); setShowVaultMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
-                              Recalculate {selectedItems.size > 0 ? `Selected (${selectedItems.size})` : 'All'} items
-                            </button>
-                            {SHOPIFY_FEATURE_ENABLED && shopifyConnected && (
-                              <button onClick={() => { setShowShopifyExportOptions(true); setShowVaultMenu(false); }} disabled={shopifyExporting} className={`w-full px-4 py-3 text-left text-[10px] font-black uppercase border-b border-stone-100 transition-colors ${shopifyExporting ? 'text-stone-400 cursor-not-allowed' : 'text-slate-700 hover:bg-stone-50'}`}>
-                                {shopifyExporting ? 'Exporting…' : `Export to Shopify ${selectedItems.size > 0 ? `(${selectedItems.size})` : `(${filteredInventory.length})`}`}
-                              </button>
-                            )}
-                            <button onClick={() => { setShowPDFOptions(true); setShowVaultMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
-                              Export PDF {selectedItems.size > 0 && `(${selectedItems.size})`}
-                            </button>
-                            <button onClick={() => { exportToCSV(); setShowVaultMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
-                              Export CSV {selectedItems.size > 0 && `(${selectedItems.size})`}
-                            </button>
-                            <button onClick={() => { setShowSiteProductCsvModal(true); setShowVaultMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
-                              Export CSV for your site {selectedItems.size > 0 && `(${selectedItems.size})`}
-                            </button>
-                          </div>
-                          </div>
-                        </div>
-                      )}
-                      </div>
-                    </>
-                  ) : (
-                    <button
-                      disabled
-                      className="min-h-[48px] sm:min-h-0 flex-1 md:flex-initial px-4 rounded-2xl text-[10px] font-black uppercase tracking-wide flex items-center justify-center gap-2 bg-stone-50 text-stone-400 cursor-not-allowed border-2 border-stone-200"
-                      title={SHOPIFY_FEATURE_ENABLED ? "Add items to unlock Recalculate, Export, and Shopify" : "Add items to unlock Recalculate and Export"}
-                    >
-                      Vault Options
-                    </button>
-                  )}
-                </div>
-                </div>
-
-                {/* Row 2: Action bar when items exist (desktop only; mobile uses More dropdown) */}
-                {filteredInventory.length > 0 && (
-                  <div className="hidden md:flex flex-wrap gap-2">
-                      <button onClick={() => { setShowGlobalRecalc(true); }} className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase bg-white text-slate-700 border-2 border-stone-200 hover:border-[#A5BEAC] hover:bg-stone-50 transition shadow-sm">
-                        Recalculate {selectedItems.size > 0 ? `Selected (${selectedItems.size})` : 'All'} items
-                      </button>
-                      {SHOPIFY_FEATURE_ENABLED && shopifyConnected && (
-                        <button onClick={() => { setShowShopifyExportOptions(true); }} disabled={shopifyExporting} className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase transition shadow-sm ${shopifyExporting ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-white text-slate-700 border-2 border-stone-200 hover:border-[#A5BEAC] hover:bg-stone-50'}`}>
-                          {shopifyExporting ? 'Exporting…' : `Export to Shopify ${selectedItems.size > 0 ? `(${selectedItems.size})` : `(${filteredInventory.length})`}`}
-                        </button>
-                      )}
-                      <button onClick={() => { setShowPDFOptions(true); }} className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase bg-white text-slate-700 border-2 border-stone-200 hover:border-[#A5BEAC] hover:bg-stone-50 transition shadow-sm">
-                        Export PDF {selectedItems.size > 0 && `(${selectedItems.size})`}
-                      </button>
-                      <button onClick={() => exportToCSV()} className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase bg-white text-slate-700 border-2 border-stone-200 hover:border-[#A5BEAC] hover:bg-stone-50 transition shadow-sm">
-                        Export CSV {selectedItems.size > 0 && `(${selectedItems.size})`}
-                      </button>
-                      <button type="button" onClick={() => setShowSiteProductCsvModal(true)} className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase bg-white text-slate-700 border-2 border-stone-200 hover:border-[#A5BEAC] hover:bg-stone-50 transition shadow-sm">
-                        Export CSV for your site {selectedItems.size > 0 && `(${selectedItems.size})`}
-                      </button>
-                    </div>
-                )}
-              </div>
-
-            {/* flex-1 min-h-0 allows scrolling when parent has max-h on desktop; mobile: cap at ~4 cards height */}
-            <div className="flex-1 min-h-0 overflow-hidden rounded-b-[2.5rem] bg-stone-50/20 flex flex-col">
-            <div
-              ref={vaultPullScrollRef}
-              className="flex-1 min-h-0 max-h-[34rem] md:max-h-none overflow-y-auto p-4 md:p-6 pb-[calc(14.25rem+env(safe-area-inset-bottom,0px))] md:pb-[calc(10rem+env(safe-area-inset-bottom,0px))] custom-scrollbar overscroll-behavior-contain touch-pan-y [overflow-anchor:none]"
-            >
-              <div className="will-change-transform" style={{ transform: `translate3d(0, ${vaultPullPx}px, 0)` }}>
-                {(vaultPullPx > 6 || vaultPullRefreshing) && (
-                  <div className="flex flex-col items-center justify-center gap-1 py-1 text-[#A5BEAC] pointer-events-none select-none" aria-hidden>
-                    <span
-                      className={`text-xl leading-none inline-block origin-center ${vaultPullRefreshing ? 'animate-spin' : ''}`}
-                      style={
-                        vaultPullRefreshing
-                          ? undefined
-                          : { transform: `rotate(${(Math.min(vaultPullPx, 64) / 64) * 360}deg)` }
-                      }
-                    >
-                      ↻
-                    </span>
-                    <span className="text-[8px] font-black uppercase tracking-widest text-stone-400">
-                      {vaultPullRefreshing ? 'Updating spots…' : vaultPullPx >= 64 ? 'Release to refresh' : 'Pull for latest spots'}
-                    </span>
-                  </div>
-                )}
-              {loading ? (
-                <div className="p-20 text-center text-stone-400 font-bold uppercase text-xs tracking-widest animate-pulse">Opening Vault...</div>
-              ) : inventory.length === 0 && hasValidSupabaseCredentials ? (
-                <div className="p-12 text-center space-y-4">
-                  {showVaultPlusUpgradeLikeCompare && vaultPaywallHasItems ? (
-                    <>
-                      <p className="text-stone-600 font-bold uppercase text-xs tracking-wider">To see your items upgrade to Vault+ ({VAULT_PLUS_PRICE_PHRASE})</p>
-                      <div className="flex flex-col sm:flex-row gap-2 items-center justify-center">
-                        <button onClick={() => setShowVaultPlusModal(true)} className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-[#A5BEAC] text-white hover:bg-slate-900 transition shadow-sm">
-                          Upgrade to Vault+
-                        </button>
-                        {VAULT_REFRESH_AND_STRIPE_SYNC_UI_ENABLED && (
-                          <>
-                            <button type="button" onClick={() => { setLoading(true); void fetchInventory(); }} className="text-[10px] font-bold uppercase text-stone-400 hover:text-[#A5BEAC] transition">Refresh</button>
-                            <button type="button" disabled={syncingVaultPlus} onClick={() => { void syncVaultPlusFromStripe(); }} className="text-[10px] font-bold uppercase text-[#A5BEAC] hover:text-slate-900 transition disabled:opacity-50">
-                              {syncingVaultPlus ? 'Syncing…' : 'Sync from Stripe'}
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="space-y-4">
-                      <p className="text-stone-500 font-bold uppercase text-xs tracking-wider">No items yet</p>
-                      {showVaultPlusUpgradeLikeCompare && (
-                        <button
-                          type="button"
-                          onClick={() => setShowVaultPlusModal(true)}
-                          className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-[#A5BEAC] text-white hover:bg-slate-900 transition shadow-sm"
-                        >
-                          Upgrade to Vault+
-                        </button>
-                      )}
-                    </div>
-                  )}
-                  {VAULT_DIAGNOSTICS_UI_ENABLED && (subscriptionStatus?.subscribed || vaultPaywallHasItems) && (
-                    <button
-                      onClick={async () => {
-                        setVaultDiagnostic(null);
-                        const session = (await supabase.auth.getSession()).data.session;
-                        const accessToken = (session as any)?.access_token;
-                        if (!accessToken) return;
-                        try {
-                          const res = await fetch('/api/vault-diagnostic', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ accessToken }),
-                          });
-                          const data = await res.json().catch(() => ({}));
-                          if (data.fix_suggestion) {
-                            setVaultDiagnostic(data.fix_suggestion);
-                          } else if (data.access_block_reason) {
-                            setVaultDiagnostic(String(data.access_block_reason));
-                          } else if (data.subscribed && data.inventory_count_for_you === 0) {
-                            setVaultDiagnostic('You’re subscribed and no items exist yet for your account. Your vault is empty.');
-                          } else {
-                            setVaultDiagnostic(`Subscribed: ${data.subscribed}. Status: ${data.subscription_status ?? '—'}. Period end: ${data.subscription_period_end ?? '—'}. Items: ${data.inventory_count_for_you}. Run Diagnose again or tap Sync from Stripe.`);
-                          }
-                        } catch (_) {
-                          setVaultDiagnostic('Diagnostic failed. Check the browser console.');
-                        }
-                      }}
-                      className="text-[9px] font-bold uppercase text-stone-400 hover:text-[#A5BEAC] transition underline"
-                    >
-                      Not seeing items? Diagnose
-                    </button>
-                  )}
-                  {VAULT_DIAGNOSTICS_UI_ENABLED && vaultDiagnostic && (
-                    <div className="mt-4 p-4 bg-stone-50 rounded-xl text-left">
-                      <p className="text-xs font-mono text-slate-700 break-all whitespace-pre-wrap">{vaultDiagnostic}</p>
-                      {(vaultDiagnostic.includes('UPDATE inventory') || vaultDiagnostic.includes('UPDATE subscriptions')) && (
-                        <button onClick={() => { setVaultDiagnostic(null); setLoading(true); fetchInventory(); }} className="mt-2 text-[10px] font-bold uppercase text-[#A5BEAC] hover:underline">I ran the SQL — Refresh</button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {filteredInventory.map(item => {
-                  const stonesArray = convertStonesToArray(item);
-                  const current = calculateFullBreakdown(item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0, stonesArray, item.overhead_cost || 0, (item.overhead_type as 'flat' | 'percent') || 'flat', item.multiplier, item.markup_b, undefined, undefined, undefined, findingsMultFromItem(item));
-                  const labor = item.labor_at_making || 0;
-                  const itemPrices = getItemPrices(item, current);
-                  const liveWholesale = itemPrices.wholesale;
-                  const liveRetail = itemPrices.retail;
-                  const priceDiff = liveRetail - item.retail;
-                  const isUp = priceDiff >= 0;
-
-                  const formatCurrency = (num: number) => {
-                    return roundForDisplay(num).toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2
-                    });
-                  };
-
-                  const savedMetalCost = current.metalCost;
-
-                  // Stone cost for Materials display only (does not affect other calculations)
-                  const savedStonesArray = convertStonesToArray(item);
-                  const savedStoneCost = savedStonesArray.reduce((sum, s) => sum + (Number(s.cost) || 0), 0);
-
-                  const isSold = item.status === 'sold';
-                  const isArchived = item.status === 'archived';
-
-                  return (
-                    <div
-                      key={item.id}
-                      // UPDATED: Dynamic z-index for stacking context
-                      className={`bg-white rounded-[2rem] border border-stone-100 shadow-sm overflow-visible relative transition-all hover:shadow-md pl-12 ${isSold || isArchived ? 'opacity-70 bg-stone-50' : ''}`}
-                      style={{ zIndex: openMenuId === item.id ? 50 : 0 }}
-                    >
-                      {/* Selection Checkbox */}
-                      <div className="absolute left-4 top-6 flex items-center justify-center">
-                        <input
-                          type="checkbox"
-                          checked={selectedItems.has(item.id)}
-                          onChange={() => toggleSelection(item.id)}
-                          className="w-5 h-5 accent-[#A5BEAC] cursor-pointer rounded-md border-stone-300"
-                        />
-                      </div>
-
-                      <div className="p-5 md:p-6 flex flex-col gap-5">
-                        <div className="flex flex-col gap-1">
-                          <div className="flex items-start flex-nowrap justify-between gap-3 relative">
-
-                            {/* Circular 64x64 thumbnail - square crop stored for Shopify export */}
-                            {item.image_url && (
-                              <div className="shrink-0 w-16 h-16 rounded-full overflow-hidden border border-stone-200 shadow-sm bg-stone-100">
-                                <img
-                                  key={`vault-thumb-${item.id}-${vaultImageVisibilityEpoch}-${vaultImageErrorRetries[item.id] ?? 0}`}
-                                  src={vaultThumbnailSrc(item.image_url, vaultImageVisibilityEpoch, vaultImageErrorRetries[item.id] ?? 0)}
-                                  alt={(item.name || '').toUpperCase()}
-                                  className="w-full h-full object-cover"
-                                  loading="lazy"
-                                  decoding="async"
-                                  onError={() => {
-                                    setVaultImageErrorRetries((prev) => {
-                                      const n = prev[item.id] ?? 0;
-                                      if (n >= 4) return prev;
-                                      return { ...prev, [item.id]: n + 1 };
-                                    });
-                                  }}
-                                />
-                              </div>
-                            )}
-
-                            <div className="flex-1 min-w-0">
-                              {editingNameId === item.id ? (
-                                <div className="w-full animate-in fade-in slide-in-from-left-1 flex items-center gap-2">
-                                  <input
-                                    type="text"
-                                    // FIXED: Added min-w-0 to prevent flex item blowout on mobile
-                                    className="flex-1 bg-stone-50 border-2 border-[#A5BEAC] rounded-xl px-4 py-2 text-sm font-black uppercase outline-none shadow-inner min-w-0"
-                                    value={newNameValue}
-                                    autoFocus
-                                    onChange={(e) => setNewNameValue(e.target.value)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') renameItem(item.id);
-                                      if (e.key === 'Escape') setEditingNameId(null);
-                                    }}
-                                  />
-                                  <button onClick={() => renameItem(item.id)} className="w-10 h-10 flex items-center justify-center bg-[#A5BEAC] text-white rounded-xl font-black text-lg shadow-sm hover:bg-slate-900 transition-colors shrink-0">✓</button>
-                                </div>
-                              ) : (
-                                <div className="flex items-start flex-nowrap gap-2 w-full">
-                                  <h3 className={`text-lg font-black leading-tight uppercase tracking-tight break-words flex-1 ${isSold ? 'line-through text-stone-400' : 'text-slate-900'}`}>
-                                    {(item.name || '').toUpperCase()}
-                                  </h3>
-                                  <div className="relative shrink-0 pt-0.5 item-menu-container">
-                                    <button
-                                      onClick={() => setOpenMenuId(openMenuId === item.id ? null : item.id)}
-                                      className="item-menu-trigger w-8 h-8 flex items-center justify-center rounded-full bg-stone-50 text-[#A5BEAC] border border-stone-100 hover:bg-stone-100 transition-all shadow-sm"
-                                    >
-                                      <span className="text-[10px] transform transition-transform duration-200" style={{ transform: openMenuId === item.id ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
-                                    </button>
-
-                                    {openMenuId === item.id && (
-                                      <div className="item-menu-dropdown absolute top-full left-auto right-0 mt-2 w-56 bg-white border border-stone-200 rounded-2xl shadow-xl z-[150] overflow-hidden animate-in fade-in slide-in-from-top-1">
-                                        <div className="px-3 py-1.5 border-b border-stone-100">
-                                          <p className="text-[9px] font-black uppercase tracking-wider text-stone-400">Item actions</p>
-                                        </div>
-                                        <div className="py-0.5">
-                                          <button
-                                            onClick={() => loadItemIntoCalculator(item)}
-                                            className={`w-full px-4 py-2 text-left text-sm font-semibold hover:bg-stone-50 transition-colors flex items-center gap-3 ${item.status === 'draft' ? 'text-[#2d4a22] font-bold' : 'text-slate-700'}`}
-                                          >
-                                            <span className="text-stone-400 w-5 text-center">🧪</span>
-                                            {item.status === 'draft' ? 'Add metals & components' : 'Edit metals & components'}
-                                          </button>
-                                          <button
-                                            onClick={() => {
-                                              setEditingNameId(item.id);
-                                              setNewNameValue(item.name);
-                                              setOpenMenuId(null);
-                                            }}
-                                            className="w-full px-4 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-stone-50 transition-colors flex items-center gap-3"
-                                          >
-                                            <span className="text-stone-400 w-5 text-center">✎</span>
-                                            Edit name
-                                          </button>
-                                          {item.image_url && (
-                                            <button
-                                              type="button"
-                                              onClick={() => {
-                                                void openExistingImageInCropper(item.id, item.image_original_url || item.image_url);
-                                              }}
-                                              disabled={uploadingId === item.id}
-                                              className="w-full px-4 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-stone-50 transition-colors flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
-                                            >
-                                              <span className="text-stone-400 w-5 text-center">⊙</span>
-                                              <span className="flex flex-col items-start gap-0.5">
-                                                <span>Re-crop &amp; adjust photo</span>
-                                                <span className="text-[9px] font-normal text-stone-400 normal-case">Same picture — zoom, rotate, position</span>
-                                              </span>
-                                            </button>
-                                          )}
-                                          <label className="w-full px-4 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-stone-50 transition-colors flex items-center gap-3 cursor-pointer block">
-                                            <span className="text-stone-400 w-5 text-center">📷</span>
-                                            <span className="flex flex-col items-start gap-0.5">
-                                              <span>Change image</span>
-                                              <span className="text-[9px] font-normal text-stone-400 normal-case">iPhone Photos · max {Math.round(MAX_VAULT_PHOTO_UPLOAD_BYTES / (1024 * 1024))} MB</span>
-                                            </span>
-                                            <input
-                                              type="file"
-                                              accept={VAULT_PHOTO_ACCEPT}
-                                              className="hidden"
-                                              disabled={uploadingId === item.id}
-                                              onChange={(e) => onFileSelect(e, item.id)}
-                                            />
-                                          </label>
-                                        </div>
-                                        <div className="border-t border-stone-100 py-0.5">
-                                          <p className="px-4 pt-1 pb-0.5 text-[9px] font-black uppercase tracking-wider text-stone-400">Pricing</p>
-                                          <button
-                                            onClick={() => syncToMarket(item)}
-                                            className="w-full px-4 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-stone-50 transition-colors flex items-center gap-3"
-                                          >
-                                            <span className="text-stone-400 w-5 text-center">🔄</span>
-                                            Sync to market
-                                          </button>
-                                          <button
-                                            onClick={() => {
-                                              setRecalcItem(item);
-                                              setRecalcItemFormulaMode('keep');
-                                              setRecalcParams({ gold: '', silver: '', platinum: '', palladium: '', laborRate: '' });
-                                              setOpenMenuId(null);
-                                            }}
-                                            className="w-full px-4 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-stone-50 transition-colors flex items-center gap-3"
-                                          >
-                                            <span className="text-stone-400 w-5 text-center">🧮</span>
-                                            Recalculate prices
-                                          </button>
-                                          <button
-                                            onClick={() => {
-                                              setEditingItem(item);
-                                              setManualRetail(roundForDisplay(Number(item.retail)).toFixed(2));
-                                              setManualWholesale(roundForDisplay(Number(item.wholesale)).toFixed(2));
-                                              setOpenMenuId(null);
-                                            }}
-                                            className="w-full px-4 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-stone-50 transition-colors flex items-center gap-3"
-                                          >
-                                            <span className="text-stone-400 w-5 text-center">⚙️</span>
-                                            Manual price edit
-                                          </button>
-                                        </div>
-                                        <div className="border-t border-stone-100 py-0.5">
-                                          <button
-                                            onClick={() => updateStatus(item.id, item.status === 'archived' ? 'active' : 'archived')}
-                                            className={`w-full px-4 py-2 text-left text-sm font-semibold hover:bg-stone-50 transition-colors flex items-center gap-3 ${item.status === 'archived' ? 'text-[#2d4a22]' : 'text-slate-700'}`}
-                                          >
-                                            <span className="w-5 text-center">{item.status === 'archived' ? '↩' : '📦'}</span>
-                                            {item.status === 'archived' ? 'Restore to active' : 'Mark sold / Archive'}
-                                          </button>
-                                        </div>
-                                        <div className="border-t border-stone-100 py-0.5">
-                                          <button
-                                            onClick={() => {
-                                              deleteInventoryItem(item.id, (item.name || 'Untitled').toUpperCase());
-                                              setOpenMenuId(null);
-                                            }}
-                                            className="w-full px-4 py-2 text-left text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors flex items-center gap-3"
-                                          >
-                                            <span className="w-5 text-center">🗑</span>
-                                            Remove from vault
-                                          </button>
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              )}
-
-                              <div className="flex flex-wrap items-center gap-2 mt-2">
-                                {item.status === 'draft' && <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-700 border border-amber-200 uppercase">Draft</span>}
-                                {(isSold || isArchived) && <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-stone-200 text-stone-600 uppercase">SOLD / ARCHIVED</span>}
-
-                                {/* Tag Badge & Dropdown (optional - vault only) */}
-                                <div className="relative tag-menu-container">
-                                  <button
-                                    onClick={() => setShowTagMenuId(showTagMenuId === item.id ? null : item.id)}
-                                    className={`text-[8px] font-black px-1.5 py-0.5 rounded-md border uppercase transition-colors leading-none flex items-center h-[18px] ${item.tag ? 'bg-amber-50 text-amber-700 border-amber-100 hover:bg-amber-100' : 'bg-stone-100 text-stone-500 border-stone-200 hover:bg-stone-200'}`}
-                                  >
-                                    {item.tag || '+ Tag'}
-                                  </button>
-                                  {showTagMenuId === item.id && (
-                                    <div className="tag-menu-dropdown absolute top-full left-0 mt-1 w-36 bg-white border border-stone-200 rounded-xl shadow-lg z-[60] overflow-hidden animate-in fade-in">
-                                      {uniqueTags.length > 0 && (
-                                        <>
-                                          {uniqueTags.map(t => (
-                                            <div key={t} className="flex items-center justify-between border-b border-stone-50 last:border-0 hover:bg-stone-50 pr-2 group">
-                                              <button
-                                                onClick={() => updateTag(item.id, t)}
-                                                className="flex-1 px-3 py-2 text-left text-[9px] font-bold uppercase text-slate-600"
-                                              >
-                                                {t}
-                                              </button>
-                                              <button
-                                                onClick={(e) => { e.stopPropagation(); deleteTagFromLibrary(t); }}
-                                                className="text-red-400 text-[10px] font-bold px-1.5 py-1 hover:text-red-600 hover:bg-red-50 rounded shrink-0"
-                                                title={`Remove "${t}" from tag list`}
-                                                aria-label={`Remove ${t} from tag list`}
-                                              >
-                                                ×
-                                              </button>
-                                            </div>
-                                          ))}
-                                        </>
-                                      )}
-                                      {item.tag && (
-                                        <button
-                                          onClick={() => clearTag(item.id)}
-                                          className="w-full px-3 py-2 text-left text-[9px] font-bold text-red-600 hover:bg-red-50 border-b border-stone-50"
-                                        >
-                                          Remove tag
-                                        </button>
-                                      )}
-                                      <div className="p-2 border-t border-stone-100 bg-stone-50">
-                                        <input
-                                          type="text"
-                                          placeholder="New tag..."
-                                          className="w-full p-1.5 text-[9px] border rounded bg-white mb-1.5"
-                                          value={newTagInput}
-                                          onChange={(e) => setNewTagInput(e.target.value)}
-                                          onClick={(e) => e.stopPropagation()}
-                                        />
-                                        <button
-                                          onClick={() => addCustomTag(item.id)}
-                                          className="w-full py-1 bg-[#A5BEAC] text-white rounded text-[9px] font-bold uppercase hover:bg-slate-900"
-                                        >
-                                          Add +
-                                        </button>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-
-                                {/* Location Badge & Dropdown */}
-                                <div className="relative location-menu-container">
-                                  <button
-                                    onClick={() => setShowLocationMenuId(showLocationMenuId === item.id ? null : item.id)}
-                                    className="text-[8px] font-black px-1.5 py-0.5 rounded-md border bg-blue-50 text-blue-600 border-blue-100 uppercase hover:bg-blue-100 transition-colors leading-none flex items-center h-[18px]"
-                                  >
-                                    📍 {item.location || 'Main Vault'}
-                                  </button>
-
-                                  {showLocationMenuId === item.id && (
-                                    <div className="location-menu-dropdown absolute top-full left-0 mt-1 w-32 bg-white border border-stone-200 rounded-xl shadow-lg z-[60] overflow-hidden animate-in fade-in">
-                                      {locations.map(loc => (
-                                        <div key={loc} className="flex items-center justify-between border-b border-stone-50 last:border-0 hover:bg-stone-50 pr-2">
-                                          <button
-                                            onClick={() => updateLocation(item.id, loc)}
-                                            className="flex-1 px-3 py-2 text-left text-[9px] font-bold uppercase text-slate-600"
-                                          >
-                                            {loc}
-                                          </button>
-                                          {loc !== 'Main Vault' && (
-                                            <button
-                                              onClick={(e) => { e.stopPropagation(); deleteLocation(loc); }}
-                                              className="text-red-400 text-[10px] font-bold px-1 hover:text-red-600"
-                                            >
-                                              ×
-                                            </button>
-                                          )}
-                                        </div>
-                                      ))}
-                                      <div className="p-2 border-t border-stone-100 bg-stone-50">
-                                        <input
-                                          type="text"
-                                          placeholder="New Location..."
-                                          className="w-full p-1 text-[9px] border rounded bg-white mb-1"
-                                          value={newLocationInput}
-                                          onChange={(e) => setNewLocationInput(e.target.value)}
-                                        />
-                                        <button
-                                          onClick={() => addCustomLocation(item.id)}
-                                          className="w-full py-1 bg-[#A5BEAC] text-white rounded text-[9px] font-bold uppercase hover:bg-slate-900"
-                                        >
-                                          Add +
-                                        </button>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-
-                                <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-md border leading-none flex items-center h-[18px] ${isUp ? 'bg-green-50 text-green-700 border-green-100' : 'bg-red-50 text-red-700 border-red-100'}`}>
-                                  {isUp ? '▲' : '▼'} ${formatCurrency(Math.abs(priceDiff))}
-                                </span>
-                                <p className="text-[9px] text-stone-400 font-bold uppercase tracking-widest text-left leading-none flex items-center h-[18px]">
-                                  {new Date(item.created_at).toLocaleDateString()}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 sm:grid-cols-4 border border-stone-100 rounded-2xl overflow-hidden mt-1 relative z-0">
-                          <div className="p-3 border-b sm:border-b-0 border-r border-stone-100 bg-stone-50/30 text-left">
-                            <p className="text-[7px] font-black text-stone-400 uppercase tracking-widest mb-1">Saved Wholesale</p>
-                            <p className="text-xs font-bold text-stone-500 whitespace-nowrap">${formatCurrency(Number(item.wholesale))}</p>
-                          </div>
-                          <div className="p-3 border-b sm:border-b-0 sm:border-r border-stone-100 bg-stone-50/30 text-left">
-                            <p className="text-[7px] font-black text-stone-400 uppercase tracking-widest mb-1">Saved Retail</p>
-                            <p className="text-xs font-bold text-stone-500 whitespace-nowrap">${formatCurrency(Number(item.retail))}</p>
-                          </div>
-                          <div className="p-3 border-r border-stone-100 bg-white text-left">
-                            <p className="text-[7px] font-black text-slate-900 uppercase tracking-widest mb-1">Live Wholesale</p>
-                            <p className="text-sm font-black text-slate-900 whitespace-nowrap">
-                              ${pricesLoaded ? formatCurrency(liveWholesale) : "--.--"}
-                            </p>
-                          </div>
-                          <div className="p-3 bg-white text-left">
-                            <p className="text-[7px] font-black text-[#A5BEAC] uppercase tracking-widest italic mb-1">Live Retail</p>
-                            <p className="text-base sm:text-lg font-black text-slate-900 leading-none whitespace-nowrap">
-                              ${pricesLoaded ? formatCurrency(liveRetail) : "--.--"}
-                            </p>
-                          </div>
-                        </div>
-
-                        {(() => {
-                          const sq = vaultItemStockQty(item);
-                          const busy = updatingStockId === item.id;
-                          return (
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-3 mt-1 border-t border-stone-100">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-[9px] font-black uppercase text-stone-400 tracking-wider">In stock</span>
-                                <div className="flex items-center rounded-xl border border-stone-200 bg-stone-50 overflow-hidden">
-                                  <button
-                                    type="button"
-                                    disabled={busy || sq <= 1}
-                                    onClick={() => updateStockQty(item.id, sq - 1)}
-                                    className="w-9 h-8 text-sm font-black text-slate-700 hover:bg-stone-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                                    aria-label="Decrease stock"
-                                  >
-                                    −
-                                  </button>
-                                  <span className="min-w-[2.25rem] text-center text-xs font-black tabular-nums px-1">{sq}</span>
-                                  <button
-                                    type="button"
-                                    disabled={busy || sq >= 999999}
-                                    onClick={() => updateStockQty(item.id, sq + 1)}
-                                    className="w-9 h-8 text-sm font-black text-slate-700 hover:bg-stone-200 disabled:opacity-40 transition-colors"
-                                    aria-label="Increase stock"
-                                  >
-                                    +
-                                  </button>
-                                </div>
-                                {busy && <span className="text-[8px] font-bold text-stone-400 uppercase">Saving…</span>}
-                              </div>
-                              {sq > 1 && (
-                                <p className="text-[9px] text-stone-600">
-                                  <span className="font-black uppercase text-stone-400 tracking-wider mr-1">Line total (live retail × qty)</span>
-                                  <span className="font-black text-slate-900 tabular-nums">
-                                    ${pricesLoaded ? formatCurrency(liveRetail * sq) : '—'}
-                                  </span>
-                                </p>
-                              )}
-                            </div>
-                          );
-                        })()}
-                      </div>
-
-                      <details className="group border-t border-stone-50 text-left">
-                        <summary className="list-none cursor-pointer py-2 text-center text-[8px] font-black uppercase tracking-[0.3em] text-stone-300 hover:text-[#A5BEAC] transition-colors">View Breakdown & Notes</summary>
-                        <div className="p-5 md:p-6 bg-stone-50/50 space-y-6">
-
-                          {/* Compact Formula, Materials, Labor, and Rounding Boxes */}
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 md:gap-3">
-                            {/* Formula Box */}
-                            <div className="bg-white p-3.5 md:p-3 rounded-xl border border-stone-100 shadow-sm flex flex-col justify-center items-center text-center min-h-[70px] md:min-h-0">
-                              <p className="text-[9px] md:text-[8px] font-black text-stone-400 uppercase mb-1.5 md:mb-1">Formula</p>
-                              <p className="text-sm md:text-xs font-black text-slate-700 uppercase">{item.strategy === 'custom' ? (item.custom_formula?.formula_name || 'Custom') : item.strategy}</p>
-                            </div>
-                            {/* Materials Box */}
-                            <div className="bg-white p-3.5 md:p-3 rounded-xl border border-stone-100 shadow-sm flex flex-col justify-center items-center text-center min-h-[70px] md:min-h-0">
-                              <p className="text-[9px] md:text-[8px] font-black text-stone-400 uppercase mb-1.5 md:mb-1">Materials</p>
-                              <p className="text-sm md:text-xs font-black text-slate-700">${(savedMetalCost + Number(item.other_costs_at_making || 0) + savedStoneCost).toFixed(2)}</p>
-                            </div>
-                            {/* Labor Box */}
-                            <div className="bg-white p-3.5 md:p-3 rounded-xl border border-stone-100 shadow-sm flex flex-col justify-center items-center text-center min-h-[70px] md:min-h-0">
-                              <p className="text-[9px] md:text-[8px] font-black text-stone-400 uppercase mb-1.5 md:mb-1 leading-tight">Labor ({Number(item.hours || 0)}h @ ${((Number(item.labor_at_making) || 0) / (Number(item.hours) || 1)).toFixed(2)}/hr)</p>
-                              <p className="text-sm md:text-xs font-black text-slate-700">${Number(item.labor_at_making || 0).toFixed(2)}</p>
-                              {(trackedTimeByItem[item.id] || 0) > 0 && (
-                                <p className="text-[8px] font-bold text-amber-600 mt-1">Tracked: {(trackedTimeByItem[item.id] / 60).toFixed(1)}h</p>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => { setEditingTimeEntryId(null); setLogTimeItemId(item.id); setLogTimeAllowItemSelect(false); setLogTimeHours(''); setLogTimeDate(localTodayYYYYMMDD()); setLogTimeNote(''); setShowLogTimeModal(true); }}
-                                className="mt-1.5 py-1 px-2 rounded-lg text-[8px] font-black uppercase bg-[#A5BEAC]/20 text-[#A5BEAC] hover:bg-[#A5BEAC]/30 transition"
-                              >
-                                Log time
-                              </button>
-                            </div>
-                            {/* Rounding Box */}
-                            <div className="bg-white p-3.5 md:p-3 rounded-xl border border-stone-100 shadow-sm flex flex-col justify-center items-center text-center min-h-[70px] md:min-h-0">
-                              <p className="text-[9px] md:text-[8px] font-black text-stone-400 uppercase mb-1.5 md:mb-1">Price Rounding</p>
-                              <p className="text-sm md:text-xs font-black text-slate-700">
-                                {priceRounding === 'none' ? 'None' : `$${priceRounding}`}
-                              </p>
-                            </div>
-                          </div>
-
-                          {item.strategy === 'custom' && item.custom_formula && (
-                            <div className="bg-white p-4 rounded-xl border border-stone-100 shadow-sm text-left">
-                              <h4 className="text-[9px] font-black text-stone-400 uppercase mb-2">
-                                {item.custom_formula.formula_name ? `Custom: ${item.custom_formula.formula_name}` : 'Custom Formula'}
-                              </h4>
-                              <div className="space-y-1.5 text-[9px] text-slate-700">
-                                <p><span className="font-bold text-stone-500">Base:</span> {formulaToReadableString(item.custom_formula.formula_base)}</p>
-                                <p><span className="font-bold text-stone-500">Wholesale:</span> {formulaToReadableString(item.custom_formula.formula_wholesale)}</p>
-                                <p><span className="font-bold text-stone-500">Retail:</span> {formulaToReadableString(item.custom_formula.formula_retail)}</p>
-                              </div>
-                            </div>
-                          )}
-
-                          <div className="grid grid-cols-1 gap-8 text-left">
-                            <div className="space-y-3">
-                              <h4 className="text-[10px] font-black uppercase text-stone-400">Saved Breakdown</h4>
-                              {item.metals?.map((m: any, idx: number) => {
-                                const spotOz = resolveSpotOzForMetal(m, prices);
-                                const liveLineVal = metalRowLiveDollarValue(m, prices);
-                                const customSpotOzt = Number(m.manualPrice) || 0;
-                                const isManualLine = !!(m.isManual && customSpotOzt > 0);
-                                const manualLineVal = isManualLine ? metalRowDollarValueFromSpotOzt(m, customSpotOzt) : 0;
-                                const displayVal = isManualLine ? manualLineVal : liveLineVal;
-
-                                return (
-                                  <div key={idx} className="flex justify-between items-center text-[10px] font-bold border-b border-stone-100 pb-1.5 uppercase">
-                                    <div>
-                                      <span>{m.weight}{m.unit} {m.type}</span>
-                                    </div>
-                                    <div className="text-right">
-                                      <span>${(displayVal > 0 ? displayVal : 0).toFixed(2)}</span>
-                                      {isManualLine ? (
-                                        <span className="block text-[8px] text-stone-500 font-medium normal-case tracking-wide">
-                                          Custom spot: ${customSpotOzt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/ozt
-                                        </span>
-                                      ) : (
-                                        spotOz > 0 && <span className="block text-[8px] text-stone-400 font-medium normal-case tracking-wide">Spot: ${spotOz.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/ozt</span>
-                                      )}
-                                      {isManualLine && <span className="block text-[8px] text-amber-700/90 font-medium normal-case tracking-wide">First save used this spot; live column uses market spot</span>}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                              {item.other_costs_at_making > 0 && (
-                                <div className="flex justify-between text-[10px] font-bold border-b border-stone-100 pb-1.5 uppercase">
-                                  <span>Findings/Other</span>
-                                  <div className="text-right">
-                                    <span>${Number(item.other_costs_at_making).toFixed(2)}</span>
-                                    {item.strategy !== 'custom' && (() => {
-                                      const om = findingsMultFromItem(item) ?? (item.strategy === 'B' ? 2 * Number(item.markup_b || 0) : Number(item.multiplier || 0));
-                                      const retailPortion = Number(item.other_costs_at_making) * om;
-                                      return (
-                                        <span className="block text-[8px] text-stone-400 font-medium normal-case tracking-wide">
-                                          ×{om.toFixed(2)} retail → ${retailPortion.toFixed(2)}
-                                        </span>
-                                      );
-                                    })()}
-                                  </div>
-                                </div>
-                              )}
-                              {(() => {
-                                const stonesArray = convertStonesToArray(item);
-                                const totalStoneCost = stonesArray.reduce((sum, s) => sum + (Number(s.cost) || 0), 0);
-                                const totalStoneRetail = stonesArray.reduce((sum, s) => sum + ((Number(s.cost) || 0) * (Number(s.markup) || 1.5)), 0);
-                                return totalStoneCost > 0 && (
-                                  <div className="flex justify-between items-center text-[10px] font-bold border-b border-stone-100 pb-1.5 uppercase">
-                                    <div className="flex-1">
-                                      <span>Stones{stonesArray.length > 1 ? ` (${stonesArray.length})` : ''}</span>
-                                      {stonesArray.length > 1 && (
-                                        <div className="text-[8px] text-stone-400 font-medium normal-case mt-0.5 space-y-0.5">
-                                          {stonesArray.map((s: any, idx: number) => (
-                                            <div key={idx}>{s.name}: ${(Number(s.cost) * Number(s.markup || 1.5)).toFixed(2)} ({s.markup.toFixed(1)}x)</div>
-                                          ))}
-                                        </div>
-                                      )}
-                                    </div>
-                                    <div className="text-right">
-                                      <span>${totalStoneRetail.toFixed(2)}</span>
-                                      <span className="block text-[8px] text-stone-400 font-medium normal-case tracking-wide">Cost: ${totalStoneCost.toFixed(2)}</span>
-                                    </div>
-                                  </div>
-                                );
-                              })()}
-                              {(item.overhead_cost > 0 || current.overhead > 0) && (
-                                <div className="flex justify-between text-[10px] font-bold border-b border-stone-100 pb-1.5 uppercase">
-                                  <span>Overhead {item.overhead_type === 'percent' ? `(${Number(item.overhead_cost).toFixed(0)}%)` : ''}</span>
-                                  <span>${Number(current.overhead).toFixed(2)}</span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="bg-white p-4 rounded-2xl border border-stone-200 text-left">
-                            <h4 className="text-[9px] font-black uppercase text-stone-400 mb-2">Vault Notes</h4>
-                            <textarea className="w-full p-3 bg-stone-50 border border-stone-100 rounded-xl text-xs italic text-slate-600 resize-none h-24 outline-none focus:border-[#A5BEAC] transition-all" placeholder="Click to add notes..." defaultValue={item.notes || ''} onBlur={(e) => saveNote(item.id, (e.target as HTMLTextAreaElement).value)} />
-                          </div>
-                        </div>
-                      </details>
-                    </div>
-                  );
-                })}
-                </div>
-              )}
-              </div>
+          {vaultTabVisited && (
+            <div className={activeTab !== 'vault' ? 'hidden' : ''}>
+              <VaultTabPanel
+                SHOPIFY_FEATURE_ENABLED={SHOPIFY_FEATURE_ENABLED}
+                VAULT_DIAGNOSTICS_UI_ENABLED={VAULT_DIAGNOSTICS_UI_ENABLED}
+                VAULT_REFRESH_AND_STRIPE_SYNC_UI_ENABLED={VAULT_REFRESH_AND_STRIPE_SYNC_UI_ENABLED}
+                MAX_VAULT_PHOTO_UPLOAD_BYTES={MAX_VAULT_PHOTO_UPLOAD_BYTES}
+                VAULT_PHOTO_ACCEPT={VAULT_PHOTO_ACCEPT}
+                VAULT_PLUS_PRICE_PHRASE={VAULT_PLUS_PRICE_PHRASE}
+                addCustomLocation={addCustomLocation}
+                addCustomTag={addCustomTag}
+                calculateFullBreakdown={calculateFullBreakdown}
+                clearTag={clearTag}
+                convertStonesToArray={convertStonesToArray}
+                deleteInventoryItem={deleteInventoryItem}
+                deleteLocation={deleteLocation}
+                deleteTagFromLibrary={deleteTagFromLibrary}
+                editingNameId={editingNameId}
+                exportToCSV={exportToCSV}
+                fetchInventory={fetchInventory}
+                filterButtonRef={filterButtonRef}
+                filterDropdownRect={filterDropdownRect}
+                filterLocation={filterLocation}
+                filterMaxPrice={filterMaxPrice}
+                filterMetal={filterMetal}
+                filterMinPrice={filterMinPrice}
+                filterStatus={filterStatus}
+                filterStrategy={filterStrategy}
+                filterTag={filterTag}
+                filteredInventory={filteredInventory}
+                getItemPrices={getItemPrices}
+                hasValidSupabaseCredentials={Boolean(hasValidSupabaseCredentials)}
+                inventory={inventory}
+                loadItemIntoCalculator={loadItemIntoCalculator}
+                loading={loading}
+                locations={locations}
+                newLocationInput={newLocationInput}
+                newNameValue={newNameValue}
+                newTagInput={newTagInput}
+                onFileSelect={onFileSelect}
+                openExistingImageInCropper={openExistingImageInCropper}
+                openMenuId={openMenuId}
+                prices={prices}
+                pricesLoaded={pricesLoaded}
+                priceRounding={priceRounding}
+                renameItem={renameItem}
+                roundForDisplay={roundForDisplay}
+                saveNote={saveNote}
+                searchTerm={searchTerm}
+                selectedItems={selectedItems}
+                setEditingItem={setEditingItem}
+                setEditingNameId={setEditingNameId}
+                setEditingTimeEntryId={setEditingTimeEntryId}
+                setFilterLocation={setFilterLocation}
+                setFilterMaxPrice={setFilterMaxPrice}
+                setFilterMetal={setFilterMetal}
+                setFilterMinPrice={setFilterMinPrice}
+                setFilterStatus={setFilterStatus}
+                setFilterStrategy={setFilterStrategy}
+                setFilterStartDate={setFilterStartDate}
+                setFilterEndDate={setFilterEndDate}
+                setFilterTag={setFilterTag}
+                setLoading={setLoading}
+                setLogTimeAllowItemSelect={setLogTimeAllowItemSelect}
+                setLogTimeDate={setLogTimeDate}
+                setLogTimeHours={setLogTimeHours}
+                setLogTimeItemId={setLogTimeItemId}
+                setLogTimeNote={setLogTimeNote}
+                setManualRetail={setManualRetail}
+                setManualWholesale={setManualWholesale}
+                setNewLocationInput={setNewLocationInput}
+                setNewNameValue={setNewNameValue}
+                setNewTagInput={setNewTagInput}
+                setOpenMenuId={setOpenMenuId}
+                setRecalcItem={setRecalcItem}
+                setRecalcItemFormulaMode={setRecalcItemFormulaMode}
+                setRecalcParams={setRecalcParams}
+                setSearchTerm={setSearchTerm}
+                setShowFilterMenu={setShowFilterMenu}
+                setShowGlobalRecalc={setShowGlobalRecalc}
+                setShowLogTimeModal={setShowLogTimeModal}
+                setShowPDFOptions={setShowPDFOptions}
+                setShowQuickAddPiece={setShowQuickAddPiece}
+                setShowShopifyExportOptions={setShowShopifyExportOptions}
+                setShowSiteProductCsvModal={setShowSiteProductCsvModal}
+                setShowLocationMenuId={setShowLocationMenuId}
+                setShowTagMenuId={setShowTagMenuId}
+                setShowVaultMenu={setShowVaultMenu}
+                setShowVaultPlusModal={setShowVaultPlusModal}
+                setVaultDiagnostic={setVaultDiagnostic}
+                setVaultImageErrorRetries={setVaultImageErrorRetries}
+                shopifyConnected={shopifyConnected}
+                shopifyExporting={shopifyExporting}
+                showFilterMenu={showFilterMenu}
+                showLocationMenuId={showLocationMenuId}
+                showTagMenuId={showTagMenuId}
+                showVaultMenu={showVaultMenu}
+                showVaultPlusUpgradeLikeCompare={showVaultPlusUpgradeLikeCompare}
+                subscriptionStatus={subscriptionStatus}
+                syncToMarket={syncToMarket}
+                syncingVaultPlus={syncingVaultPlus}
+                syncVaultPlusFromStripe={syncVaultPlusFromStripe}
+                toggleSelectAll={toggleSelectAll}
+                toggleSelection={toggleSelection}
+                totalVaultValue={totalVaultValue}
+                trackedTimeByItem={trackedTimeByItem}
+                uniqueTags={uniqueTags}
+                updateLocation={updateLocation}
+                updateStatus={updateStatus}
+                updateStockQty={updateStockQty}
+                updateTag={updateTag}
+                uploadingId={uploadingId}
+                vaultDiagnostic={vaultDiagnostic}
+                vaultImageErrorRetries={vaultImageErrorRetries}
+                vaultImageVisibilityEpoch={vaultImageVisibilityEpoch}
+                vaultItemStockQty={vaultItemStockQty}
+                vaultPaywallHasItems={vaultPaywallHasItems}
+                vaultPullPx={vaultPullPx}
+                vaultPullRefreshing={vaultPullRefreshing}
+                vaultPullScrollRef={vaultPullScrollRef}
+                updatingStockId={updatingStockId}
+              />
             </div>
+          )}
+          {/* COMPARE PANEL — code-split after first visit */}
+          {compareTabVisited && (
+            <div className={activeTab !== 'compare' ? 'hidden' : ''}>
+              <CompareTabPanel
+                user={user}
+                showVaultPlusUpgradeLikeCompare={showVaultPlusUpgradeLikeCompare}
+                setShowAuth={setShowAuth}
+                setShowVaultPlusModal={setShowVaultPlusModal}
+                VAULT_REFRESH_AND_STRIPE_SYNC_UI_ENABLED={VAULT_REFRESH_AND_STRIPE_SYNC_UI_ENABLED}
+                setLoading={setLoading}
+                fetchInventory={fetchInventory}
+                syncingVaultPlus={syncingVaultPlus}
+                syncVaultPlusFromStripe={syncVaultPlusFromStripe}
+                compareFilterButtonRef={compareFilterButtonRef}
+                showCompareFilterMenu={showCompareFilterMenu}
+                setShowCompareFilterMenu={setShowCompareFilterMenu}
+                compareFilterDropdownRect={compareFilterDropdownRect}
+                locations={locations}
+                uniqueTags={uniqueTags}
+                compareFilterLocation={compareFilterLocation}
+                setCompareFilterLocation={setCompareFilterLocation}
+                compareFilterTag={compareFilterTag}
+                setCompareFilterTag={setCompareFilterTag}
+                compareFilterStatus={compareFilterStatus}
+                setCompareFilterStatus={setCompareFilterStatus}
+                compareFilterStrategy={compareFilterStrategy}
+                setCompareFilterStrategy={setCompareFilterStrategy}
+                compareFilterMetal={compareFilterMetal}
+                setCompareFilterMetal={setCompareFilterMetal}
+                compareSearchTerm={compareSearchTerm}
+                setCompareSearchTerm={setCompareSearchTerm}
+                compareShowLive={compareShowLive}
+                setCompareShowLive={setCompareShowLive}
+                compareFormulas={compareFormulas}
+                setCompareFormulas={setCompareFormulas}
+                formulas={formulas}
+                compareSpotEnabled={compareSpotEnabled}
+                setCompareSpotEnabled={setCompareSpotEnabled}
+                compareCustomSpots={compareCustomSpots}
+                setCompareCustomSpots={setCompareCustomSpots}
+                prices={prices}
+                subscriptionStatus={subscriptionStatus}
+                compareFilteredInventory={compareFilteredInventory}
+                inventory={inventory}
+                convertStonesToArray={convertStonesToArray}
+                calculateFullBreakdown={calculateFullBreakdown}
+                getItemPrices={getItemPrices}
+                getPricesForFormulas={getPricesForFormulas}
+                formatCompareWholesaleRetail={formatCompareWholesaleRetail}
+                renderComparePriceDelta={renderComparePriceDelta}
+              />
             </div>
-          </div>
+          )}
 
-          {/* COMPARE PANEL */}
-          <div className={`bg-white rounded-2xl sm:rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm flex flex-col flex-1 min-h-0 min-h-[50vh] lg:min-h-0 lg:max-h-[calc(100vh-5rem)] overflow-hidden ${activeTab !== 'compare' ? 'hidden' : ''}`}>
-            <div className="p-3 sm:p-6 border-b border-stone-100 bg-white space-y-3 sm:space-y-4 rounded-t-2xl sm:rounded-t-[2.5rem] shrink-0">
-              <h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Compare Prices</h2>
-              <div className="text-[10px] text-stone-500 space-y-2">
-                <p>
-                  Default view shows <span className="font-bold">Saved</span> (snapshot) and <span className="font-bold">Live</span> (current spot) pricing.
-                </p>
-                <p>
-                  Select <span className="font-bold">Formulas</span> to compare prices, and use <span className="font-bold">Spot Scenario</span> to generate amber columns for comparing custom metal prices against your Saved vault prices or Formula prices.
-                </p>
-              </div>
-              {(!user || showVaultPlusUpgradeLikeCompare) ? (
-                <div className="py-8 px-4 rounded-xl bg-stone-50 border border-stone-200 text-center space-y-4">
-                  {!user && (
-                    <p className="text-stone-600 font-bold uppercase text-xs tracking-wider">
-                      Sign in to compare prices. With a vault and Vault+, you can compare item prices across different formulas.
-                    </p>
-                  )}
-                  <div className="flex flex-col sm:flex-row gap-2 items-center justify-center">
-                    {!user ? (
-                      <button onClick={() => setShowAuth(true)} className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-[#A5BEAC] text-white hover:bg-slate-900 transition shadow-sm">
-                        Sign in
-                      </button>
-                    ) : (
-                      <>
-                        <button onClick={() => setShowVaultPlusModal(true)} className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-[#A5BEAC] text-white hover:bg-slate-900 transition shadow-sm">
-                          Upgrade to Vault+
-                        </button>
-                        {VAULT_REFRESH_AND_STRIPE_SYNC_UI_ENABLED && (
-                          <>
-                            <button type="button" onClick={() => { setLoading(true); void fetchInventory(); }} className="text-[10px] font-bold uppercase text-stone-400 hover:text-[#A5BEAC] transition">Refresh</button>
-                            <button type="button" disabled={syncingVaultPlus} onClick={() => { void syncVaultPlusFromStripe(); }} className="text-[10px] font-bold uppercase text-[#A5BEAC] hover:text-slate-900 transition disabled:opacity-50">
-                              {syncingVaultPlus ? 'Syncing…' : 'Sync from Stripe'}
-                            </button>
-                          </>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </div>
-              ) : (
-              <>
-              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 min-h-[48px] sm:h-12">
-                <div className="relative flex-1 flex gap-2 w-full min-h-[48px] sm:h-full">
-                  <div className="relative shrink-0 min-h-[48px] sm:h-full w-12">
-                    <button
-                      ref={compareFilterButtonRef}
-                      onClick={() => setShowCompareFilterMenu(!showCompareFilterMenu)}
-                      className={`w-full h-full min-h-[48px] sm:min-h-0 flex items-center justify-center rounded-xl border transition-all ${showCompareFilterMenu ? 'bg-slate-900 text-white border-slate-900' : 'bg-stone-50 border-stone-200 text-stone-400 hover:border-[#A5BEAC]'}`}
-                    >
-                      <span className="text-lg">⚡</span>
-                    </button>
-                    {showCompareFilterMenu && compareFilterDropdownRect && typeof document !== 'undefined' && createPortal(
-                      <div
-                        className="fixed w-[min(18rem,calc(100vw-1rem))] max-h-[min(85dvh,calc(100dvh-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px)-1rem))] bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[9999] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2"
-                        style={{ top: compareFilterDropdownRect.top, left: compareFilterDropdownRect.left }}
-                      >
-                        <div className="overflow-y-auto overscroll-contain touch-pan-y p-4 space-y-4 min-h-0 flex-1 custom-scrollbar">
-                        <div className="flex justify-between items-center">
-                          <h4 className="text-xs font-black uppercase text-slate-900">Compare Filters</h4>
-                          <button onClick={() => {
-                            setCompareFilterLocation('All'); setCompareFilterTag('All'); setCompareFilterStrategy('All'); setCompareFilterMetal('All'); setCompareFilterStatus('Active'); setCompareSearchTerm('');
-                          }} className="text-[9px] font-bold text-[#A5BEAC] uppercase hover:text-slate-900">Reset</button>
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-stone-400 uppercase">Location</label>
-                          <select value={compareFilterLocation} onChange={e => setCompareFilterLocation(e.target.value)} className="w-full p-2 bg-stone-50 border rounded-lg text-xs font-bold">
-                            <option>All</option>
-                            {locations.map(l => <option key={l}>{l}</option>)}
-                          </select>
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-stone-400 uppercase">Tag</label>
-                          <div className="flex flex-wrap gap-2">
-                            <button key="All" onClick={() => setCompareFilterTag('All')} className={`py-1.5 px-2 rounded-lg text-[9px] font-black uppercase border ${compareFilterTag === 'All' ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-400'}`}>All</button>
-                            {uniqueTags.map(t => (
-                              <button key={t} onClick={() => setCompareFilterTag(t)} className={`py-1.5 px-2 rounded-lg text-[9px] font-black uppercase border ${compareFilterTag === t ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-400'}`}>{t}</button>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-stone-400 uppercase">Item Status</label>
-                          <div className="flex gap-2 bg-stone-100 p-1 rounded-lg flex-wrap">
-                            {['Active', 'Draft', 'Archived', 'All'].map(s => (
-                              <button key={s} onClick={() => setCompareFilterStatus(s)} className={`flex-1 py-1.5 rounded-md text-[8px] font-black uppercase transition-all ${compareFilterStatus === s ? 'bg-white text-slate-900 shadow-sm' : 'text-stone-400 hover:text-stone-600'}`}>{s}</button>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-stone-400 uppercase">Formula</label>
-                          <div className="flex gap-2">
-                            {['All', 'A', 'B', 'custom'].map(s => (
-                              <button key={s} onClick={() => setCompareFilterStrategy(s)} className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase border ${compareFilterStrategy === s ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-400'}`}>{s === 'custom' ? 'Custom' : s}</button>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-stone-400 uppercase">Metal Type</label>
-                          <div className="grid grid-cols-2 gap-2">
-                            {['All', 'Gold', 'Silver', 'Platinum'].map(m => (
-                              <button key={m} onClick={() => setCompareFilterMetal(m)} className={`py-1.5 rounded-lg text-[9px] font-black uppercase border ${compareFilterMetal === m ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-400'}`}>{m}</button>
-                            ))}
-                          </div>
-                        </div>
-                        </div>
-                      </div>,
-                      document.body
-                    )}
-                  </div>
-                  <div className="relative flex-1 min-w-0 min-h-[48px] sm:h-full">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-300 text-xs">🔍</span>
-                    <input
-                      type="text"
-                      placeholder="Search by name, tag, metal, location..."
-                      className="w-full h-full min-h-[48px] sm:min-h-0 pl-10 pr-4 bg-stone-50 border rounded-xl text-xs font-bold outline-none focus:border-[#A5BEAC] transition-all"
-                      value={compareSearchTerm}
-                      onChange={(e) => setCompareSearchTerm(e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2 items-center">
-                <span className="text-[9px] font-bold text-stone-400 uppercase">Show:</span>
-                <button
-                  type="button"
-                  onClick={() => setCompareShowLive(p => !p)}
-                  className={`py-2 px-3 rounded-xl text-[10px] font-black uppercase border transition-all ${compareShowLive ? 'bg-slate-800 text-white border-slate-800' : 'bg-white border-stone-200 text-stone-500 hover:border-stone-300'}`}
-                >
-                  Live
-                </button>
-                <span className="text-[9px] font-bold text-stone-400 uppercase">Formulas:</span>
-                <button
-                  type="button"
-                  onClick={() => setCompareFormulas(p => ({ ...p, a: !p.a }))}
-                  className={`py-2 px-3 rounded-xl text-[10px] font-black uppercase border transition-all ${compareFormulas.a ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-500 hover:border-stone-300'}`}
-                >
-                  Formula A
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCompareFormulas(p => ({ ...p, b: !p.b }))}
-                  className={`py-2 px-3 rounded-xl text-[10px] font-black uppercase border transition-all ${compareFormulas.b ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-500 hover:border-stone-300'}`}
-                >
-                  Formula B
-                </button>
-                {formulas.map((f: any) => {
-                  const isSelected = compareFormulas.customIds.includes(f.id);
-                  return (
-                    <button
-                      key={f.id}
-                      type="button"
-                      onClick={() => {
-                        if (isSelected) setCompareFormulas(p => ({ ...p, customIds: p.customIds.filter(id => id !== f.id) }));
-                        else setCompareFormulas(p => ({ ...p, customIds: [...p.customIds, f.id] }));
-                      }}
-                      title={f.name}
-                      className={`py-2 px-3 rounded-xl text-[10px] font-black uppercase border transition-all truncate max-w-[140px] ${isSelected ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-500 hover:border-stone-300'}`}
-                    >
-                      {f.name}
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="flex flex-wrap items-end gap-3 pt-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const next = !compareSpotEnabled;
-                    setCompareSpotEnabled(next);
-                    if (next && compareCustomSpots.gold === 0 && compareCustomSpots.silver === 0) {
-                      setCompareCustomSpots({ gold: prices.gold || 0, silver: prices.silver || 0, platinum: prices.platinum || 0, palladium: prices.palladium || 0 });
-                    }
-                  }}
-                  className={`py-2 px-3 rounded-xl text-[10px] font-black uppercase border transition-all ${compareSpotEnabled ? 'bg-amber-600 text-white border-amber-600' : 'bg-white border-stone-200 text-stone-500 hover:border-stone-300'}`}
-                >
-                  {compareSpotEnabled ? 'Spot scenario on' : 'Spot scenario'}
-                </button>
-                {compareSpotEnabled && (
-                  <>
-                    <p className="w-full basis-full text-[8px] font-bold text-stone-500 normal-case">Scenario spots: <span className="font-black">US$/ozt</span> (same unit as live).</p>
-                    {(['gold', 'silver', 'platinum', 'palladium'] as const).map(metal => (
-                      <div key={metal} className="flex flex-col gap-0.5">
-                        <label className="text-[8px] font-black uppercase text-stone-400">{metal} ($/ozt)</label>
-                        <div className="relative">
-                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-stone-400">$</span>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={compareCustomSpots[metal] || ''}
-                            onChange={e => setCompareCustomSpots(p => ({ ...p, [metal]: Number(e.target.value) || 0 }))}
-                            className="w-[92px] pl-5 pr-2 py-1.5 bg-white border border-stone-200 rounded-lg text-xs font-bold outline-none focus:border-[#A5BEAC] transition-all"
-                          />
-                        </div>
-                      </div>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={() => setCompareCustomSpots({ gold: prices.gold || 0, silver: prices.silver || 0, platinum: prices.platinum || 0, palladium: prices.palladium || 0 })}
-                      className="py-1.5 px-3 rounded-lg text-[9px] font-black uppercase text-[#A5BEAC] border border-[#A5BEAC]/30 hover:bg-[#A5BEAC]/10 transition-all"
-                    >
-                      Load live
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setCompareSpotEnabled(false); setCompareCustomSpots({ gold: 0, silver: 0, platinum: 0, palladium: 0 }); }}
-                      className="py-1.5 px-3 rounded-lg text-[9px] font-black uppercase text-stone-400 border border-stone-200 hover:bg-stone-100 transition-all"
-                    >
-                      Clear
-                    </button>
-                  </>
-                )}
-              </div>
-            </>
-              )}
+          {/* FORMULAS PANEL — code-split after first visit */}
+          {formulasTabVisited && (
+            <div className={activeTab !== 'formulas' ? 'hidden' : ''}>
+              <FormulasTabPanel
+                user={user}
+                formulas={formulas}
+                formulaEditorOpen={formulaEditorOpen}
+                setFormulaEditorOpen={setFormulaEditorOpen}
+                setEditingFormulaId={setEditingFormulaId}
+                setFormulaDraftName={setFormulaDraftName}
+                setFormulaDraftTokens={setFormulaDraftTokens}
+                formulaDraftName={formulaDraftName}
+                formulaDraftTokens={formulaDraftTokens}
+                priceRounding={priceRounding}
+                setPriceRoundingWithPersist={setPriceRoundingWithPersist}
+                formulaValid={formulaValid}
+                setFormulaValid={setFormulaValid}
+                roundForDisplay={roundForDisplay}
+                calculateFullBreakdown={calculateFullBreakdown}
+                metalList={metalList}
+                calcHours={calcHours}
+                calcRate={calcRate}
+                calcOtherCosts={calcOtherCosts}
+                calcStoneList={calcStoneList}
+                calcOverheadCost={calcOverheadCost}
+                overheadType={overheadType}
+                applyManualMetalInCalculator={applyManualMetalInCalculator}
+                calculatorFindingsMult={calculatorFindingsMult}
+                subscriptionStatus={subscriptionStatus}
+                setShowVaultPlusModal={setShowVaultPlusModal}
+                setNotification={setNotification}
+                editingFormulaId={editingFormulaId}
+                setFormulas={setFormulas}
+                savingFormula={savingFormula}
+                setSavingFormula={setSavingFormula}
+                formulaToReadableString={formulaToReadableString}
+                deletingFormulaId={deletingFormulaId}
+                setDeletingFormulaId={setDeletingFormulaId}
+                selectedFormulaId={selectedFormulaId}
+                setSelectedFormulaId={setSelectedFormulaId}
+                setCustomFormulaModel={setCustomFormulaModel}
+              />
             </div>
-            {user && subscriptionStatus?.subscribed && (
-            <div className="flex-1 overflow-x-auto overflow-y-auto overscroll-x-contain touch-pan-x px-2 pt-1 pb-[calc(6.25rem+env(safe-area-inset-bottom,0px))] sm:p-6 sm:pb-6 [scrollbar-gutter:stable]">
-              {compareFilteredInventory.length === 0 ? (
-                <div className="text-center py-12 text-stone-500 text-sm">
-                  {inventory.length === 0 ? 'Add items to your vault to compare prices. Use the Vault tab to add items.' : 'No items match your filters. Try adjusting filters or search.'}
-                </div>
-              ) : !compareShowLive && !compareFormulas.a && !compareFormulas.b && compareFormulas.customIds.length === 0 && !compareSpotEnabled ? (
-                <div className="text-center py-12 text-stone-500 text-sm">
-                  Turn on Live, Spot scenario, or select at least one formula to compare.
-                </div>
-              ) : (
-                <div className="min-w-max w-full">
-                  <p className="sm:hidden text-[9px] font-bold uppercase tracking-wide text-stone-400 mb-2 px-0.5">Scroll sideways — item names are shortened on phone; full name on tap (hold) or desktop.</p>
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b-2 border-stone-200">
-                        <th className="py-1 pr-1.5 pl-1 sm:py-1.5 sm:pr-3 sm:pl-0 text-[9px] sm:text-[10px] font-black uppercase text-stone-500 bg-white border-r border-stone-200 relative sm:sticky sm:left-0 sm:z-20 sm:shadow-[4px_0_12px_-6px_rgba(0,0,0,0.12)] max-sm:w-[min(48vw,10.75rem)] max-sm:max-w-[min(48vw,10.75rem)] sm:max-w-[13rem] sm:w-auto">Item</th>
-                        <th className="max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 text-[8px] sm:text-[10px] font-black uppercase text-stone-500 whitespace-nowrap bg-stone-100 max-sm:max-w-[2.75rem] max-sm:min-w-0">Saved</th>
-                        {compareSpotEnabled && (
-                          <th className="max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 text-[8px] sm:text-[10px] font-black uppercase text-amber-700 whitespace-nowrap bg-amber-50 border-l border-amber-100 max-sm:max-w-[2.75rem] max-sm:min-w-0" title="Each item’s saved formula (A, B, or custom) recalculated at scenario spot prices">
-                            <span className="sm:hidden">V@S</span>
-                            <span className="hidden sm:inline">Vault @ Scn</span>
-                          </th>
-                        )}
-                        {compareShowLive && <th className="max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 text-[8px] sm:text-[10px] font-black uppercase text-slate-700 whitespace-nowrap bg-slate-50 border-l border-stone-100 max-sm:max-w-[2.75rem] max-sm:min-w-0">Live</th>}
-                        {compareFormulas.a && <th className="max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 text-[8px] sm:text-[10px] font-black uppercase text-stone-500 whitespace-nowrap bg-white max-sm:max-w-[2.75rem] max-sm:min-w-0"><span className="sm:hidden">A</span><span className="hidden sm:inline">Formula A</span></th>}
-                        {compareSpotEnabled && compareFormulas.a && <th className="max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 text-[8px] sm:text-[10px] font-black uppercase text-amber-600 whitespace-nowrap bg-amber-50 max-sm:max-w-[2.75rem] max-sm:min-w-0"><span className="sm:hidden">A*</span><span className="hidden sm:inline">A @ Scn</span></th>}
-                        {compareFormulas.b && <th className="max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 text-[8px] sm:text-[10px] font-black uppercase text-stone-500 whitespace-nowrap bg-white max-sm:max-w-[2.75rem] max-sm:min-w-0"><span className="sm:hidden">B</span><span className="hidden sm:inline">Formula B</span></th>}
-                        {compareSpotEnabled && compareFormulas.b && <th className="max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 text-[8px] sm:text-[10px] font-black uppercase text-amber-600 whitespace-nowrap bg-amber-50 max-sm:max-w-[2.75rem] max-sm:min-w-0"><span className="sm:hidden">B*</span><span className="hidden sm:inline">B @ Scn</span></th>}
-                        {compareFormulas.customIds.map(id => {
-                          const f = formulas.find((x: any) => x.id === id);
-                          if (!f) return null;
-                          return (<React.Fragment key={f.id}>
-                            <th className="max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 text-[8px] sm:text-[10px] font-black uppercase text-stone-500 whitespace-nowrap truncate max-sm:max-w-[2.6rem] max-sm:min-w-0 sm:max-w-[5.5rem] bg-white" title={f.name}><span className="sm:hidden">{f.name.length > 6 ? `${f.name.slice(0, 5)}…` : f.name}</span><span className="hidden sm:inline">{f.name}</span></th>
-                            {compareSpotEnabled && <th className="max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 text-[8px] sm:text-[10px] font-black uppercase text-amber-600 whitespace-nowrap bg-amber-50 truncate max-sm:max-w-[2.6rem] max-sm:min-w-0 sm:max-w-[5.5rem]" title={`${f.name} @ Scenario`}><span className="sm:hidden">{f.name.length > 4 ? `${f.name.slice(0, 3)}…*` : `${f.name}*`}</span><span className="hidden sm:inline">{f.name} @ Scn</span></th>}
-                          </React.Fragment>);
-                        })}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {compareFilteredInventory.map((item: any) => {
-                        const stonesForRow = convertStonesToArray(item);
-                        const liveBreakdownForItem = calculateFullBreakdown(
-                          item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0,
-                          stonesForRow, item.overhead_cost || 0, (item.overhead_type as 'flat' | 'percent') || 'flat',
-                          item.multiplier, item.markup_b, undefined, false, true, findingsMultFromItem(item)
-                        );
-                        const liveItemPrices = getItemPrices(item, liveBreakdownForItem);
-                        const scenarioBreakdownForItem = compareSpotEnabled
-                          ? calculateFullBreakdown(
-                              item.metals || [], 1, item.labor_at_making, item.other_costs_at_making || 0,
-                              stonesForRow, item.overhead_cost || 0, (item.overhead_type as 'flat' | 'percent') || 'flat',
-                              item.multiplier, item.markup_b, compareCustomSpots, false, true, findingsMultFromItem(item)
-                            )
-                          : null;
-                        const vaultScenarioPrices = scenarioBreakdownForItem ? getItemPrices(item, scenarioBreakdownForItem) : null;
-                        const pricesByFormula = getPricesForFormulas(item, compareFormulas);
-                        const scenarioPrices = compareSpotEnabled ? getPricesForFormulas(item, compareFormulas, compareCustomSpots) : null;
-                        const itemStrategy = item.strategy === 'custom' && item.custom_formula?.formula_name ? item.custom_formula.formula_name : item.strategy;
-                        const itemTitle = (item.name || 'Untitled').toUpperCase();
-                        return (
-                          <tr key={item.id} className="group border-b border-stone-100 hover:bg-stone-50/50">
-                            <td
-                              className="py-1 pr-1.5 pl-1 sm:py-1.5 sm:pr-3 sm:pl-0 text-[10px] sm:text-xs font-bold text-slate-800 bg-white group-hover:bg-stone-50 border-r border-stone-100 relative sm:sticky sm:left-0 sm:z-10 max-sm:shadow-none sm:shadow-[4px_0_12px_-6px_rgba(0,0,0,0.08)] max-sm:w-[min(48vw,10.75rem)] max-sm:max-w-[min(48vw,10.75rem)] sm:max-w-[13rem] sm:w-auto align-top overflow-hidden"
-                              title={itemTitle}
-                            >
-                              <span className="block truncate sm:truncate-none sm:line-clamp-2 sm:break-words sm:hyphens-auto">{itemTitle}</span>
-                            </td>
-                            <td className="max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 text-stone-600 tabular-nums bg-stone-100 group-hover:bg-stone-50 align-top max-sm:max-w-[2.75rem] max-sm:min-w-0">
-                              {formatCompareWholesaleRetail(Number(item.wholesale), Number(item.retail))}
-                            </td>
-                            {compareSpotEnabled && vaultScenarioPrices && (
-                              <td
-                                className="max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 tabular-nums bg-amber-50 border-l border-amber-100 group-hover:bg-amber-50/90 align-top max-sm:max-w-[2.75rem] max-sm:min-w-0"
-                                title="This piece’s saved pricing strategy at your scenario spot prices (labor, overhead, stones unchanged)"
-                              >
-                                {formatCompareWholesaleRetail(vaultScenarioPrices.wholesale, vaultScenarioPrices.retail)}
-                                {renderComparePriceDelta(Number(item.wholesale), Number(item.retail), vaultScenarioPrices.wholesale, vaultScenarioPrices.retail)}
-                              </td>
-                            )}
-                            {compareShowLive && (
-                              <td className="max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 text-slate-800 tabular-nums bg-slate-50 border-l border-stone-100 group-hover:bg-stone-50/90 align-top max-sm:max-w-[2.75rem] max-sm:min-w-0" title={"At current spot, using this item's saved formula"}>
-                                {formatCompareWholesaleRetail(liveItemPrices.wholesale, liveItemPrices.retail)}
-                              </td>
-                            )}
-                            {compareFormulas.a && (
-                              <td className={`max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 tabular-nums bg-white group-hover:bg-stone-50/50 align-top max-sm:max-w-[2.75rem] max-sm:min-w-0 ${itemStrategy === 'A' ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
-                                {formatCompareWholesaleRetail(pricesByFormula['A']?.wholesale ?? 0, pricesByFormula['A']?.retail ?? 0)}
-                              </td>
-                            )}
-                            {compareSpotEnabled && compareFormulas.a && scenarioPrices && (
-                              <td className="max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 tabular-nums bg-amber-50 group-hover:bg-amber-50/90 align-top max-sm:max-w-[2.75rem] max-sm:min-w-0">
-                                {formatCompareWholesaleRetail(scenarioPrices['A']?.wholesale ?? 0, scenarioPrices['A']?.retail ?? 0)}
-                                {renderComparePriceDelta(
-                                  pricesByFormula['A']?.wholesale ?? 0,
-                                  pricesByFormula['A']?.retail ?? 0,
-                                  scenarioPrices['A']?.wholesale ?? 0,
-                                  scenarioPrices['A']?.retail ?? 0
-                                )}
-                              </td>
-                            )}
-                            {compareFormulas.b && (
-                              <td className={`max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 tabular-nums bg-white group-hover:bg-stone-50/50 align-top max-sm:max-w-[2.75rem] max-sm:min-w-0 ${itemStrategy === 'B' ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
-                                {formatCompareWholesaleRetail(pricesByFormula['B']?.wholesale ?? 0, pricesByFormula['B']?.retail ?? 0)}
-                              </td>
-                            )}
-                            {compareSpotEnabled && compareFormulas.b && scenarioPrices && (
-                              <td className="max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 tabular-nums bg-amber-50 group-hover:bg-amber-50/90 align-top max-sm:max-w-[2.75rem] max-sm:min-w-0">
-                                {formatCompareWholesaleRetail(scenarioPrices['B']?.wholesale ?? 0, scenarioPrices['B']?.retail ?? 0)}
-                                {renderComparePriceDelta(
-                                  pricesByFormula['B']?.wholesale ?? 0,
-                                  pricesByFormula['B']?.retail ?? 0,
-                                  scenarioPrices['B']?.wholesale ?? 0,
-                                  scenarioPrices['B']?.retail ?? 0
-                                )}
-                              </td>
-                            )}
-                            {compareFormulas.customIds.map(id => {
-                              const f = formulas.find((x: any) => x.id === id);
-                              if (!f) return null;
-                              const p = pricesByFormula[f.name];
-                              const sp = scenarioPrices?.[f.name];
-                              const isCurrent = itemStrategy === f.name;
-                              return (<React.Fragment key={f.id}>
-                                <td className={`max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 tabular-nums bg-white group-hover:bg-stone-50/50 align-top max-sm:max-w-[2.6rem] max-sm:min-w-0 sm:max-w-[5.5rem] ${isCurrent ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
-                                  {formatCompareWholesaleRetail(p?.wholesale ?? 0, p?.retail ?? 0)}
-                                </td>
-                                {compareSpotEnabled && sp ? (
-                                  <td className="max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 tabular-nums bg-amber-50 group-hover:bg-amber-50/90 align-top max-sm:max-w-[2.6rem] max-sm:min-w-0 sm:max-w-[5.5rem]">
-                                    {formatCompareWholesaleRetail(sp.wholesale ?? 0, sp.retail ?? 0)}
-                                    {renderComparePriceDelta(p?.wholesale ?? 0, p?.retail ?? 0, sp.wholesale ?? 0, sp.retail ?? 0)}
-                                  </td>
-                                ) : null}
-                              </React.Fragment>);
-                            })}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+          )}
+
+          {/* TIME PANEL — code-split after first visit */}
+          {timeTabVisited && (
+            <div className={activeTab !== 'time' ? 'hidden' : ''}>
+              <TimeTabPanel
+                user={user}
+                inventory={inventory}
+                timerStartedAt={timerStartedAt}
+                setTimerStartedAt={setTimerStartedAt}
+                timerPausedElapsed={timerPausedElapsed}
+                setTimerPausedElapsed={setTimerPausedElapsed}
+                timerElapsedDisplay={timerElapsedDisplay}
+                timerElapsedSeconds={timerElapsedSeconds}
+                timeSummaryToday={timeSummaryToday}
+                timeSummaryThisWeek={timeSummaryThisWeek}
+                timeFilterDateFrom={timeFilterDateFrom}
+                setTimeFilterDateFrom={setTimeFilterDateFrom}
+                timeFilterDateTo={timeFilterDateTo}
+                setTimeFilterDateTo={setTimeFilterDateTo}
+                timeFilterItemDropdownRef={timeFilterItemDropdownRef}
+                timeFilterItemId={timeFilterItemId}
+                setTimeFilterItemId={setTimeFilterItemId}
+                timeFilterItemSearch={timeFilterItemSearch}
+                setTimeFilterItemSearch={setTimeFilterItemSearch}
+                timeFilterItemDropdownOpen={timeFilterItemDropdownOpen}
+                setTimeFilterItemDropdownOpen={setTimeFilterItemDropdownOpen}
+                filteredTimeEntries={filteredTimeEntries}
+                deletingTimeEntryId={deletingTimeEntryId}
+                onOpenLogTimeHeader={() => {
+                  setLogTimeItemId(null);
+                  setLogTimeAllowItemSelect(true);
+                  setEditingTimeEntryId(null);
+                  setLogTimeHours('');
+                  setLogTimeDate(localTodayYYYYMMDD());
+                  setLogTimeNote('');
+                  setShowLogTimeModal(true);
+                }}
+                onOpenLogTimeFromStoppedTimer={() => {
+                  setEditingTimeEntryId(null);
+                  setLogTimeItemId(null);
+                  setLogTimeAllowItemSelect(true);
+                  setLogTimeHours((timerPausedElapsed / 3600).toFixed(2));
+                  setLogTimeDate(localTodayYYYYMMDD());
+                  setLogTimeNote('');
+                  setShowLogTimeModal(true);
+                }}
+                openEditTimeModal={openEditTimeModal}
+                deleteTimeEntry={deleteTimeEntry}
+              />
             </div>
-            )}
-          </div>
+          )}
 
-          {/* FORMULAS PANEL */}
-          <div className={`bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm flex flex-col flex-1 min-h-0 min-h-[50vh] lg:min-h-0 lg:max-h-[calc(100vh-5rem)] overflow-hidden ${activeTab !== 'formulas' ? 'hidden' : ''}`}>
-            <div className="p-6 border-b border-stone-100 bg-white space-y-4 rounded-t-[2.5rem] shrink-0">
-              <div className="flex justify-between items-center">
-                <h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Saved Formulas</h2>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingFormulaId(null);
-                    setFormulaDraftName('');
-                    setFormulaDraftTokens({ base: formulaToTokens(PRESET_A.base), wholesale: formulaToTokens(PRESET_A.wholesale), retail: formulaToTokens(PRESET_A.retail) });
-                    setFormulaEditorOpen(true);
-                  }}
-                  className="px-4 py-2 rounded-xl bg-[#A5BEAC] text-white text-xs font-black uppercase hover:bg-slate-900 transition"
-                >
-                  Create formula
-                </button>
-              </div>
-              <p className="text-[10px] text-stone-500">Create custom price formulas. Star one to make it the default in the Calculator.</p>
+          {/* LOGIC PANEL — code-split after first visit */}
+          {logicTabVisited && (
+            <div className={`flex flex-col flex-1 min-h-0 min-h-[50vh] lg:min-h-0 lg:max-h-[calc(100vh-5rem)] overflow-y-auto overflow-x-hidden custom-scrollbar scrollbar-gutter-stable ${activeTab !== 'logic' ? 'hidden' : ''}`}>
+              <LogicTabPanel
+                retailMultA={retailMultA}
+                markupB={markupB}
+                onCreateFormula={() => {
+                  setActiveTab('formulas');
+                  setFormulaEditorOpen(true);
+                  setEditingFormulaId(null);
+                  setFormulaDraftName('');
+                  setFormulaDraftTokens({
+                    base: formulaToTokens(PRESET_A.base),
+                    wholesale: formulaToTokens(PRESET_A.wholesale),
+                    retail: formulaToTokens(PRESET_A.retail),
+                  });
+                }}
+              />
             </div>
-            <div className="flex-1 overflow-y-auto p-6 max-md:pb-[calc(6.25rem+env(safe-area-inset-bottom,0px))] space-y-4">
-              {!user ? (
-                <div className="text-center py-12 text-stone-400 text-sm font-bold">
-                  Sign in to create and manage formulas.
-                </div>
-              ) : formulas.length === 0 && !formulaEditorOpen ? (
-                <div className="text-center py-12 space-y-4">
-                  <p className="text-stone-500 text-sm">No formulas yet.</p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingFormulaId(null);
-                      setFormulaDraftName('');
-                      setFormulaDraftTokens({ base: formulaToTokens(PRESET_A.base), wholesale: formulaToTokens(PRESET_A.wholesale), retail: formulaToTokens(PRESET_A.retail) });
-                      setFormulaEditorOpen(true);
-                    }}
-                    className="px-4 py-2 rounded-xl bg-[#A5BEAC] text-white text-xs font-black uppercase hover:bg-slate-900 transition"
-                  >
-                    Create your first formula
-                  </button>
-                </div>
-              ) : formulaEditorOpen ? (
-                <div className="bg-stone-50 rounded-2xl border border-stone-200 p-6 space-y-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[9px] font-bold text-stone-400 uppercase">Round preview to</span>
-                    {(['none', 1, 5, 10, 25] as const).map(opt => (
-                      <button key={opt} type="button" onClick={() => setPriceRoundingWithPersist(opt)}
-                        className={`py-1.5 px-2.5 rounded-lg text-[9px] font-black uppercase border transition-all ${priceRounding === opt ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-500'}`}>
-                        {opt === 'none' ? 'None' : `$${opt}`}
-                      </button>
-                    ))}
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-black uppercase text-stone-500 mb-1">Formula name</label>
-                    <input
-                      type="text"
-                      value={formulaDraftName}
-                      onChange={(e) => setFormulaDraftName(e.target.value)}
-                      placeholder="e.g. High-End Retail"
-                      className="w-full p-3 rounded-xl border border-stone-200 bg-white text-sm font-bold outline-none focus:border-[#A5BEAC]"
-                    />
-                  </div>
-                  <FormulaBuilder
-                    tokens={formulaDraftTokens}
-                    onChange={setFormulaDraftTokens}
-                    onValidationChange={setFormulaValid}
-                    roundForDisplay={roundForDisplay}
-                    previewContext={(() => {
-                      const a = calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator, undefined, calculatorFindingsMult);
-                      return {
-                        metalCost: a.metalCost,
-                        labor: a.labor,
-                        other: a.other,
-                        stoneCost: a.stones,
-                        stoneRetail: a.stoneRetail,
-                        overhead: a.overhead,
-                        totalMaterials: a.totalMaterials,
-                      };
-                    })()}
-                  />
-                  {!formulaValid && (
-                    <div className="text-red-700 bg-red-50 border-2 border-red-400 rounded-xl px-4 py-3 flex items-center gap-3 shadow-sm">
-                      <span className="text-xl" aria-hidden>⚠</span>
-                      <p className="font-black text-base">Formula is invalid — Save is disabled until you fix it above.</p>
-                    </div>
-                  )}
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (subscriptionStatus && !subscriptionStatus.subscribed) {
-                          setShowVaultPlusModal(true);
-                          return;
-                        }
-                        if (!formulaDraftName.trim()) {
-                          setNotification({ title: 'Name required', message: 'Please enter a name for your formula.', type: 'info' });
-                          return;
-                        }
-                        const baseRes = parseTokensStrict(formulaDraftTokens.base);
-                        const wholesaleRes = parseTokensStrict(formulaDraftTokens.wholesale);
-                        const retailRes = parseTokensStrict(formulaDraftTokens.retail);
-                        if (!baseRes.valid || !wholesaleRes.valid || !retailRes.valid) {
-                          setNotification({ title: 'Invalid formula', message: 'Formula must be valid to save. Each slot needs values and operations in a valid pattern (e.g. Metal + Labor).', type: 'error' });
-                          return;
-                        }
-                        if (baseRes.node && formulaReferencesBase(baseRes.node)) {
-                          setNotification({ title: 'Invalid formula', message: 'Base formula cannot reference Base (circular).', type: 'error' });
-                          return;
-                        }
-                        setSavingFormula(true);
-                        try {
-                          const session = (await supabase.auth.getSession()).data.session;
-                          const accessToken = (session as any)?.access_token;
-                          if (!accessToken || !user?.id) {
-                            setNotification({ title: 'Session expired', message: 'Please sign in again.', type: 'info' });
-                            return;
-                          }
-                          const body: any = { accessToken, userId: user.id, formula: { name: formulaDraftName.trim(), formula_base: baseRes.node, formula_wholesale: wholesaleRes.node, formula_retail: retailRes.node } };
-                          if (editingFormulaId) body.formula.id = editingFormulaId;
-                          const res = await fetch('/api/save-formula', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-                          if (res.ok) {
-                            const saved = await res.json();
-                            setFormulas(prev => {
-                              const without = prev.filter(f => f.id !== saved.id);
-                              const existing = prev.find(f => f.id === saved.id);
-                              const merged = { ...saved, is_starred: existing?.is_starred ?? saved.is_starred ?? false };
-                              const next = [merged, ...without];
-                              next.sort((a, b) => (b.is_starred ? 1 : 0) - (a.is_starred ? 1 : 0));
-                              return next;
-                            });
-                            setFormulaEditorOpen(false);
-                            setEditingFormulaId(null);
-                            setFormulaDraftName('');
-                            setNotification({ title: 'Formula saved', message: `"${formulaDraftName}" has been saved.`, type: 'success' });
-                          } else if (res.status === 402) {
-                            const err = await res.json().catch(() => ({}));
-                            if (err?.code === 'PAYWALL_FORMULAS') setShowVaultPlusModal(true);
-                            else setNotification({ title: 'Save failed', message: err?.error || 'Could not save formula.', type: 'error' });
-                          } else {
-                            const err = await res.json().catch(() => ({}));
-                            setNotification({ title: 'Save failed', message: err?.error || 'Could not save formula.', type: 'error' });
-                          }
-                        } finally {
-                          setSavingFormula(false);
-                        }
-                      }}
-                      disabled={savingFormula || !formulaValid}
-                      title={!formulaValid ? 'Formula must be valid to save' : undefined}
-                      className="px-4 py-2 rounded-xl bg-[#A5BEAC] text-white text-xs font-black uppercase hover:bg-slate-900 transition disabled:opacity-50"
-                    >
-                      {savingFormula ? 'Saving…' : 'Save'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setFormulaEditorOpen(false);
-                        setEditingFormulaId(null);
-                        setFormulaDraftName('');
-                      }}
-                      className="px-4 py-2 rounded-xl bg-stone-200 text-stone-600 text-xs font-black uppercase hover:bg-stone-300 transition"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {formulas.map((f) => (
-                    <div
-                      key={f.id}
-                      className="p-4 rounded-xl border border-stone-200 bg-white hover:border-[#A5BEAC]/50 transition flex items-start justify-between gap-4"
-                    >
-                      <div className="min-w-0">
-                        <p className="font-black text-slate-900 truncate">{f.name}</p>
-                        <p className="text-[10px] text-stone-500 truncate mt-1" title={formulaToReadableString(f.formula_base) + ' → ' + formulaToReadableString(f.formula_wholesale) + ' → ' + formulaToReadableString(f.formula_retail)}>
-                          Base: {formulaToReadableString(f.formula_base)} | Wholesale: {formulaToReadableString(f.formula_wholesale)} | Retail: {formulaToReadableString(f.formula_retail)}
-                        </p>
-                      </div>
-                      <div className="flex gap-2 shrink-0 items-center">
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            try {
-                              const session = (await supabase.auth.getSession()).data.session;
-                              const accessToken = (session as any)?.access_token;
-                              if (!accessToken || !user?.id) return;
-                              const res = await fetch('/api/star-formula', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ accessToken, userId: user.id, formulaId: f.is_starred ? null : f.id }),
-                              });
-                              if (res.ok) {
-                                const updated = await res.json();
-                                if (updated.id) {
-                                  setFormulas(prev => {
-                                    const next = prev.map(x => x.id === updated.id ? { ...updated, is_starred: true } : { ...x, is_starred: false });
-                                    const starred = next.find(x => x.is_starred);
-                                    return starred ? [starred, ...next.filter(x => x.id !== starred.id)] : next;
-                                  });
-                                  setSelectedFormulaId(updated.id);
-                                  setCustomFormulaModel({ formula_base: updated.formula_base, formula_wholesale: updated.formula_wholesale, formula_retail: updated.formula_retail });
-                                } else {
-                                  setFormulas(prev => prev.map(x => ({ ...x, is_starred: false })));
-                                }
-                              }
-                            } catch { /* ignore */ }
-                          }}
-                          title={f.is_starred ? 'Remove as default' : 'Set as default in Calculator'}
-                          className={`p-1.5 rounded-lg border transition ${f.is_starred ? 'text-amber-500 border-amber-300 bg-amber-50' : 'text-stone-400 border-stone-200 hover:border-[#A5BEAC] hover:text-[#A5BEAC]'}`}
-                        >
-                          {f.is_starred ? '★' : '☆'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingFormulaId(f.id);
-                            setFormulaDraftName(f.name);
-                            setFormulaDraftTokens({ base: formulaToTokens(f.formula_base), wholesale: formulaToTokens(f.formula_wholesale), retail: formulaToTokens(f.formula_retail) });
-                            setFormulaEditorOpen(true);
-                          }}
-                          className="px-2 py-1 rounded-lg text-[10px] font-bold border border-stone-200 hover:border-[#A5BEAC] transition"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            try {
-                              setDeletingFormulaId(f.id);
-                              const session = (await supabase.auth.getSession()).data.session;
-                              const accessToken = (session as any)?.access_token;
-                              if (!accessToken || !user?.id) {
-                                setNotification({ title: 'Session expired', message: 'Please sign in again.', type: 'info' });
-                                return;
-                              }
-                              const res = await fetch('/api/delete-formula', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accessToken, userId: user.id, formulaId: f.id }) });
-                              if (res.ok) {
-                                setFormulas(prev => prev.filter(x => x.id !== f.id));
-                                if (selectedFormulaId === f.id) {
-                                  setSelectedFormulaId(null);
-                                  setCustomFormulaModel({ formula_base: PRESET_A.base, formula_wholesale: PRESET_A.wholesale, formula_retail: PRESET_A.retail });
-                                }
-                                setNotification({ title: 'Formula deleted', message: `"${f.name}" has been removed.`, type: 'success' });
-                              } else {
-                                const err = await res.json().catch(() => ({}));
-                                setNotification({ title: 'Delete failed', message: err?.error || 'Could not delete formula.', type: 'error' });
-                              }
-                            } catch (err) {
-                              setNotification({ title: 'Delete failed', message: 'Could not delete formula.', type: 'error' });
-                            } finally {
-                              setDeletingFormulaId(null);
-                            }
-                          }}
-                          disabled={deletingFormulaId === f.id}
-                          className="px-2 py-1 rounded-lg text-[10px] font-bold border border-red-200 text-red-600 hover:border-red-400 transition disabled:opacity-50"
-                        >
-                          {deletingFormulaId === f.id ? 'Deleting…' : 'Delete'}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* TIME PANEL */}
-          <div className={`bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm flex flex-col flex-1 min-h-0 min-h-[50vh] lg:min-h-0 lg:max-h-[calc(100vh-5rem)] overflow-hidden ${activeTab !== 'time' ? 'hidden' : ''}`}>
-            <div className="p-6 border-b border-stone-100 bg-white space-y-4 rounded-t-[2.5rem] shrink-0">
-              <div className="flex justify-between items-center flex-wrap gap-3">
-                <h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Time Tracking</h2>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLogTimeItemId(null);
-                    setLogTimeAllowItemSelect(true);
-                    setEditingTimeEntryId(null);
-                    setLogTimeHours('');
-                    setLogTimeDate(localTodayYYYYMMDD());
-                    setLogTimeNote('');
-                    setShowLogTimeModal(true);
-                  }}
-                  className="px-4 py-2 rounded-xl bg-[#A5BEAC] text-white text-xs font-black uppercase hover:bg-slate-900 transition"
-                >
-                  Log time
-                </button>
-              </div>
-              <p className="text-[10px] text-stone-500">Track time spent on pieces or general shop work.</p>
-            </div>
-            <div className="flex-1 overflow-y-auto p-6 max-md:pb-[calc(6.25rem+env(safe-area-inset-bottom,0px))] space-y-6">
-              {!user ? (
-                <div className="text-center py-12 text-stone-400 text-sm font-bold">
-                  Sign in to track time.
-                </div>
-              ) : (
-                <>
-                  {/* Timer */}
-                  <div className="bg-stone-50 rounded-2xl border-2 border-[#A5BEAC]/30 p-6 space-y-4">
-                    <p className="text-[9px] font-black uppercase text-stone-400">Live Timer</p>
-                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                      <div className="flex items-baseline gap-2">
-                        <span className={`text-4xl sm:text-5xl font-black tabular-nums ${timerStartedAt ? 'text-[#A5BEAC] animate-pulse' : timerPausedElapsed > 0 ? 'text-slate-900' : 'text-stone-300'}`}>
-                          {timerElapsedDisplay}
-                        </span>
-                        <span className="text-sm font-bold text-stone-400">
-                          {(timerElapsedSeconds / 3600).toFixed(2)}h
-                        </span>
-                      </div>
-                      <div className="flex gap-2 flex-wrap justify-center">
-                        {!timerStartedAt && timerPausedElapsed === 0 && (
-                          <button
-                            type="button"
-                            onClick={() => setTimerStartedAt(Date.now())}
-                            className="px-6 py-3 rounded-xl bg-[#A5BEAC] text-white text-sm font-black uppercase hover:bg-slate-900 transition shadow-lg flex items-center gap-2"
-                          >
-                            <span className="w-3 h-3 rounded-full bg-white" /> Start
-                          </button>
-                        )}
-                        {timerStartedAt && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const elapsed = Math.floor((Date.now() - timerStartedAt) / 1000);
-                              setTimerPausedElapsed(elapsed);
-                              setTimerStartedAt(null);
-                            }}
-                            className="px-6 py-3 rounded-xl bg-slate-900 text-white text-sm font-black uppercase hover:bg-[#A5BEAC] transition shadow-lg"
-                          >
-                            Stop
-                          </button>
-                        )}
-                        {!timerStartedAt && timerPausedElapsed > 0 && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingTimeEntryId(null);
-                                setLogTimeItemId(null);
-                                setLogTimeAllowItemSelect(true);
-                                setLogTimeHours((timerPausedElapsed / 3600).toFixed(2));
-                                setLogTimeDate(localTodayYYYYMMDD());
-                                setLogTimeNote('');
-                                setShowLogTimeModal(true);
-                              }}
-                              className="px-6 py-3 rounded-xl bg-[#A5BEAC] text-white text-sm font-black uppercase hover:bg-slate-900 transition shadow-lg"
-                            >
-                              Log time
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setTimerPausedElapsed(0)}
-                              className="px-6 py-3 rounded-xl bg-stone-200 text-stone-600 text-sm font-black uppercase hover:bg-stone-300 transition"
-                            >
-                              Reset
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setTimerStartedAt(Date.now() - timerPausedElapsed * 1000);
-                                setTimerPausedElapsed(0);
-                              }}
-                              className="px-6 py-3 rounded-xl border-2 border-[#A5BEAC] text-[#A5BEAC] text-sm font-black uppercase hover:bg-[#A5BEAC]/10 transition"
-                            >
-                              Resume
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    <p className="text-[10px] text-stone-500">
-                      {timerStartedAt ? 'Timer running…' : timerPausedElapsed > 0 ? 'Stopped. Log it, adjust in the modal, or resume.' : 'Start the timer when you begin working, stop when you finish.'}
-                    </p>
-                  </div>
-
-                  {/* Summary */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-stone-50 rounded-2xl border border-stone-200 p-4">
-                      <p className="text-[9px] font-black uppercase text-stone-400">Today</p>
-                      <p className="text-2xl font-black text-slate-900 mt-0.5">{(timeSummaryToday / 60).toFixed(1)}h</p>
-                    </div>
-                    <div className="bg-stone-50 rounded-2xl border border-stone-200 p-4">
-                      <p className="text-[9px] font-black uppercase text-stone-400">This week</p>
-                      <p className="text-2xl font-black text-slate-900 mt-0.5">{(timeSummaryThisWeek / 60).toFixed(1)}h</p>
-                    </div>
-                  </div>
-
-                  {/* Filters */}
-                  <div className="flex flex-wrap gap-2 items-center">
-                    <span className="text-[9px] font-bold text-stone-400 uppercase">Filters</span>
-                    <input
-                      type="date"
-                      value={timeFilterDateFrom}
-                      onChange={e => setTimeFilterDateFrom(e.target.value)}
-                      className="py-2 px-3 rounded-lg border border-stone-200 text-xs font-bold outline-none focus:border-[#A5BEAC]"
-                    />
-                    <span className="text-stone-300">–</span>
-                    <input
-                      type="date"
-                      value={timeFilterDateTo}
-                      onChange={e => setTimeFilterDateTo(e.target.value)}
-                      className="py-2 px-3 rounded-lg border border-stone-200 text-xs font-bold outline-none focus:border-[#A5BEAC]"
-                    />
-                    <div ref={timeFilterItemDropdownRef} className="relative min-w-[140px]">
-                      <input
-                        type="text"
-                        placeholder="Filter by piece…"
-                        value={timeFilterItemDropdownOpen ? timeFilterItemSearch : (timeFilterItemId === '_unassigned' ? 'General / unassigned' : timeFilterItemId ? (inventory.find((i: any) => i.id === timeFilterItemId)?.name || '').toUpperCase() : 'All pieces')
-                        }
-                        onChange={e => { setTimeFilterItemSearch(e.target.value); setTimeFilterItemDropdownOpen(true); }}
-                        onFocus={() => { setTimeFilterItemDropdownOpen(true); setTimeFilterItemSearch(timeFilterItemId && timeFilterItemId !== '_unassigned' ? (inventory.find((i: any) => i.id === timeFilterItemId)?.name || '') : ''); }}
-                        onBlur={() => setTimeout(() => setTimeFilterItemDropdownOpen(false), 150)}
-                        className="w-full py-2 px-3 rounded-lg border border-stone-200 text-xs font-bold outline-none focus:border-[#A5BEAC]"
-                      />
-                      {timeFilterItemDropdownOpen && (
-                        <div className="absolute top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white border border-stone-200 rounded-xl shadow-lg z-50 min-w-[180px]">
-                          <button
-                            type="button"
-                            onClick={() => { setTimeFilterItemId(''); setTimeFilterItemSearch(''); setTimeFilterItemDropdownOpen(false); }}
-                            className={`w-full text-left px-3 py-2.5 text-xs font-bold hover:bg-stone-50 first:rounded-t-xl ${!timeFilterItemId ? 'bg-[#A5BEAC]/10 text-[#A5BEAC]' : 'text-stone-600'}`}
-                          >
-                            All pieces
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => { setTimeFilterItemId('_unassigned'); setTimeFilterItemSearch(''); setTimeFilterItemDropdownOpen(false); }}
-                            className={`w-full text-left px-3 py-2.5 text-xs font-bold hover:bg-stone-50 ${timeFilterItemId === '_unassigned' ? 'bg-[#A5BEAC]/10 text-[#A5BEAC]' : 'text-stone-600'}`}
-                          >
-                            General / unassigned
-                          </button>
-                          {inventory
-                            .filter((i: any) => !timeFilterItemSearch.trim() || (i.name || '').toUpperCase().includes(timeFilterItemSearch.trim().toUpperCase()))
-                            .map((i: any) => (
-                              <button
-                                key={i.id}
-                                type="button"
-                                onClick={() => { setTimeFilterItemId(i.id); setTimeFilterItemSearch(''); setTimeFilterItemDropdownOpen(false); }}
-                                className={`w-full text-left px-3 py-2.5 text-xs font-bold hover:bg-stone-50 last:rounded-b-xl ${timeFilterItemId === i.id ? 'bg-[#A5BEAC]/10 text-[#A5BEAC]' : 'text-stone-800'}`}
-                              >
-                                {(i.name || '').toUpperCase()}
-                              </button>
-                            ))}
-                          {inventory.filter((i: any) => !timeFilterItemSearch.trim() || (i.name || '').toUpperCase().includes(timeFilterItemSearch.trim().toUpperCase())).length === 0 && (
-                            <div className="px-3 py-4 text-xs text-stone-400 font-bold">No pieces match</div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    {(timeFilterDateFrom || timeFilterDateTo || timeFilterItemId) && (
-                      <button
-                        type="button"
-                        onClick={() => { setTimeFilterDateFrom(''); setTimeFilterDateTo(''); setTimeFilterItemId(''); setTimeFilterItemSearch(''); setTimeFilterItemDropdownOpen(false); }}
-                        className="py-2 px-3 rounded-lg text-[10px] font-black uppercase text-stone-500 hover:text-slate-900 border border-stone-200 hover:border-stone-300 transition"
-                      >
-                        Clear
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Recent entries */}
-                  <div>
-                    <h3 className="text-sm font-black uppercase text-slate-900 mb-3">Recent entries</h3>
-                    {filteredTimeEntries.length === 0 ? (
-                      <p className="text-stone-500 text-sm py-6">No time entries yet. Log time to get started.</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {filteredTimeEntries.map((e: any) => {
-                          const workDay = entryWorkLocalDay(e);
-                          const itemName = e.inventory_id ? ((inventory.find((i: any) => i.id === e.inventory_id)?.name || 'Piece').toUpperCase()) : 'General';
-                          const hrs = (Number(e.duration_minutes) / 60).toFixed(2);
-                          const isDeleting = deletingTimeEntryId === e.id;
-                          const hasExplicitWorkDate = !!(e.logged_on && /^\d{4}-\d{2}-\d{2}$/.test(e.logged_on));
-                          return (
-                            <div key={e.id} className="flex items-center justify-between gap-4 py-3 px-4 rounded-xl border border-stone-200 bg-white hover:border-[#A5BEAC]/50 transition">
-                              <div className="min-w-0 flex-1">
-                                <p className="font-bold text-slate-900 truncate">{itemName}</p>
-                                <p className="text-[10px] text-stone-500">
-                                  {hasExplicitWorkDate ? (
-                                    <><span className="font-bold text-stone-600">{workDay.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span><span className="text-stone-400"> · work date</span></>
-                                  ) : (
-                                    <>{workDay.toLocaleDateString()} {new Date(e.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</>
-                                  )}
-                                </p>
-                                {e.note && <p className="text-[10px] text-stone-400 mt-0.5 truncate">{e.note}</p>}
-                              </div>
-                              <div className="flex items-center gap-2 shrink-0">
-                                <span className="text-sm font-black text-[#A5BEAC]">{hrs}h</span>
-                                <button
-                                  type="button"
-                                  onClick={() => openEditTimeModal(e)}
-                                  className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 hover:bg-stone-100 hover:text-[#A5BEAC] transition"
-                                  title="Edit"
-                                >
-                                  <span className="text-xs">✎</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => deleteTimeEntry(e.id)}
-                                  disabled={isDeleting}
-                                  className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 hover:bg-red-50 hover:text-red-600 transition disabled:opacity-50"
-                                  title="Delete"
-                                >
-                                  {isDeleting ? <span className="text-[10px] animate-pulse">…</span> : <span className="text-xs">🗑</span>}
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* LOGIC PANEL */}
-          <div className={`flex flex-col flex-1 min-h-0 min-h-[50vh] lg:min-h-0 lg:max-h-[calc(100vh-5rem)] overflow-y-auto overflow-x-hidden custom-scrollbar scrollbar-gutter-stable ${activeTab !== 'logic' ? 'hidden' : ''}`}>
-            <div className="grid grid-cols-1 gap-8 pt-6 mt-0 md:pt-4 px-4 md:px-6 lg:px-8 pb-[calc(6.25rem+env(safe-area-inset-bottom,0px))] md:pb-8 min-w-0">
-          <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC] min-h-[400px] md:min-h-0 min-w-0">
-            <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">1. MATERIAL CALCULATION DETAIL</h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 text-left">
-              <div className="space-y-6 min-w-0">
-                <div className="bg-stone-50 p-6 md:p-8 rounded-[2rem] border border-stone-100 text-left">
-                  <h3 className="text-xs font-black text-[#A5BEAC] uppercase tracking-widest mb-6">THE LOGIC</h3>
-                  <div className="font-mono text-sm bg-white p-6 rounded-2xl border border-stone-100 text-center shadow-sm">
-                    <p className="text-slate-900 font-bold break-words">Cost = (Spot ÷ 31.1035) × Grams × Purity</p>
-                  </div>
-                </div>
-                <p className="text-xs text-stone-500 leading-relaxed italic px-2 pb-2 overflow-visible">Spot prices are quoted per Troy Ounce. We divide by 31.1035 to get the price per gram, then multiply by the specific metal purity.</p>
-              </div>
-              <div className="bg-stone-50 p-6 md:p-8 rounded-[2rem] border border-stone-100 text-left min-w-0">
-                <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6">PURITY CONSTANTS:</h3>
-                <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-[10px] font-bold text-stone-400 uppercase tracking-tighter">
-                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>24K Gold</span><span>99.9%</span></div>
-                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>22K Gold</span><span>91.6%</span></div>
-                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>18K Gold</span><span>75.0%</span></div>
-                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>14K Gold</span><span>58.3%</span></div>
-                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>10K Gold</span><span>41.7%</span></div>
-                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>Sterling Silver</span><span>92.5%</span></div>
-                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>Plat 950</span><span>95.0%</span></div>
-                  <div className="flex justify-between border-b border-stone-200 pb-1"><span>Palladium</span><span>95.0%</span></div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* New Logic Explanation for Stones & Overhead */}
-          <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC] min-h-[400px] md:min-h-0 min-w-0">
-            <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">2. ADVANCED PRICING LOGIC</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
-              <div className="p-6 md:p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all flex flex-col justify-between">
-                <div>
-                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6">STONE PRICING</h3>
-                  <div className="space-y-4 mb-8">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-white border border-stone-200 flex items-center justify-center font-black text-xs shrink-0">S</div>
-                      <span className="text-xs font-bold text-slate-900 break-words">Stone Retail = Stone Cost × Markup</span>
-                    </div>
-                    <p className="text-xs text-stone-500 leading-relaxed italic">Stones are calculated separately from the main piece markup to allow for competitive diamond pricing (often lower margin) vs findings.</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-6 md:p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all flex flex-col justify-between">
-                <div>
-                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-6">OVERHEAD CALCULATION</h3>
-                  <div className="space-y-4 mb-8">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-white border border-stone-200 flex items-center justify-center font-black text-xs shrink-0">$</div>
-                      <span className="text-xs font-bold text-slate-900 break-words">Flat: Simple dollar addition</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-white border border-stone-200 flex items-center justify-center font-black text-xs shrink-0">%</div>
-                      <span className="text-xs font-bold text-slate-900 break-words">Percent: (Metal + Labor + Other + Stones) × Percentage</span>
-                    </div>
-                    <p className="text-xs text-stone-500 leading-relaxed italic mt-2">Stones are included in the burden base for percentage calculations.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC] min-h-[400px] md:min-h-0 min-w-0">
-            <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">3. PRICE FORMULA DETAIL</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 text-left">
-              <div className="p-6 md:p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all flex flex-col justify-between">
-                <div>
-                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-2">FORMULA A (STANDARD MULTIPLIER)</h3>
-                  <p className="text-[10px] text-stone-500 leading-relaxed mb-4">Uses a basic markup of 2–3× on your total cost (metal, labor, overhead). Industry standard for straightforward pricing.</p>
-                  <div className="space-y-4 mb-8">
-                    <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-white border border-stone-200 flex items-center justify-center font-black text-xs shrink-0 mt-0.5">B</div>
-                      <div className="flex-1">
-                        <span className="text-xs font-bold text-stone-400 block mb-1">Base Cost =</span>
-                        <span className="text-xs font-bold text-slate-900 break-words">Metal + Labor + Other + Overhead</span>
-                        <span className="text-xs text-stone-500 italic block mt-1">(Stones excluded from base)</span>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-white border border-stone-200 flex items-center justify-center font-black text-xs shrink-0 mt-0.5">R</div>
-                      <div className="flex-1">
-                        <span className="text-xs font-bold text-stone-400 block mb-1">Retail Price =</span>
-                        <span className="text-xs font-bold text-slate-900 break-words">(Base Cost × {retailMultA}) + (Stones × Stone Markup)</span>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-white border border-stone-200 flex items-center justify-center font-black text-xs shrink-0 mt-0.5">W</div>
-                      <div className="flex-1">
-                        <span className="text-xs font-bold text-stone-400 block mb-1">Displayed Wholesale =</span>
-                        <span className="text-xs font-bold text-slate-900 break-words">Base Cost + Stone Cost</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-6 md:p-8 rounded-[2rem] border border-stone-100 bg-stone-50 transition-all flex flex-col justify-between">
-                <div>
-                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-2">FORMULA B (MATERIALS MARKUP)</h3>
-                  <p className="text-[10px] text-stone-500 leading-relaxed mb-4">Prioritizes materials: metal + other costs get a markup (typically 1.5–2×), then labor and overhead are added. Industry standard for material-focused pieces.</p>
-                  <div className="space-y-4 mb-8">
-                    <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-white border border-stone-200 flex items-center justify-center font-black text-xs shrink-0 mt-0.5">B</div>
-                      <div className="flex-1">
-                        <span className="text-xs font-bold text-stone-400 block mb-1">Base Cost =</span>
-                        <span className="text-xs font-bold text-slate-900 break-words">((Metal + Other) × {markupB}) + Labor + Overhead</span>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-white border border-stone-200 flex items-center justify-center font-black text-xs shrink-0 mt-0.5">R</div>
-                      <div className="flex-1">
-                        <span className="text-xs font-bold text-stone-400 block mb-1">Retail Price =</span>
-                        <span className="text-xs font-bold text-slate-900 break-words">(Base Cost × 2) + (Stones × Stone Markup)</span>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-white border border-stone-200 flex items-center justify-center font-black text-xs shrink-0 mt-0.5">W</div>
-                      <div className="flex-1">
-                        <span className="text-xs font-bold text-stone-400 block mb-1">Displayed Wholesale =</span>
-                        <span className="text-xs font-bold text-slate-900 break-words">Base Cost + Stone Cost</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-6 md:p-8 rounded-[2rem] border-2 border-[#A5BEAC] bg-[#A5BEAC]/5 transition-all flex flex-col justify-between">
-                <div>
-                  <h3 className="text-xs font-black text-[#A5BEAC] uppercase tracking-widest mb-2">CUSTOM FORMULAS</h3>
-                  <p className="text-[10px] text-stone-500 leading-relaxed mb-4">Build your own pricing logic. You define three formulas that work together to calculate your prices.</p>
-                  <div className="space-y-4 mb-6">
-                    <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-[#A5BEAC] text-white flex items-center justify-center font-black text-xs shrink-0 mt-0.5">B</div>
-                      <div className="flex-1">
-                        <span className="text-xs font-bold text-stone-400 block mb-1">Base Cost</span>
-                        <span className="text-xs text-slate-900 break-words">Your materials + labor + overhead. Combine values with +, −, ×, ÷.</span>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-[#A5BEAC] text-white flex items-center justify-center font-black text-xs shrink-0 mt-0.5">W</div>
-                      <div className="flex-1">
-                        <span className="text-xs font-bold text-stone-400 block mb-1">Wholesale</span>
-                        <span className="text-xs text-slate-900 break-words">Typically Base + Stone cost, or your own markup.</span>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-[#A5BEAC] text-white flex items-center justify-center font-black text-xs shrink-0 mt-0.5">R</div>
-                      <div className="flex-1">
-                        <span className="text-xs font-bold text-stone-400 block mb-1">Retail</span>
-                        <span className="text-xs text-slate-900 break-words">Final price. Can use Base, multipliers, and stone retail.</span>
-                      </div>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => { setActiveTab('formulas'); setFormulaEditorOpen(true); setEditingFormulaId(null); setFormulaDraftName(''); setFormulaDraftTokens({ base: formulaToTokens(PRESET_A.base), wholesale: formulaToTokens(PRESET_A.wholesale), retail: formulaToTokens(PRESET_A.retail) }); }}
-                    className="w-full py-3 rounded-xl text-[10px] font-black uppercase bg-[#A5BEAC] text-white hover:bg-slate-900 transition shadow-sm"
-                  >
-                    Create a formula →
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-            </div>
-          </div>
+          )}
 
         <div className="flex flex-col items-center justify-center gap-2 pt-8 pb-[calc(2rem+env(safe-area-inset-bottom,0px))] md:py-8 border-t border-stone-200 mt-10">
             <a href="https://bearsilverandstone.com" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400">Powered by</span>
-              <img
-                src="/icon.png?v=2"
+              <NextImage
+                src={appIconHeaderPathForImage()}
                 alt="Bear Silver and Stone"
+                width={192}
+                height={192}
                 className="w-6 h-6 object-contain brightness-110 contrast-125 mb-3"
                 style={{ mixBlendMode: 'multiply' }}
+                sizes="24px"
               />
               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900">Bear Silver and Stone</span>
             </a>

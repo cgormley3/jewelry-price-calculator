@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { appIconPwaPath } from "@/lib/app-icon";
 import { IOS_PWA_STARTUP_IMAGES } from "./pwa-apple-splash";
 import { AuthProvider } from "./providers";
 
@@ -17,8 +18,8 @@ export const metadata: Metadata = {
     startupImage: IOS_PWA_STARTUP_IMAGES,
   },
   icons: {
-    icon: '/icon.png?v=5',
-    apple: "/icon.png?v=5",
+    icon: appIconPwaPath(),
+    apple: appIconPwaPath(),
   },
 };
 
@@ -35,13 +36,31 @@ export const viewport: Viewport = {
   themeColor: PWA_THEME,
 };
 
+function supabasePreconnectOrigin(): string | null {
+  const raw = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  if (!raw || !(raw.startsWith("http://") || raw.startsWith("https://"))) return null;
+  try {
+    return new URL(raw).origin;
+  } catch {
+    return null;
+  }
+}
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const supabaseOrigin = supabasePreconnectOrigin();
   return (
     <html lang="en">
+      <head>
+        <link rel="preconnect" href="https://accounts.google.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://challenges.cloudflare.com" crossOrigin="anonymous" />
+        {supabaseOrigin ? (
+          <link rel="preconnect" href={supabaseOrigin} crossOrigin="anonymous" />
+        ) : null}
+      </head>
       <body className="antialiased" suppressHydrationWarning>
         <AuthProvider>
           {children}
