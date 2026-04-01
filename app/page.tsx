@@ -139,6 +139,11 @@ const MAIN_NAV_TABS: { id: MainNavTabId; label: string }[] = [
 const PRIMARY_MOBILE_NAV_IDS: MainNavTabId[] = ['calculator', 'vault', 'time'];
 const SECONDARY_MAIN_NAV = MAIN_NAV_TABS.filter((t) => !PRIMARY_MOBILE_NAV_IDS.includes(t.id));
 
+/** Cap automatic background metal price fetches (focus/visibility/mount) to once per minute. */
+const PRICE_NETWORK_MIN_INTERVAL_MS = 60_000;
+/** sessionStorage cache max age for hydrating spot UI without a network call */
+const PRICE_SESSION_MAX_AGE_MS = 60_000;
+
 export default function Home() {
   // Check if Turnstile is configured (for human verification)
   const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '';
@@ -340,6 +345,7 @@ export default function Home() {
     []
   );
   const [pricesLoaded, setPricesLoaded] = useState(false);
+  const pricesLoadedRef = useRef(false);
   const [user, setUser] = useState<any>(null);
   /** Same as Compare tab’s “Upgrade to Vault+”: signed in + subscription known + not subscribed. */
   const showVaultPlusUpgradeLikeCompare = Boolean(user && subscriptionStatus && !subscriptionStatus.subscribed);
@@ -641,6 +647,8 @@ export default function Home() {
   }, []);
 
   const fetchInProgressRef = useRef(false);
+  /** Last time we started a network metal-prices fetch (throttle auto refreshes). */
+  const lastPriceNetworkFetchAtRef = useRef(0);
   /** Coalesces overlapping vault loads (dev Strict Mode, auth burst, preview). */
   const fetchInventoryInFlightRef = useRef<Promise<void> | null>(null);
   const fetchVersionRef = useRef(0);
@@ -735,14 +743,17 @@ export default function Home() {
     return () => document.removeEventListener('keydown', onKey);
   }, [mainNavMenuOpen]);
 
-  const fetchPrices = useCallback(async () => {
+  useEffect(() => {
+    pricesLoadedRef.current = pricesLoaded;
+  }, [pricesLoaded]);
+
+  const fetchPrices = useCallback(async (opts?: { force?: boolean }) => {
+    const force = Boolean(opts?.force);
     const cachedData = sessionStorage.getItem('vault_prices');
     const now = Date.now();
 
-    // Use cache only if fresh (< 2 min) so we don't show stale data while fetching
     const cachedTime = typeof window !== 'undefined' ? sessionStorage.getItem('vault_prices_time') : null;
-    const maxAgeMs = 2 * 60 * 1000;
-    const isFresh = cachedTime && (Date.now() - parseInt(cachedTime, 10)) < maxAgeMs;
+    const isFresh = cachedTime && (Date.now() - parseInt(cachedTime, 10)) < PRICE_SESSION_MAX_AGE_MS;
     if (cachedData && isFresh) {
       try {
         const parsed = JSON.parse(cachedData);
@@ -753,8 +764,16 @@ export default function Home() {
       } catch (_) { /* ignore */ }
     }
 
+    if (!force) {
+      const lastNet = lastPriceNetworkFetchAtRef.current;
+      if (lastNet > 0 && now - lastNet < PRICE_NETWORK_MIN_INTERVAL_MS) {
+        return;
+      }
+    }
+
     // Fetch prices from API (Supabase metal_prices)
     if (fetchInProgressRef.current) return;
+    lastPriceNetworkFetchAtRef.current = now;
     fetchInProgressRef.current = true;
     const myVersion = ++fetchVersionRef.current;
 
@@ -807,7 +826,7 @@ export default function Home() {
     }
 
     function tryUseCacheOnlyWhenEmpty() {
-      if (!pricesLoaded && cachedData) {
+      if (!pricesLoadedRef.current && cachedData) {
         try {
           const parsed = JSON.parse(cachedData);
           if (parsed.gold > 0 || parsed.silver > 0) {
@@ -817,7 +836,7 @@ export default function Home() {
         } catch (_) { /* ignore */ }
       }
     }
-  }, [pricesLoaded]);
+  }, []);
 
   useEffect(() => {
     vaultPullPxRef.current = vaultPullPx;
@@ -912,7 +931,7 @@ export default function Home() {
         }
         void (async () => {
           try {
-            await fetchPricesRef.current();
+            await fetchPricesRef.current({ force: true });
           } finally {
             vaultPullRefreshingForRef.current = false;
             setVaultPullRefreshing(false);
@@ -1138,12 +1157,11 @@ export default function Home() {
       if (mounted) setLoading(false);
     }, 10000);
 
-    // Apply cached prices only if fresh (< 2 min) so refresh doesn't show stale data
+    // Apply cached prices only if fresh so we don't flash stale numbers before fetch
     try {
       const cached = typeof window !== 'undefined' ? sessionStorage.getItem('vault_prices') : null;
       const cachedTime = typeof window !== 'undefined' ? sessionStorage.getItem('vault_prices_time') : null;
-      const maxAgeMs = 2 * 60 * 1000; // 2 minutes
-      const isFresh = cachedTime && (Date.now() - parseInt(cachedTime, 10)) < maxAgeMs;
+      const isFresh = cachedTime && (Date.now() - parseInt(cachedTime, 10)) < PRICE_SESSION_MAX_AGE_MS;
       if (cached && isFresh) {
         const parsed = JSON.parse(cached);
         if (parsed.gold > 0 || parsed.silver > 0 || parsed.platinum > 0 || parsed.palladium > 0) {
@@ -3924,11 +3942,11 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-stone-50 p-4 md:p-10 text-slate-900 font-sans text-left relative">
+    <div className="min-h-screen bg-stone-50 px-4 pt-[calc(1rem+env(safe-area-inset-top,0px))] pb-[calc(1rem+env(safe-area-inset-bottom,0px))] md:p-10 text-slate-900 font-sans text-left relative">
 
       {/* Image Adjuster Modal */}
       {cropImage && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[500] flex items-center justify-center p-4 animate-in fade-in">
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[500] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl space-y-4">
             <h3 className="text-lg font-black uppercase text-center text-slate-900">Adjust Photo</h3>
             <p className="text-[9px] text-stone-500 text-center font-medium">
@@ -4026,7 +4044,7 @@ export default function Home() {
 
       {/* Profile Settings Modal */}
       {showProfileModal && user && !user.is_anonymous && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[260] flex items-center justify-center p-4 animate-in fade-in">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[260] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-6">
             <div className="flex justify-between items-center">
               <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Profile</h3>
@@ -4198,7 +4216,7 @@ export default function Home() {
 
       {/* Vault+ Upgrade Modal */}
       {showVaultPlusModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4 animate-in fade-in">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[250] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-6">
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Upgrade to Vault+</h3>
             {(!user || user.is_anonymous) ? (
@@ -4252,7 +4270,7 @@ export default function Home() {
       {/* Exports & bulk saves — not the same as vault “Opening…” (`loading`). */}
       {blockingWorkBanner && (
         <div
-          className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[420] flex items-center justify-center p-4"
+          className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[420] flex items-center justify-center pt-4 px-4 pb-modal-safe"
           role="status"
           aria-live="polite"
           aria-busy="true"
@@ -4271,7 +4289,7 @@ export default function Home() {
 
       {/* PDF Options Modal */}
       {showPDFOptions && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-6">
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">PDF Options</h3>
 
@@ -4352,7 +4370,7 @@ export default function Home() {
 
       {/* Connect Shopify Modal – hidden when SHOPIFY_FEATURE_ENABLED is false */}
       {SHOPIFY_FEATURE_ENABLED && showShopifyConnectModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-6">
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Connect Shopify</h3>
             <p className="text-[10px] text-stone-500 font-bold">Enter your Shopify store name (e.g. mystore or mystore.myshopify.com)</p>
@@ -4373,7 +4391,7 @@ export default function Home() {
 
       {/* Export to Shopify Options Modal – hidden when SHOPIFY_FEATURE_ENABLED is false */}
       {SHOPIFY_FEATURE_ENABLED && showShopifyExportOptions && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-6">
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Export to Shopify</h3>
             <p className="text-[10px] text-stone-500 font-bold">Choose what to sync. Existing Shopify products with matching SKU will be updated, not duplicated.</p>
@@ -4425,7 +4443,7 @@ export default function Home() {
       )}
 
       {showSiteProductCsvModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-6 max-h-[90vh] overflow-y-auto">
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Export CSV for your site</h3>
             <p className="text-[10px] text-stone-500 font-bold">Download a product file to import into Shopify or Squarespace (no store connection required).</p>
@@ -4527,7 +4545,7 @@ export default function Home() {
 
       {/* Shopify Export Progress Modal – hidden when SHOPIFY_FEATURE_ENABLED is false */}
       {SHOPIFY_FEATURE_ENABLED && shopifyExportProgress === 'exporting' && (
-        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[400] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[400] flex items-center justify-center pt-4 px-4 pb-modal-safe">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] border-2 border-[#A5BEAC] p-10 space-y-6 shadow-2xl animate-in zoom-in-95 text-center">
             <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto bg-[#A5BEAC]/20 animate-pulse">
               <span className="text-3xl">⟳</span>
@@ -4540,7 +4558,7 @@ export default function Home() {
 
       {/* Shopify Export Confirmation Modal – hidden when SHOPIFY_FEATURE_ENABLED is false */}
       {SHOPIFY_FEATURE_ENABLED && shopifyExportProgress && shopifyExportProgress !== 'exporting' && (
-        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[400] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[400] flex items-center justify-center pt-4 px-4 pb-modal-safe">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] border-2 border-[#A5BEAC] p-10 space-y-6 shadow-2xl animate-in zoom-in-95 text-center">
             <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto bg-[#A5BEAC]/10 text-[#A5BEAC]">
               <span className="text-2xl">✓</span>
@@ -4562,7 +4580,7 @@ export default function Home() {
       )}
 
       {editingItem && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-6">
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Manual Price Edit</h3>
             {/* Rounding options */}
@@ -4596,7 +4614,7 @@ export default function Home() {
 
       {/* RECALCULATE MODAL (Individual) */}
       {recalcItem && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] max-h-[95vh] overflow-hidden flex flex-col">
             <div className="overflow-y-auto flex-1 min-h-0 p-8 space-y-5 custom-scrollbar">
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Scenario Calculator</h3>
@@ -4761,7 +4779,7 @@ export default function Home() {
 
       {/* Log Time Modal */}
       {showLogTimeModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-5">
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">{editingTimeEntryId ? 'Edit Time Entry' : 'Log Time'}</h3>
             <p className="text-[10px] text-stone-400 font-bold uppercase">
@@ -4854,7 +4872,7 @@ export default function Home() {
 
       {/* Quick Add Piece Modal (draft - time-only) */}
       {showQuickAddPiece && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-5">
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Quick Add Piece</h3>
             <p className="text-[10px] text-stone-400 font-bold uppercase">Create a draft piece to track time. Add metal and pricing later.</p>
@@ -4875,7 +4893,7 @@ export default function Home() {
 
       {/* NEW: GLOBAL RECALCULATE MODAL */}
       {showGlobalRecalc && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] max-h-[95vh] overflow-hidden flex flex-col">
             <div className="overflow-y-auto flex-1 min-h-0 p-8 space-y-5 custom-scrollbar">
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Recalculate all items</h3>
@@ -4953,7 +4971,7 @@ export default function Home() {
       )}
 
       {showResetModal && (
-        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[300] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[300] flex items-center justify-center pt-4 px-4 pb-modal-safe">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] border-2 border-[#A5BEAC] p-8 space-y-6 shadow-2xl animate-in zoom-in-95">
             <div className="text-center">
               <h3 className="text-xl font-black uppercase italic tracking-tighter">Secure the Vault</h3>
@@ -4986,7 +5004,7 @@ export default function Home() {
       )}
 
       {notification && (
-        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[400] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[400] flex items-center justify-center pt-4 px-4 pb-modal-safe">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] border-2 border-[#A5BEAC] p-10 space-y-6 shadow-2xl animate-in zoom-in-95 text-center">
             <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-2 ${notification.type === 'error' ? 'bg-red-50 text-red-500' :
                 notification.type === 'info' ? 'bg-blue-50 text-blue-500' :
@@ -5025,7 +5043,7 @@ export default function Home() {
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto flex flex-col min-h-[calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] gap-6 md:min-h-0 md:space-y-6 md:gap-0 pb-[calc(4.85rem+env(safe-area-inset-bottom))] md:pb-[env(safe-area-inset-bottom)]">
+      <div className="max-w-7xl mx-auto flex flex-col min-h-[calc(100dvh-2rem-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px))] gap-6 md:min-h-0 md:space-y-6 md:gap-0 pb-[calc(4.85rem+env(safe-area-inset-bottom,0px))] md:pb-[env(safe-area-inset-bottom,0px)]">
         {/* HEADER */}
         <div className="flex flex-col md:flex-row justify-between items-center bg-white px-6 py-8 rounded-[2rem] border-2 shadow-sm gap-8 shrink-0 relative border-[#A5BEAC]">
           <div className="hidden md:block md:w-1/4" />
@@ -5276,7 +5294,7 @@ export default function Home() {
           {/* CALCULATOR PANEL */}
           <div className={`flex flex-col flex-1 min-h-0 min-h-[50vh] lg:min-h-0 lg:max-h-[calc(100vh-5rem)] ${activeTab !== 'calculator' ? 'hidden' : ''}`}>
             <div className="bg-white rounded-[2rem] shadow-xl border-2 border-[#A5BEAC] overflow-hidden lg:h-full lg:min-h-0 lg:flex lg:flex-col">
-              <div className="overflow-y-auto lg:overflow-hidden lg:flex-1 lg:min-h-0 lg:flex lg:flex-col p-8 space-y-4 lg:space-y-4 min-h-0 custom-scrollbar">
+              <div className="overflow-y-auto lg:overflow-hidden lg:flex-1 lg:min-h-0 lg:flex lg:flex-col px-4 pt-5 pb-[calc(6.25rem+env(safe-area-inset-bottom,0px))] md:p-8 md:pb-8 space-y-4 lg:space-y-4 min-h-0 custom-scrollbar">
               <h2 className="text-2xl font-black uppercase italic tracking-tighter text-slate-900 shrink-0">Calculator</h2>
 
               {/* Desktop: side-by-side layout with independent scrolling per column */}
@@ -5286,16 +5304,19 @@ export default function Home() {
               <div className="space-y-4 lg:p-5 lg:pr-6 lg:overflow-y-auto lg:custom-scrollbar lg:flex-1 lg:min-h-0">
               <p className="text-[10px] font-black uppercase tracking-widest text-[#A5BEAC] lg:mb-1 hidden lg:block">Components</p>
               {/* Calculator section tabs: one visible at a time */}
-              <div className="space-y-2">
-                <p className="text-[11px] sm:text-xs font-bold text-stone-500 leading-snug">
-                  <span className="block sm:inline">What&apos;s in this piece?</span>{' '}
-                  <span className="text-stone-400 font-normal">Tap a section to add metal, stones, or labor.</span>
-                </p>
-                <div className="grid grid-cols-3 gap-1.5 sm:flex sm:gap-2 p-2 rounded-xl bg-stone-100/80 border border-stone-200 min-w-0">
+              <div className="space-y-3 max-md:scroll-mt-2">
+                <div>
+                  <p className="text-[11px] sm:text-xs font-bold text-slate-800 leading-tight">What&apos;s in this piece?</p>
+                  <p className="text-[10px] sm:text-xs text-stone-500 font-medium leading-snug mt-1 max-md:max-w-[20rem]">
+                    <span className="md:hidden">Choose Metal, Stones, or Labor below.</span>
+                    <span className="hidden md:inline">Tap a section to add metal, stones, or labor.</span>
+                  </p>
+                </div>
+                <div className="grid grid-cols-3 gap-2 sm:flex sm:gap-2 p-2.5 rounded-2xl bg-white border border-stone-200/90 shadow-sm min-w-0">
                   <button
                     type="button"
                     onClick={() => setActiveCalculatorTab('metal')}
-                    className={`flex items-center justify-center gap-1 sm:gap-1.5 px-2 py-2.5 sm:px-4 sm:py-3 rounded-lg min-h-[44px] text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all min-w-0 ${activeCalculatorTab === 'metal' ? 'bg-[#A5BEAC] text-white shadow-sm' : 'bg-white text-slate-700 border border-stone-200 hover:border-stone-300 hover:bg-stone-50 active:bg-stone-100'}`}
+                    className={`flex items-center justify-center gap-1 sm:gap-1.5 px-2 py-2.5 sm:px-4 sm:py-3 rounded-xl min-h-[44px] text-[10px] sm:text-xs font-black uppercase tracking-wide transition-all min-w-0 ${activeCalculatorTab === 'metal' ? 'bg-[#A5BEAC] text-white shadow-sm ring-1 ring-[#A5BEAC]/30' : 'bg-stone-50 text-slate-700 border border-stone-200/90 hover:border-[#A5BEAC]/40 hover:bg-white active:bg-stone-100'}`}
                   >
                     <span className="truncate">Metal</span>
                     <span
@@ -5308,7 +5329,7 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={() => setActiveCalculatorTab('stones')}
-                    className={`flex items-center justify-center gap-1 sm:gap-1.5 px-2 py-2.5 sm:px-4 sm:py-3 rounded-lg min-h-[44px] text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all min-w-0 ${activeCalculatorTab === 'stones' ? 'bg-[#A5BEAC] text-white shadow-sm' : 'bg-white text-slate-700 border border-stone-200 hover:border-stone-300 hover:bg-stone-50 active:bg-stone-100'}`}
+                    className={`flex items-center justify-center gap-1 sm:gap-1.5 px-2 py-2.5 sm:px-4 sm:py-3 rounded-xl min-h-[44px] text-[10px] sm:text-xs font-black uppercase tracking-wide transition-all min-w-0 ${activeCalculatorTab === 'stones' ? 'bg-[#A5BEAC] text-white shadow-sm ring-1 ring-[#A5BEAC]/30' : 'bg-stone-50 text-slate-700 border border-stone-200/90 hover:border-[#A5BEAC]/40 hover:bg-white active:bg-stone-100'}`}
                   >
                     <span className="truncate">Stones</span>
                     <span
@@ -5325,7 +5346,7 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={() => setActiveCalculatorTab('labor')}
-                    className={`flex items-center justify-center gap-1 sm:gap-1.5 px-2 py-2.5 sm:px-4 sm:py-3 rounded-lg min-h-[44px] text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all min-w-0 ${activeCalculatorTab === 'labor' ? 'bg-[#A5BEAC] text-white shadow-sm' : 'bg-white text-slate-700 border border-stone-200 hover:border-stone-300 hover:bg-stone-50 active:bg-stone-100'}`}
+                    className={`flex items-center justify-center gap-1 sm:gap-1.5 px-2 py-2.5 sm:px-4 sm:py-3 rounded-xl min-h-[44px] text-[10px] sm:text-xs font-black uppercase tracking-wide transition-all min-w-0 ${activeCalculatorTab === 'labor' ? 'bg-[#A5BEAC] text-white shadow-sm ring-1 ring-[#A5BEAC]/30' : 'bg-stone-50 text-slate-700 border border-stone-200/90 hover:border-[#A5BEAC]/40 hover:bg-white active:bg-stone-100'}`}
                   >
                     <span className="truncate sm:hidden">Labor</span>
                     <span className="truncate hidden sm:inline">Labor & other</span>
@@ -5344,9 +5365,9 @@ export default function Home() {
               </div>
 
               {activeCalculatorTab === 'metal' && (
-              <div className="space-y-2 pt-3">
+              <div className="space-y-2 pt-2 md:pt-3">
                 <p className="text-[10px] font-black uppercase tracking-wider text-stone-400">Metal components</p>
-                <div className="p-4 bg-stone-50 rounded-2xl border-2 border-dotted border-stone-300 space-y-3">
+                <div className="p-4 max-md:bg-white max-md:border max-md:border-stone-200 max-md:shadow-sm md:bg-stone-50 rounded-2xl md:border-2 md:border-dotted md:border-stone-300 space-y-3">
                 <select className="w-full p-3 border border-stone-200 rounded-xl font-bold bg-white focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none transition-shadow" value={tempMetal} onChange={e => setTempMetal(e.target.value)}>
                   <option>Sterling Silver</option><option>10K Gold</option><option>14K Gold</option><option>18K Gold</option><option>22K Gold</option><option>24K Gold</option><option>Platinum 950</option><option>Palladium</option>
                 </select>
@@ -5393,9 +5414,9 @@ export default function Home() {
               )}
 
               {activeCalculatorTab === 'stones' && (
-              <div className="space-y-2 pt-3">
+              <div className="space-y-2 pt-2 md:pt-3">
                 <p className="text-[10px] font-black uppercase tracking-wider text-stone-400">Stones</p>
-                <div className="p-4 bg-stone-50 rounded-2xl border-2 border-dotted border-stone-300 space-y-3">
+                <div className="p-4 max-md:bg-white max-md:border max-md:border-stone-200 max-md:shadow-sm md:bg-stone-50 rounded-2xl md:border-2 md:border-dotted md:border-stone-300 space-y-3">
                 <input
                   type="text"
                   placeholder="Stone name (optional — e.g. Diamond, Ruby)"
@@ -5447,7 +5468,7 @@ export default function Home() {
               )}
 
               {activeCalculatorTab === 'labor' && (
-              <div className="space-y-2 pt-3">
+              <div className="space-y-2 pt-2 md:pt-3">
                 <p className="text-[10px] font-black uppercase tracking-wider text-stone-400">Labor & overhead</p>
                 <div className="space-y-3">
                   <div className="grid grid-cols-2 gap-4">
@@ -5887,7 +5908,7 @@ export default function Home() {
                     {/* Filter Menu Dropdown - rendered via portal to avoid overflow clipping when vault has no items */}
                     {showFilterMenu && filterDropdownRect && typeof document !== 'undefined' && createPortal(
                       <div
-                        className="filter-menu-dropdown fixed w-[min(18rem,calc(100vw-1rem))] max-h-[min(85dvh,calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-1rem))] bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[9999] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2"
+                        className="filter-menu-dropdown fixed w-[min(18rem,calc(100vw-1rem))] max-h-[min(85dvh,calc(100dvh-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px)-1rem))] bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[9999] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2"
                         style={{ top: filterDropdownRect.top, left: filterDropdownRect.left }}
                       >
                         <div className="overflow-y-auto overscroll-contain touch-pan-y p-4 space-y-4 min-h-0 flex-1 custom-scrollbar">
@@ -6073,7 +6094,7 @@ export default function Home() {
             <div className="flex-1 min-h-0 overflow-hidden rounded-b-[2.5rem] bg-stone-50/20 flex flex-col">
             <div
               ref={vaultPullScrollRef}
-              className="flex-1 min-h-0 max-h-[34rem] md:max-h-none overflow-y-auto p-4 md:p-6 pb-[calc(14.25rem+env(safe-area-inset-bottom))] md:pb-[calc(10rem+env(safe-area-inset-bottom))] custom-scrollbar overscroll-behavior-contain touch-pan-y [overflow-anchor:none]"
+              className="flex-1 min-h-0 max-h-[34rem] md:max-h-none overflow-y-auto p-4 md:p-6 pb-[calc(14.25rem+env(safe-area-inset-bottom,0px))] md:pb-[calc(10rem+env(safe-area-inset-bottom,0px))] custom-scrollbar overscroll-behavior-contain touch-pan-y [overflow-anchor:none]"
             >
               <div className="will-change-transform" style={{ transform: `translate3d(0, ${vaultPullPx}px, 0)` }}>
                 {(vaultPullPx > 6 || vaultPullRefreshing) && (
@@ -6777,7 +6798,7 @@ export default function Home() {
                     </button>
                     {showCompareFilterMenu && compareFilterDropdownRect && typeof document !== 'undefined' && createPortal(
                       <div
-                        className="fixed w-[min(18rem,calc(100vw-1rem))] max-h-[min(85dvh,calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-1rem))] bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[9999] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2"
+                        className="fixed w-[min(18rem,calc(100vw-1rem))] max-h-[min(85dvh,calc(100dvh-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px)-1rem))] bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[9999] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2"
                         style={{ top: compareFilterDropdownRect.top, left: compareFilterDropdownRect.left }}
                       >
                         <div className="overflow-y-auto overscroll-contain touch-pan-y p-4 space-y-4 min-h-0 flex-1 custom-scrollbar">
@@ -6939,7 +6960,7 @@ export default function Home() {
               )}
             </div>
             {user && subscriptionStatus?.subscribed && (
-            <div className="flex-1 overflow-x-auto overflow-y-auto overscroll-x-contain touch-pan-x px-2 pb-3 pt-1 sm:p-6 [scrollbar-gutter:stable]">
+            <div className="flex-1 overflow-x-auto overflow-y-auto overscroll-x-contain touch-pan-x px-2 pt-1 pb-[calc(6.25rem+env(safe-area-inset-bottom,0px))] sm:p-6 sm:pb-6 [scrollbar-gutter:stable]">
               {compareFilteredInventory.length === 0 ? (
                 <div className="text-center py-12 text-stone-500 text-sm">
                   {inventory.length === 0 ? 'Add items to your vault to compare prices. Use the Vault tab to add items.' : 'No items match your filters. Try adjusting filters or search.'}
@@ -7104,7 +7125,7 @@ export default function Home() {
               </div>
               <p className="text-[10px] text-stone-500">Create custom price formulas. Star one to make it the default in the Calculator.</p>
             </div>
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            <div className="flex-1 overflow-y-auto p-6 max-md:pb-[calc(6.25rem+env(safe-area-inset-bottom,0px))] space-y-4">
               {!user ? (
                 <div className="text-center py-12 text-stone-400 text-sm font-bold">
                   Sign in to create and manage formulas.
@@ -7374,7 +7395,7 @@ export default function Home() {
               </div>
               <p className="text-[10px] text-stone-500">Track time spent on pieces or general shop work.</p>
             </div>
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            <div className="flex-1 overflow-y-auto p-6 max-md:pb-[calc(6.25rem+env(safe-area-inset-bottom,0px))] space-y-6">
               {!user ? (
                 <div className="text-center py-12 text-stone-400 text-sm font-bold">
                   Sign in to track time.
@@ -7602,7 +7623,7 @@ export default function Home() {
 
           {/* LOGIC PANEL */}
           <div className={`flex flex-col flex-1 min-h-0 min-h-[50vh] lg:min-h-0 lg:max-h-[calc(100vh-5rem)] overflow-y-auto overflow-x-hidden custom-scrollbar scrollbar-gutter-stable ${activeTab !== 'logic' ? 'hidden' : ''}`}>
-            <div className="grid grid-cols-1 gap-8 pt-6 mt-0 md:pt-4 px-4 md:px-6 lg:px-8 pb-8 min-w-0">
+            <div className="grid grid-cols-1 gap-8 pt-6 mt-0 md:pt-4 px-4 md:px-6 lg:px-8 pb-[calc(6.25rem+env(safe-area-inset-bottom,0px))] md:pb-8 min-w-0">
           <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border-2 border-[#A5BEAC] min-h-[400px] md:min-h-0 min-w-0">
             <h2 className="text-xl font-black uppercase italic tracking-tighter mb-8 text-slate-900 text-left underline decoration-[#A5BEAC] decoration-4 underline-offset-8">1. MATERIAL CALCULATION DETAIL</h2>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 text-left">
@@ -7772,7 +7793,7 @@ export default function Home() {
             </div>
           </div>
 
-        <div className="flex flex-col items-center justify-center gap-2 py-8 border-t border-stone-200 mt-10">
+        <div className="flex flex-col items-center justify-center gap-2 pt-8 pb-[calc(2rem+env(safe-area-inset-bottom,0px))] md:py-8 border-t border-stone-200 mt-10">
             <a href="https://bearsilverandstone.com" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400">Powered by</span>
               <img
@@ -7792,7 +7813,7 @@ export default function Home() {
       </div>
 
       <nav
-        className="md:hidden fixed bottom-0 inset-x-0 z-[270] pointer-events-none px-3 pb-[calc(env(safe-area-inset-bottom)+0.45rem)] pt-0"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-[270] pointer-events-none pt-0 pl-[max(0.75rem,env(safe-area-inset-left,0px))] pr-[max(0.75rem,env(safe-area-inset-right,0px))] pb-[calc(env(safe-area-inset-bottom,0px)+0.625rem)]"
         role="navigation"
         aria-label="Primary"
       >
