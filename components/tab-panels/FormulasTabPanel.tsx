@@ -107,7 +107,7 @@ export default function FormulasTabPanel(props: FormulasTabPanelProps) {
           <div className="bg-white rounded-[2.5rem] border-2 border-brand shadow-sm flex flex-col flex-1 min-h-0 min-h-[50vh] lg:min-h-0 lg:max-h-[calc(100vh-5rem)] overflow-hidden">
             <div className="p-6 border-b border-stone-100 bg-white space-y-4 rounded-t-[2.5rem] shrink-0">
               <div className="flex justify-between items-center">
-                <h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Saved Formulas</h2>
+                <h2 className="text-xl font-black uppercase tracking-tight text-foreground">Saved Formulas</h2>
                 <button
                   type="button"
                   onClick={() => {
@@ -116,7 +116,7 @@ export default function FormulasTabPanel(props: FormulasTabPanelProps) {
                     setFormulaDraftTokens({ base: formulaToTokens(PRESET_A.base), wholesale: formulaToTokens(PRESET_A.wholesale), retail: formulaToTokens(PRESET_A.retail) });
                     setFormulaEditorOpen(true);
                   }}
-                  className="px-4 py-2 rounded-xl bg-brand text-white text-xs font-black uppercase hover:bg-slate-900 transition"
+                  className="px-4 py-2 rounded-xl bg-brand text-white text-xs font-black uppercase hover:bg-forest transition"
                 >
                   Create formula
                 </button>
@@ -139,7 +139,7 @@ export default function FormulasTabPanel(props: FormulasTabPanelProps) {
                       setFormulaDraftTokens({ base: formulaToTokens(PRESET_A.base), wholesale: formulaToTokens(PRESET_A.wholesale), retail: formulaToTokens(PRESET_A.retail) });
                       setFormulaEditorOpen(true);
                     }}
-                    className="px-4 py-2 rounded-xl bg-brand text-white text-xs font-black uppercase hover:bg-slate-900 transition"
+                    className="px-4 py-2 rounded-xl bg-brand text-white text-xs font-black uppercase hover:bg-forest transition"
                   >
                     Create your first formula
                   </button>
@@ -251,7 +251,7 @@ export default function FormulasTabPanel(props: FormulasTabPanelProps) {
                       }}
                       disabled={savingFormula || !formulaValid}
                       title={!formulaValid ? 'Formula must be valid to save' : undefined}
-                      className="px-4 py-2 rounded-xl bg-brand text-white text-xs font-black uppercase hover:bg-slate-900 transition disabled:opacity-50"
+                      className="px-4 py-2 rounded-xl bg-brand text-white text-xs font-black uppercase hover:bg-forest transition disabled:opacity-50"
                     >
                       {savingFormula ? 'Saving…' : 'Save'}
                     </button>
@@ -276,7 +276,7 @@ export default function FormulasTabPanel(props: FormulasTabPanelProps) {
                       className="p-4 rounded-xl border border-stone-200 bg-white hover:border-brand/50 transition flex items-start justify-between gap-4"
                     >
                       <div className="min-w-0">
-                        <p className="font-black text-slate-900 truncate">{f.name}</p>
+                        <p className="font-black text-foreground truncate">{f.name}</p>
                         <p className="text-[10px] text-stone-500 truncate mt-1" title={formulaToReadableString(f.formula_base) + ' → ' + formulaToReadableString(f.formula_wholesale) + ' → ' + formulaToReadableString(f.formula_retail)}>
                           Base: {formulaToReadableString(f.formula_base)} | Wholesale: {formulaToReadableString(f.formula_wholesale)} | Retail: {formulaToReadableString(f.formula_retail)}
                         </p>

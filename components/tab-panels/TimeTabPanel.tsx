@@ -73,11 +73,11 @@ export default function TimeTabPanel({
     <div className="bg-white rounded-[2.5rem] border-2 border-brand shadow-sm flex flex-col flex-1 min-h-0 min-h-[50vh] lg:min-h-0 lg:max-h-[calc(100vh-5rem)] overflow-hidden">
       <div className="p-6 border-b border-stone-100 bg-white space-y-4 rounded-t-[2.5rem] shrink-0">
         <div className="flex justify-between items-center flex-wrap gap-3">
-          <h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Time Tracking</h2>
+          <h2 className="text-xl font-black uppercase tracking-tight text-foreground">Time Tracking</h2>
           <button
             type="button"
             onClick={onOpenLogTimeHeader}
-            className="px-4 py-2 rounded-xl bg-brand text-white text-xs font-black uppercase hover:bg-slate-900 transition"
+            className="px-4 py-2 rounded-xl bg-brand text-white text-xs font-black uppercase hover:bg-forest transition"
           >
             Log time
           </button>
@@ -95,7 +95,7 @@ export default function TimeTabPanel({
               <p className="text-[9px] font-black uppercase text-stone-400">Live Timer</p>
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="flex items-baseline gap-2">
-                  <span className={`text-4xl sm:text-5xl font-black tabular-nums ${timerStartedAt ? "text-brand animate-pulse" : timerPausedElapsed > 0 ? "text-slate-900" : "text-stone-300"}`}>
+                  <span className={`text-4xl sm:text-5xl font-black tabular-nums ${timerStartedAt ? "text-brand animate-pulse" : timerPausedElapsed > 0 ? "text-foreground" : "text-stone-300"}`}>
                     {timerElapsedDisplay}
                   </span>
                   <span className="text-sm font-bold text-stone-400">
@@ -107,7 +107,7 @@ export default function TimeTabPanel({
                     <button
                       type="button"
                       onClick={() => setTimerStartedAt(Date.now())}
-                      className="px-6 py-3 rounded-xl bg-brand text-white text-sm font-black uppercase hover:bg-slate-900 transition shadow-lg flex items-center gap-2"
+                      className="px-6 py-3 rounded-xl bg-brand text-white text-sm font-black uppercase hover:bg-forest transition shadow-lg flex items-center gap-2"
                     >
                       <span className="w-3 h-3 rounded-full bg-white" /> Start
                     </button>
@@ -120,7 +120,7 @@ export default function TimeTabPanel({
                         setTimerPausedElapsed(elapsed);
                         setTimerStartedAt(null);
                       }}
-                      className="px-6 py-3 rounded-xl bg-slate-900 text-white text-sm font-black uppercase hover:bg-brand transition shadow-lg"
+                      className="px-6 py-3 rounded-xl bg-charcoal text-white text-sm font-black uppercase hover:bg-brand transition shadow-lg"
                     >
                       Stop
                     </button>
@@ -130,7 +130,7 @@ export default function TimeTabPanel({
                       <button
                         type="button"
                         onClick={onOpenLogTimeFromStoppedTimer}
-                        className="px-6 py-3 rounded-xl bg-brand text-white text-sm font-black uppercase hover:bg-slate-900 transition shadow-lg"
+                        className="px-6 py-3 rounded-xl bg-brand text-white text-sm font-black uppercase hover:bg-forest transition shadow-lg"
                       >
                         Log time
                       </button>
@@ -163,11 +163,11 @@ export default function TimeTabPanel({
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-stone-50 rounded-2xl border border-stone-200 p-4">
                 <p className="text-[9px] font-black uppercase text-stone-400">Today</p>
-                <p className="text-2xl font-black text-slate-900 mt-0.5">{(timeSummaryToday / 60).toFixed(1)}h</p>
+                <p className="text-2xl font-black text-foreground mt-0.5">{(timeSummaryToday / 60).toFixed(1)}h</p>
               </div>
               <div className="bg-stone-50 rounded-2xl border border-stone-200 p-4">
                 <p className="text-[9px] font-black uppercase text-stone-400">This week</p>
-                <p className="text-2xl font-black text-slate-900 mt-0.5">{(timeSummaryThisWeek / 60).toFixed(1)}h</p>
+                <p className="text-2xl font-black text-foreground mt-0.5">{(timeSummaryThisWeek / 60).toFixed(1)}h</p>
               </div>
             </div>
 
@@ -278,7 +278,7 @@ export default function TimeTabPanel({
                     setTimeFilterItemSearch("");
                     setTimeFilterItemDropdownOpen(false);
                   }}
-                  className="py-2 px-3 rounded-lg text-[10px] font-black uppercase text-stone-500 hover:text-slate-900 border border-stone-200 hover:border-stone-300 transition"
+                  className="py-2 px-3 rounded-lg text-[10px] font-black uppercase text-stone-500 hover:text-foreground border border-stone-200 hover:border-stone-300 transition"
                 >
                   Clear
                 </button>
@@ -286,7 +286,7 @@ export default function TimeTabPanel({
             </div>
 
             <div>
-              <h3 className="text-sm font-black uppercase text-slate-900 mb-3">Recent entries</h3>
+              <h3 className="text-sm font-black uppercase text-foreground mb-3">Recent entries</h3>
               {filteredTimeEntries.length === 0 ? (
                 <p className="text-stone-500 text-sm py-6">No time entries yet. Log time to get started.</p>
               ) : (
@@ -302,7 +302,7 @@ export default function TimeTabPanel({
                     return (
                       <div key={e.id} className="flex items-center justify-between gap-4 py-3 px-4 rounded-xl border border-stone-200 bg-white hover:border-brand/50 transition">
                         <div className="min-w-0 flex-1">
-                          <p className="font-bold text-slate-900 truncate">{itemName}</p>
+                          <p className="font-bold text-foreground truncate">{itemName}</p>
                           <p className="text-[10px] text-stone-500">
                             {hasExplicitWorkDate ? (
                               <>

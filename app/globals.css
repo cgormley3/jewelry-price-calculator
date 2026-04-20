@@ -1,40 +1,39 @@
 @import "tailwindcss";
 
-/* BOMA brand palette — Primary: canvas + text (Boulder Metalsmithing Association) */
+/* Claire Gormley brand palette — terracotta primary, cream canvas, charcoal text */
 :root {
-  /* 1–2 Cream / canvas */
-  --boma-pale-cream: #f6f1e9;
-  --boma-canvas-warm: #efe8dc;
-  /* 3–4 Charcoal + slate (text / cool neutrals) */
-  --boma-charcoal: #3a3634;
-  --boma-slate: #556070;
-  /* 5–6 Terracotta “red primary” + deep rust (CTAs, borders, accents) */
-  --boma-terracotta: #c2573a;
-  --boma-deep-rust: #8c3a1e;
-  /* 7–8 Golden brown + dark espresso brown */
-  --boma-golden-brown: #b17a41;
-  --boma-dark-brown: #4a3a2a;
+  --cg-terracotta: #d15c45;
+  --cg-soft-pink: #f79eab;
+  --cg-amber: #df8433;
+  --cg-cream: #f8f9db;
+  --cg-sage: #97caa5;
+  --cg-forest: #527a5f;
+  --cg-charcoal: #2a241b;
   /* App shell */
-  --background: var(--boma-pale-cream);
-  --foreground: var(--boma-dark-brown);
+  --background: var(--cg-cream);
+  --foreground: var(--cg-charcoal);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  /* UI accent = deep rust; terracotta + golden brown for secondary highlights */
-  --color-brand: var(--boma-deep-rust);
-  --color-brand-secondary: var(--boma-golden-brown);
-  --color-brand-warm: var(--boma-terracotta);
-  --color-brand-dark: var(--boma-dark-brown);
-  --color-boma-charcoal: var(--boma-charcoal);
-  --color-boma-slate: var(--boma-slate);
-  --color-brand-muted: color-mix(in srgb, var(--boma-deep-rust) 50%, var(--boma-slate));
+  /* Primary accent — terracotta; forest for pressed / secondary dark; amber & pink for highlights */
+  --color-brand: var(--cg-terracotta);
+  --color-brand-secondary: var(--cg-amber);
+  --color-brand-warm: var(--cg-soft-pink);
+  --color-brand-dark: var(--cg-forest);
+  --color-forest: var(--cg-forest);
+  --color-charcoal: var(--cg-charcoal);
+  --color-sage: var(--cg-sage);
+  /* Legacy names (used in a few components) */
+  --color-boma-charcoal: var(--cg-charcoal);
+  --color-boma-slate: color-mix(in srgb, var(--cg-charcoal) 62%, var(--cg-sage));
+  --color-brand-muted: color-mix(in srgb, var(--cg-terracotta) 42%, var(--cg-charcoal));
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-/* Keep BOMA light theme on all viewports — do not follow prefers-color-scheme: dark
+/* Keep light theme on all viewports — do not follow prefers-color-scheme: dark
    (mobile often reports dark; that made bg charcoal and body text cream on white cards). */
 html {
   color-scheme: light;
@@ -64,11 +63,11 @@ body {
   background: transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: var(--boma-deep-rust);
+  background: var(--cg-terracotta);
   border-radius: 10px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: var(--boma-golden-brown);
+  background: var(--cg-forest);
 }
 .custom-scrollbar {
   -webkit-overflow-scrolling: touch;

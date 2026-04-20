@@ -17,11 +17,17 @@ export function orgSiteUrl(): string {
 export const CREATOR_ATTRIBUTION_LABEL = 'Created by Claire Gormley / Bear Silver and Stone';
 export const CREATOR_SITE_URL = 'https://bearsilverandstone.com';
 
-export function privacyPolicyUrl(): string {
-  return (
-    process.env.NEXT_PUBLIC_PRIVACY_POLICY_URL?.trim() ??
-    'https://bearsilverandstone.com/policies/privacy-policy'
-  );
+const DEFAULT_PRIVACY_POLICY_URL = 'https://bouldermetalsmiths.com/privacy';
+
+/** Footer link — returns null when hidden via env. Override with `NEXT_PUBLIC_PRIVACY_POLICY_URL`. */
+export function privacyPolicyUrl(): string | null {
+  const hide = process.env.NEXT_PUBLIC_HIDE_PRIVACY_FOOTER_LINK?.trim().toLowerCase();
+  if (hide === '1' || hide === 'true' || hide === 'yes') return null;
+
+  const fromEnv = process.env.NEXT_PUBLIC_PRIVACY_POLICY_URL?.trim();
+  if (fromEnv === '') return null;
+
+  return fromEnv || DEFAULT_PRIVACY_POLICY_URL;
 }
 
 /** Wordmark for app header/footer (see `public/boma-logo-header.png`). */

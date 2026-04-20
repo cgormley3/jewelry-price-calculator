@@ -262,12 +262,12 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
             <div className="p-6 border-b border-stone-100 bg-white space-y-4 rounded-t-[2.5rem] shrink-0">
               <div className="flex justify-between items-center text-left">
                 <div>
-                  <h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Vault Inventory</h2>
+                  <h2 className="text-xl font-black uppercase tracking-tight text-foreground">Vault Inventory</h2>
                   <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">{inventory.length} Records Stored</p>
                 </div>
                 <div className="text-right">
                   <p className="text-[9px] font-black text-stone-400 uppercase italic">Total Vault Value</p>
-                  <p className="text-2xl font-black text-slate-900">${pricesLoaded ? roundForDisplay(totalVaultValue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "--.--"}</p>
+                  <p className="text-2xl font-black text-foreground">${pricesLoaded ? roundForDisplay(totalVaultValue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "--.--"}</p>
                 </div>
               </div>
 
@@ -278,7 +278,7 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                     <button
                       ref={filterButtonRef}
                       onClick={() => setShowFilterMenu(!showFilterMenu)}
-                      className={`filter-menu-trigger w-full h-full min-h-[48px] sm:min-h-0 flex items-center justify-center rounded-2xl border-2 transition-all ${showFilterMenu ? 'bg-slate-900 text-white border-slate-900' : 'bg-white border-stone-200 text-stone-400 hover:border-brand shadow-sm'}`}
+                      className={`filter-menu-trigger w-full h-full min-h-[48px] sm:min-h-0 flex items-center justify-center rounded-2xl border-2 transition-all ${showFilterMenu ? 'bg-charcoal text-white border-charcoal' : 'bg-white border-stone-200 text-stone-400 hover:border-brand shadow-sm'}`}
                     >
                       <span className="text-lg">⚡</span>
                     </button>
@@ -291,11 +291,11 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                       >
                         <div className="overflow-y-auto overscroll-contain touch-pan-y p-4 space-y-4 min-h-0 flex-1 custom-scrollbar">
                         <div className="flex justify-between items-center">
-                          <h4 className="text-xs font-black uppercase text-slate-900">Filters</h4>
+                          <h4 className="text-xs font-black uppercase text-foreground">Filters</h4>
                           <button onClick={() => {
                             setFilterLocation('All'); setFilterTag('All'); setFilterStrategy('All'); setFilterMetal('All'); setFilterStatus('Active');
                             setFilterMinPrice(''); setFilterMaxPrice(''); setFilterStartDate(''); setFilterEndDate('');
-                          }} className="text-[9px] font-bold text-brand uppercase hover:text-slate-900">Reset</button>
+                          }} className="text-[9px] font-bold text-brand uppercase hover:text-foreground">Reset</button>
                         </div>
 
                         {/* Location */}
@@ -323,7 +323,7 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                           <label className="text-[9px] font-bold text-stone-400 uppercase">Item Status</label>
                           <div className="flex gap-2 bg-stone-100 p-1 rounded-lg flex-wrap">
                             {['Active', 'Draft', 'Archived', 'All'].map(s => (
-                              <button key={s} onClick={() => setFilterStatus(s)} className={`flex-1 py-1.5 rounded-md text-[8px] font-black uppercase transition-all ${filterStatus === s ? 'bg-white text-slate-900 shadow-sm' : 'text-stone-400 hover:text-stone-600'}`}>{s}</button>
+                              <button key={s} onClick={() => setFilterStatus(s)} className={`flex-1 py-1.5 rounded-md text-[8px] font-black uppercase transition-all ${filterStatus === s ? 'bg-white text-foreground shadow-sm' : 'text-stone-400 hover:text-stone-600'}`}>{s}</button>
                             ))}
                           </div>
                         </div>
@@ -377,7 +377,7 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                 <div className="flex gap-2 shrink-0 md:items-stretch">
                   <button
                     onClick={() => setShowQuickAddPiece(true)}
-                    className="min-h-[48px] sm:min-h-0 flex-1 md:flex-initial px-4 rounded-2xl text-[10px] font-black uppercase tracking-wide bg-brand text-white border-2 border-brand hover:bg-slate-900 hover:border-slate-900 transition shadow-md flex items-center justify-center"
+                    className="min-h-[48px] sm:min-h-0 flex-1 md:flex-initial px-4 rounded-2xl text-[10px] font-black uppercase tracking-wide bg-brand text-white border-2 border-brand hover:bg-forest hover:border-forest transition shadow-md flex items-center justify-center"
                   >
                     Quick add piece
                   </button>
@@ -404,7 +404,7 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                         <div className="vault-menu-dropdown absolute right-0 mt-2 w-56 max-h-[80vh] bg-white rounded-2xl shadow-2xl border-2 border-brand z-[50] overflow-hidden animate-in fade-in flex flex-col">
                           <div className="overflow-y-auto min-h-0 flex-1 custom-scrollbar">
                           <div className="px-4 py-3 border-b border-stone-100 flex items-center justify-between">
-                            <span className="text-[10px] font-black uppercase text-slate-900">Select All</span>
+                            <span className="text-[10px] font-black uppercase text-foreground">Select All</span>
                             <input type="checkbox" onChange={toggleSelectAll} checked={selectedItems.size === filteredInventory.length && filteredInventory.length > 0} className="accent-brand w-4 h-4 cursor-pointer" />
                           </div>
                           {/* Mobile only: action items merged into More */}
@@ -500,13 +500,13 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                     <>
                       <p className="text-stone-600 font-bold uppercase text-xs tracking-wider">To see your items upgrade to Vault+ ({VAULT_PLUS_PRICE_PHRASE})</p>
                       <div className="flex flex-col sm:flex-row gap-2 items-center justify-center">
-                        <button onClick={() => setShowVaultPlusModal(true)} className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-brand text-white hover:bg-slate-900 transition shadow-sm">
+                        <button onClick={() => setShowVaultPlusModal(true)} className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-brand text-white hover:bg-forest transition shadow-sm">
                           Upgrade to Vault+
                         </button>
                         {VAULT_REFRESH_AND_STRIPE_SYNC_UI_ENABLED && (
                           <>
                             <button type="button" onClick={() => { setLoading(true); void fetchInventory(); }} className="text-[10px] font-bold uppercase text-stone-400 hover:text-brand transition">Refresh</button>
-                            <button type="button" disabled={syncingVaultPlus} onClick={() => { void syncVaultPlusFromStripe(); }} className="text-[10px] font-bold uppercase text-brand hover:text-slate-900 transition disabled:opacity-50">
+                            <button type="button" disabled={syncingVaultPlus} onClick={() => { void syncVaultPlusFromStripe(); }} className="text-[10px] font-bold uppercase text-brand hover:text-foreground transition disabled:opacity-50">
                               {syncingVaultPlus ? 'Syncing…' : 'Sync from Stripe'}
                             </button>
                           </>
@@ -520,7 +520,7 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                         <button
                           type="button"
                           onClick={() => setShowVaultPlusModal(true)}
-                          className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-brand text-white hover:bg-slate-900 transition shadow-sm"
+                          className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-brand text-white hover:bg-forest transition shadow-sm"
                         >
                           Upgrade to Vault+
                         </button>
@@ -653,11 +653,11 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                                       if (e.key === 'Escape') setEditingNameId(null);
                                     }}
                                   />
-                                  <button onClick={() => renameItem(item.id)} className="w-10 h-10 flex items-center justify-center bg-brand text-white rounded-xl font-black text-lg shadow-sm hover:bg-slate-900 transition-colors shrink-0">✓</button>
+                                  <button onClick={() => renameItem(item.id)} className="w-10 h-10 flex items-center justify-center bg-brand text-white rounded-xl font-black text-lg shadow-sm hover:bg-forest transition-colors shrink-0">✓</button>
                                 </div>
                               ) : (
                                 <div className="flex items-start flex-nowrap gap-2 w-full">
-                                  <h3 className={`text-lg font-black leading-tight uppercase tracking-tight break-words flex-1 ${isSold ? 'line-through text-stone-400' : 'text-slate-900'}`}>
+                                  <h3 className={`text-lg font-black leading-tight uppercase tracking-tight break-words flex-1 ${isSold ? 'line-through text-stone-400' : 'text-foreground'}`}>
                                     {(item.name || '').toUpperCase()}
                                   </h3>
                                   <div className="relative shrink-0 pt-0.5 item-menu-container">
@@ -839,7 +839,7 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                                         />
                                         <button
                                           onClick={() => addCustomTag(item.id)}
-                                          className="w-full py-1 bg-brand text-white rounded text-[9px] font-bold uppercase hover:bg-slate-900"
+                                          className="w-full py-1 bg-brand text-white rounded text-[9px] font-bold uppercase hover:bg-forest"
                                         >
                                           Add +
                                         </button>
@@ -887,7 +887,7 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                                         />
                                         <button
                                           onClick={() => addCustomLocation(item.id)}
-                                          className="w-full py-1 bg-brand text-white rounded text-[9px] font-bold uppercase hover:bg-slate-900"
+                                          className="w-full py-1 bg-brand text-white rounded text-[9px] font-bold uppercase hover:bg-forest"
                                         >
                                           Add +
                                         </button>
@@ -917,14 +917,14 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                             <p className="text-xs font-bold text-stone-500 whitespace-nowrap">${formatCurrency(Number(item.retail))}</p>
                           </div>
                           <div className="p-3 border-r border-stone-100 bg-white text-left">
-                            <p className="text-[7px] font-black text-slate-900 uppercase tracking-widest mb-1">Live Wholesale</p>
-                            <p className="text-sm font-black text-slate-900 whitespace-nowrap">
+                            <p className="text-[7px] font-black text-foreground uppercase tracking-widest mb-1">Live Wholesale</p>
+                            <p className="text-sm font-black text-foreground whitespace-nowrap">
                               ${pricesLoaded ? formatCurrency(liveWholesale) : "--.--"}
                             </p>
                           </div>
                           <div className="p-3 bg-white text-left">
                             <p className="text-[7px] font-black text-brand uppercase tracking-widest italic mb-1">Live Retail</p>
-                            <p className="text-base sm:text-lg font-black text-slate-900 leading-none whitespace-nowrap">
+                            <p className="text-base sm:text-lg font-black text-foreground leading-none whitespace-nowrap">
                               ${pricesLoaded ? formatCurrency(liveRetail) : "--.--"}
                             </p>
                           </div>
@@ -963,7 +963,7 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                               {sq > 1 && (
                                 <p className="text-[9px] text-stone-600">
                                   <span className="font-black uppercase text-stone-400 tracking-wider mr-1">Line total (live retail × qty)</span>
-                                  <span className="font-black text-slate-900 tabular-nums">
+                                  <span className="font-black text-foreground tabular-nums">
                                     ${pricesLoaded ? formatCurrency(liveRetail * sq) : '—'}
                                   </span>
                                 </p>

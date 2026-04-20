@@ -119,7 +119,7 @@ export default function CompareTabPanel(props: CompareTabPanelProps) {
   return (
           <div className="bg-white rounded-2xl sm:rounded-[2.5rem] border-2 border-brand shadow-sm flex flex-col flex-1 min-h-0 min-h-[50vh] lg:min-h-0 lg:max-h-[calc(100vh-5rem)] overflow-hidden">
             <div className="p-3 sm:p-6 border-b border-stone-100 bg-white space-y-3 sm:space-y-4 rounded-t-2xl sm:rounded-t-[2.5rem] shrink-0">
-              <h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Compare Prices</h2>
+              <h2 className="text-xl font-black uppercase tracking-tight text-foreground">Compare Prices</h2>
               <div className="text-[10px] text-stone-500 space-y-2">
                 <p>
                   Default view shows <span className="font-bold">Saved</span> (snapshot) and <span className="font-bold">Live</span> (current spot) pricing.
@@ -137,18 +137,18 @@ export default function CompareTabPanel(props: CompareTabPanelProps) {
                   )}
                   <div className="flex flex-col sm:flex-row gap-2 items-center justify-center">
                     {!user ? (
-                      <button onClick={() => setShowAuth(true)} className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-brand text-white hover:bg-slate-900 transition shadow-sm">
+                      <button onClick={() => setShowAuth(true)} className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-brand text-white hover:bg-forest transition shadow-sm">
                         Sign in
                       </button>
                     ) : (
                       <>
-                        <button onClick={() => setShowVaultPlusModal(true)} className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-brand text-white hover:bg-slate-900 transition shadow-sm">
+                        <button onClick={() => setShowVaultPlusModal(true)} className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-brand text-white hover:bg-forest transition shadow-sm">
                           Upgrade to Vault+
                         </button>
                         {VAULT_REFRESH_AND_STRIPE_SYNC_UI_ENABLED && (
                           <>
                             <button type="button" onClick={() => { setLoading(true); void fetchInventory(); }} className="text-[10px] font-bold uppercase text-stone-400 hover:text-brand transition">Refresh</button>
-                            <button type="button" disabled={syncingVaultPlus} onClick={() => { void syncVaultPlusFromStripe(); }} className="text-[10px] font-bold uppercase text-brand hover:text-slate-900 transition disabled:opacity-50">
+                            <button type="button" disabled={syncingVaultPlus} onClick={() => { void syncVaultPlusFromStripe(); }} className="text-[10px] font-bold uppercase text-brand hover:text-foreground transition disabled:opacity-50">
                               {syncingVaultPlus ? 'Syncing…' : 'Sync from Stripe'}
                             </button>
                           </>
@@ -165,7 +165,7 @@ export default function CompareTabPanel(props: CompareTabPanelProps) {
                     <button
                       ref={compareFilterButtonRef}
                       onClick={() => setShowCompareFilterMenu(!showCompareFilterMenu)}
-                      className={`w-full h-full min-h-[48px] sm:min-h-0 flex items-center justify-center rounded-xl border transition-all ${showCompareFilterMenu ? 'bg-slate-900 text-white border-slate-900' : 'bg-stone-50 border-stone-200 text-stone-400 hover:border-brand'}`}
+                      className={`w-full h-full min-h-[48px] sm:min-h-0 flex items-center justify-center rounded-xl border transition-all ${showCompareFilterMenu ? 'bg-charcoal text-white border-charcoal' : 'bg-stone-50 border-stone-200 text-stone-400 hover:border-brand'}`}
                     >
                       <span className="text-lg">⚡</span>
                     </button>
@@ -176,10 +176,10 @@ export default function CompareTabPanel(props: CompareTabPanelProps) {
                       >
                         <div className="overflow-y-auto overscroll-contain touch-pan-y p-4 space-y-4 min-h-0 flex-1 custom-scrollbar">
                         <div className="flex justify-between items-center">
-                          <h4 className="text-xs font-black uppercase text-slate-900">Compare Filters</h4>
+                          <h4 className="text-xs font-black uppercase text-foreground">Compare Filters</h4>
                           <button onClick={() => {
                             setCompareFilterLocation('All'); setCompareFilterTag('All'); setCompareFilterStrategy('All'); setCompareFilterMetal('All'); setCompareFilterStatus('Active'); setCompareSearchTerm('');
-                          }} className="text-[9px] font-bold text-brand uppercase hover:text-slate-900">Reset</button>
+                          }} className="text-[9px] font-bold text-brand uppercase hover:text-foreground">Reset</button>
                         </div>
                         <div className="space-y-1">
                           <label className="text-[9px] font-bold text-stone-400 uppercase">Location</label>
@@ -201,7 +201,7 @@ export default function CompareTabPanel(props: CompareTabPanelProps) {
                           <label className="text-[9px] font-bold text-stone-400 uppercase">Item Status</label>
                           <div className="flex gap-2 bg-stone-100 p-1 rounded-lg flex-wrap">
                             {['Active', 'Draft', 'Archived', 'All'].map(s => (
-                              <button key={s} onClick={() => setCompareFilterStatus(s)} className={`flex-1 py-1.5 rounded-md text-[8px] font-black uppercase transition-all ${compareFilterStatus === s ? 'bg-white text-slate-900 shadow-sm' : 'text-stone-400 hover:text-stone-600'}`}>{s}</button>
+                              <button key={s} onClick={() => setCompareFilterStatus(s)} className={`flex-1 py-1.5 rounded-md text-[8px] font-black uppercase transition-all ${compareFilterStatus === s ? 'bg-white text-foreground shadow-sm' : 'text-stone-400 hover:text-stone-600'}`}>{s}</button>
                             ))}
                           </div>
                         </div>

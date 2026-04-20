@@ -126,6 +126,7 @@ const VaultTabPanel = dynamic<VaultTabPanelProps>(
 );
 
 export default function Home() {
+  const privacyFooterUrl = privacyPolicyUrl();
   // Check if Turnstile is configured (for human verification)
   const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '';
   const hasTurnstile = !!turnstileSiteKey;
@@ -3922,13 +3923,13 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-background px-4 pt-[calc(1rem+env(safe-area-inset-top,0px))] pb-[calc(1rem+env(safe-area-inset-bottom,0px))] md:p-10 text-foreground font-sans text-left relative">
+    <div className="min-h-screen min-h-[100dvh] flex flex-col bg-background px-4 pt-[calc(1rem+env(safe-area-inset-top,0px))] pb-[calc(1rem+env(safe-area-inset-bottom,0px))] md:p-10 text-foreground font-sans text-left relative">
 
       {/* Image Adjuster Modal */}
       {cropImage && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[500] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
+        <div className="fixed inset-0 bg-charcoal/80 backdrop-blur-md z-[500] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl space-y-4">
-            <h3 className="text-lg font-black uppercase text-center text-slate-900">Adjust Photo</h3>
+            <h3 className="text-lg font-black uppercase text-center text-foreground">Adjust Photo</h3>
             <p className="text-[9px] text-stone-500 text-center font-medium">
               {cropIsExistingPhoto ? (
                 <>Re-crop your current vault photo — drag to position, zoom, rotate. Saved as a small square PNG.</>
@@ -3987,7 +3988,7 @@ export default function Home() {
             <div className="space-y-4">
               <div className="flex justify-between items-center text-xs font-bold text-stone-400 uppercase">
                 <span>Zoom</span>
-                <button onClick={() => setRotation(r => (r + 90) % 360)} className="text-brand hover:text-slate-900 transition-colors">⟳ Rotate 90°</button>
+                <button onClick={() => setRotation(r => (r + 90) % 360)} className="text-brand hover:text-foreground transition-colors">⟳ Rotate 90°</button>
               </div>
               <input
                 type="range"
@@ -4012,7 +4013,7 @@ export default function Home() {
               >
                 Cancel
               </button>
-              <button onClick={performCropAndUpload} className="flex-1 py-3 bg-slate-900 text-white rounded-xl font-bold text-xs uppercase hover:bg-brand transition shadow-md">
+              <button onClick={performCropAndUpload} className="flex-1 py-3 bg-charcoal text-white rounded-xl font-bold text-xs uppercase hover:bg-brand transition shadow-md">
                 {uploadingId ? 'Saving...' : 'Save Photo'}
               </button>
             </div>
@@ -4024,10 +4025,10 @@ export default function Home() {
 
       {/* Profile Settings Modal */}
       {showProfileModal && user && !user.is_anonymous && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[260] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
+        <div className="fixed inset-0 bg-charcoal/60 backdrop-blur-sm z-[260] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-brand p-8 space-y-6">
             <div className="flex justify-between items-center">
-              <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Profile</h3>
+              <h3 className="text-xl font-black uppercase italic tracking-tighter text-foreground">Profile</h3>
               <button onClick={() => setShowProfileModal(false)} className="text-stone-300 hover:text-brand font-black text-lg">✕</button>
             </div>
             <p className="text-xs text-stone-500">Your display name, company, and logo appear in PDF reports and exports.</p>
@@ -4186,7 +4187,7 @@ export default function Home() {
                 }
               }}
               disabled={profileSaving}
-              className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition disabled:opacity-50"
+              className="w-full py-4 bg-charcoal text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition disabled:opacity-50"
             >
               {profileSaving ? 'Saving…' : 'Save'}
             </button>
@@ -4196,9 +4197,9 @@ export default function Home() {
 
       {/* Vault+ Upgrade Modal */}
       {showVaultPlusModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[250] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
+        <div className="fixed inset-0 bg-charcoal/60 backdrop-blur-sm z-[250] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-brand p-8 space-y-6">
-            <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Upgrade to Vault+</h3>
+            <h3 className="text-xl font-black uppercase italic tracking-tighter text-foreground">Upgrade to Vault+</h3>
             {(!user || user.is_anonymous) ? (
               <>
                 <p className="text-sm text-stone-600 font-medium">
@@ -4220,7 +4221,7 @@ export default function Home() {
                       setIsSignUp(true);
                       setShowPassword(false);
                     }}
-                    className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition shadow-lg"
+                    className="flex-1 py-4 bg-charcoal text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition shadow-lg"
                   >
                     Sign Up to Continue
                   </button>
@@ -4239,7 +4240,7 @@ export default function Home() {
                 </ul>
                 <div className="flex gap-3">
                   <button onClick={() => setShowVaultPlusModal(false)} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Maybe later</button>
-                  <button onClick={initiateVaultPlusCheckout} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition shadow-lg">Get Vault+</button>
+                  <button onClick={initiateVaultPlusCheckout} className="flex-1 py-4 bg-charcoal text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition shadow-lg">Get Vault+</button>
                 </div>
               </>
             )}
@@ -4250,7 +4251,7 @@ export default function Home() {
       {/* Exports & bulk saves — not the same as vault “Opening…” (`loading`). */}
       {blockingWorkBanner && (
         <div
-          className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[420] flex items-center justify-center pt-4 px-4 pb-modal-safe"
+          className="fixed inset-0 bg-charcoal/90 backdrop-blur-md z-[420] flex items-center justify-center pt-4 px-4 pb-modal-safe"
           role="status"
           aria-live="polite"
           aria-busy="true"
@@ -4261,7 +4262,7 @@ export default function Home() {
                 ⟳
               </span>
             </div>
-            <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">{blockingWorkBanner.title}</h3>
+            <h3 className="text-xl font-black uppercase italic tracking-tighter text-foreground">{blockingWorkBanner.title}</h3>
             <p className="text-xs font-bold text-stone-500 uppercase tracking-wide leading-relaxed">{blockingWorkBanner.subtitle}</p>
           </div>
         </div>
@@ -4269,9 +4270,9 @@ export default function Home() {
 
       {/* PDF Options Modal */}
       {showPDFOptions && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
+        <div className="fixed inset-0 bg-charcoal/60 backdrop-blur-sm z-[200] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-brand p-8 space-y-6">
-            <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">PDF Options</h3>
+            <h3 className="text-xl font-black uppercase italic tracking-tighter text-foreground">PDF Options</h3>
 
             <div className="space-y-3">
               <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setIncludeLiveInPDF(!includeLiveInPDF)}>
@@ -4279,7 +4280,7 @@ export default function Home() {
                   {includeLiveInPDF && '✓'}
                 </div>
                 <div>
-                  <p className="text-xs font-black uppercase text-slate-900">Include Live Prices</p>
+                  <p className="text-xs font-black uppercase text-foreground">Include Live Prices</p>
                   <p className="text-[10px] text-stone-400 font-bold">Show current market value calculations</p>
                 </div>
               </div>
@@ -4290,7 +4291,7 @@ export default function Home() {
                   {includeBreakdownInPDF && '✓'}
                 </div>
                 <div>
-                  <p className="text-xs font-black uppercase text-slate-900">Include Breakdown</p>
+                  <p className="text-xs font-black uppercase text-foreground">Include Breakdown</p>
                   <p className="text-[10px] text-stone-400 font-bold">Show list of metals and labor costs</p>
                 </div>
               </div>
@@ -4301,14 +4302,14 @@ export default function Home() {
                   {includeNotesInPDF && '✓'}
                 </div>
                 <div>
-                  <p className="text-xs font-black uppercase text-slate-900">Include Notes</p>
+                  <p className="text-xs font-black uppercase text-foreground">Include Notes</p>
                   <p className="text-[10px] text-stone-400 font-bold">Show item notes if present</p>
                 </div>
               </div>
 
               {/* Wholesale as % of Retail */}
               <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 space-y-2">
-                <p className="text-xs font-black uppercase text-slate-900">Wholesale as % of Retail</p>
+                <p className="text-xs font-black uppercase text-foreground">Wholesale as % of Retail</p>
                 <p className="text-[10px] text-stone-400 font-bold">For store consignment (e.g. 50% = store doubles your price)</p>
                 <div className="flex flex-wrap gap-2 items-center">
                   {[null, 50, 60, 40].map((pct) => (
@@ -4342,7 +4343,7 @@ export default function Home() {
 
             <div className="flex gap-3">
               <button onClick={() => setShowPDFOptions(false)} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
-              <button onClick={exportDetailedPDF} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition shadow-lg">Download PDF</button>
+              <button onClick={exportDetailedPDF} className="flex-1 py-4 bg-charcoal text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition shadow-lg">Download PDF</button>
             </div>
           </div>
         </div>
@@ -4350,9 +4351,9 @@ export default function Home() {
 
       {/* Connect Shopify Modal – hidden when SHOPIFY_FEATURE_ENABLED is false */}
       {SHOPIFY_FEATURE_ENABLED && showShopifyConnectModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
+        <div className="fixed inset-0 bg-charcoal/60 backdrop-blur-sm z-[200] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-brand p-8 space-y-6">
-            <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Connect Shopify</h3>
+            <h3 className="text-xl font-black uppercase italic tracking-tighter text-foreground">Connect Shopify</h3>
             <p className="text-[10px] text-stone-500 font-bold">Enter your Shopify store name (e.g. mystore or mystore.myshopify.com)</p>
             <input
               type="text"
@@ -4363,7 +4364,7 @@ export default function Home() {
             />
             <div className="flex gap-3">
               <button onClick={() => { setShowShopifyConnectModal(false); setShopifyConnectInput(''); }} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
-              <button onClick={initiateShopifyConnect} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition shadow-lg">Connect</button>
+              <button onClick={initiateShopifyConnect} className="flex-1 py-4 bg-charcoal text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition shadow-lg">Connect</button>
             </div>
           </div>
         </div>
@@ -4371,41 +4372,41 @@ export default function Home() {
 
       {/* Export to Shopify Options Modal – hidden when SHOPIFY_FEATURE_ENABLED is false */}
       {SHOPIFY_FEATURE_ENABLED && showShopifyExportOptions && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
+        <div className="fixed inset-0 bg-charcoal/60 backdrop-blur-sm z-[200] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-brand p-8 space-y-6">
-            <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Export to Shopify</h3>
+            <h3 className="text-xl font-black uppercase italic tracking-tighter text-foreground">Export to Shopify</h3>
             <p className="text-[10px] text-stone-500 font-bold">Choose what to sync. Existing Shopify products with matching SKU will be updated, not duplicated.</p>
 
             <div className="space-y-3">
               <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setShopifyIncludeDescription(!shopifyIncludeDescription)}>
                 <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${shopifyIncludeDescription ? 'bg-brand border-brand text-white' : 'bg-white border-stone-300'}`}>{shopifyIncludeDescription && '✓'}</div>
                 <div>
-                  <p className="text-xs font-black uppercase text-slate-900">Include description</p>
+                  <p className="text-xs font-black uppercase text-foreground">Include description</p>
                   <p className="text-[10px] text-stone-400 font-bold">Notes, metals, stones</p>
                 </div>
               </div>
               <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setShopifyIncludeImage(!shopifyIncludeImage)}>
                 <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${shopifyIncludeImage ? 'bg-brand border-brand text-white' : 'bg-white border-stone-300'}`}>{shopifyIncludeImage && '✓'}</div>
                 <div>
-                  <p className="text-xs font-black uppercase text-slate-900">Include image</p>
+                  <p className="text-xs font-black uppercase text-foreground">Include image</p>
                   <p className="text-[10px] text-stone-400 font-bold">Adds our image without removing existing</p>
                 </div>
               </div>
               <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setShopifyIncludeRetail(!shopifyIncludeRetail)}>
                 <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${shopifyIncludeRetail ? 'bg-brand border-brand text-white' : 'bg-white border-stone-300'}`}>{shopifyIncludeRetail && '✓'}</div>
                 <div>
-                  <p className="text-xs font-black uppercase text-slate-900">Include retail price</p>
+                  <p className="text-xs font-black uppercase text-foreground">Include retail price</p>
                 </div>
               </div>
               <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setShopifyIncludeWholesale(!shopifyIncludeWholesale)}>
                 <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${shopifyIncludeWholesale ? 'bg-brand border-brand text-white' : 'bg-white border-stone-300'}`}>{shopifyIncludeWholesale && '✓'}</div>
                 <div>
-                  <p className="text-xs font-black uppercase text-slate-900">Include wholesale price</p>
+                  <p className="text-xs font-black uppercase text-foreground">Include wholesale price</p>
                   <p className="text-[10px] text-stone-400 font-bold">Compare-at price in Shopify</p>
                 </div>
               </div>
               <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 space-y-2">
-                <p className="text-xs font-black uppercase text-slate-900">Price source</p>
+                <p className="text-xs font-black uppercase text-foreground">Price source</p>
                 <div className="flex gap-2">
                   <button onClick={() => setShopifyPriceSource('saved')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase border transition-all ${shopifyPriceSource === 'saved' ? 'bg-brand text-white border-brand' : 'bg-white border-stone-200 text-stone-500'}`}>Saved</button>
                   <button onClick={() => setShopifyPriceSource('live')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase border transition-all ${shopifyPriceSource === 'live' ? 'bg-brand text-white border-brand' : 'bg-white border-stone-200 text-stone-500'}`}>Live</button>
@@ -4416,20 +4417,20 @@ export default function Home() {
 
             <div className="flex gap-3">
               <button onClick={() => setShowShopifyExportOptions(false)} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
-              <button onClick={() => { setShowShopifyExportOptions(false); exportToShopify(); }} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition shadow-lg">Export</button>
+              <button onClick={() => { setShowShopifyExportOptions(false); exportToShopify(); }} className="flex-1 py-4 bg-charcoal text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition shadow-lg">Export</button>
             </div>
           </div>
         </div>
       )}
 
       {showSiteProductCsvModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
+        <div className="fixed inset-0 bg-charcoal/60 backdrop-blur-sm z-[200] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-brand p-8 space-y-6 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Export CSV for your site</h3>
+            <h3 className="text-xl font-black uppercase italic tracking-tighter text-foreground">Export CSV for your site</h3>
             <p className="text-[10px] text-stone-500 font-bold">Download a product file to import into Shopify or Squarespace (no store connection required).</p>
 
             <div className="space-y-2">
-              <p className="text-xs font-black uppercase text-slate-900">Platform</p>
+              <p className="text-xs font-black uppercase text-foreground">Platform</p>
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -4452,14 +4453,14 @@ export default function Home() {
               <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setShopifyIncludeDescription(!shopifyIncludeDescription)}>
                 <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${shopifyIncludeDescription ? 'bg-brand border-brand text-white' : 'bg-white border-stone-300'}`}>{shopifyIncludeDescription && '✓'}</div>
                 <div>
-                  <p className="text-xs font-black uppercase text-slate-900">Include description</p>
+                  <p className="text-xs font-black uppercase text-foreground">Include description</p>
                   <p className="text-[10px] text-stone-400 font-bold">Notes, metals, stones</p>
                 </div>
               </div>
               <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setShopifyIncludeWholesalePctOfRetail(!shopifyIncludeWholesalePctOfRetail)}>
                 <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${shopifyIncludeWholesalePctOfRetail ? 'bg-brand border-brand text-white' : 'bg-white border-stone-300'}`}>{shopifyIncludeWholesalePctOfRetail && '✓'}</div>
                 <div>
-                  <p className="text-xs font-black uppercase text-slate-900">Wholesale % of retail</p>
+                  <p className="text-xs font-black uppercase text-foreground">Wholesale % of retail</p>
                   <p className="text-[10px] text-stone-400 font-bold">Extra column; % = wholesale ÷ retail using same rounded $ as Price / compare-at</p>
                 </div>
               </div>
@@ -4469,26 +4470,26 @@ export default function Home() {
                   <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setShopifyIncludeImage(!shopifyIncludeImage)}>
                     <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${shopifyIncludeImage ? 'bg-brand border-brand text-white' : 'bg-white border-stone-300'}`}>{shopifyIncludeImage && '✓'}</div>
                     <div>
-                      <p className="text-xs font-black uppercase text-slate-900">Include image URL</p>
+                      <p className="text-xs font-black uppercase text-foreground">Include image URL</p>
                       <p className="text-[10px] text-stone-400 font-bold">Shopify import column only</p>
                     </div>
                   </div>
                   <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setShopifyIncludeRetail(!shopifyIncludeRetail)}>
                     <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${shopifyIncludeRetail ? 'bg-brand border-brand text-white' : 'bg-white border-stone-300'}`}>{shopifyIncludeRetail && '✓'}</div>
                     <div>
-                      <p className="text-xs font-black uppercase text-slate-900">Include retail price</p>
+                      <p className="text-xs font-black uppercase text-foreground">Include retail price</p>
                       <p className="text-[10px] text-stone-400 font-bold">Shopify only</p>
                     </div>
                   </div>
                   <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setShopifyIncludeWholesale(!shopifyIncludeWholesale)}>
                     <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${shopifyIncludeWholesale ? 'bg-brand border-brand text-white' : 'bg-white border-stone-300'}`}>{shopifyIncludeWholesale && '✓'}</div>
                     <div>
-                      <p className="text-xs font-black uppercase text-slate-900">Include wholesale → compare-at</p>
+                      <p className="text-xs font-black uppercase text-foreground">Include wholesale → compare-at</p>
                       <p className="text-[10px] text-stone-400 font-bold">Shopify only</p>
                     </div>
                   </div>
                   <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 space-y-2">
-                    <p className="text-xs font-black uppercase text-slate-900">Price source</p>
+                    <p className="text-xs font-black uppercase text-foreground">Price source</p>
                     <div className="flex gap-2">
                       <button type="button" onClick={() => setShopifyPriceSource('saved')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase border transition-all ${shopifyPriceSource === 'saved' ? 'bg-brand text-white border-brand' : 'bg-white border-stone-200 text-stone-500'}`}>Saved</button>
                       <button type="button" onClick={() => setShopifyPriceSource('live')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase border transition-all ${shopifyPriceSource === 'live' ? 'bg-brand text-white border-brand' : 'bg-white border-stone-200 text-stone-500'}`}>Live</button>
@@ -4504,7 +4505,7 @@ export default function Home() {
                     Template columns: title, URL slug, description, SKU (same <span className="font-mono">VAULT-</span> prefix as Shopify), and optional wholesale % column. Add dollar prices and images in Squarespace after import if needed.
                   </p>
                   <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 space-y-2">
-                    <p className="text-xs font-black uppercase text-slate-900">Price source for %</p>
+                    <p className="text-xs font-black uppercase text-foreground">Price source for %</p>
                     <div className="flex gap-2">
                       <button type="button" onClick={() => setShopifyPriceSource('saved')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase border transition-all ${shopifyPriceSource === 'saved' ? 'bg-brand text-white border-brand' : 'bg-white border-stone-200 text-stone-500'}`}>Saved</button>
                       <button type="button" onClick={() => setShopifyPriceSource('live')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase border transition-all ${shopifyPriceSource === 'live' ? 'bg-brand text-white border-brand' : 'bg-white border-stone-200 text-stone-500'}`}>Live</button>
@@ -4517,7 +4518,7 @@ export default function Home() {
 
             <div className="flex gap-3">
               <button type="button" onClick={() => setShowSiteProductCsvModal(false)} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
-              <button type="button" onClick={() => { exportSiteProductCsv(); }} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition shadow-lg">Download CSV</button>
+              <button type="button" onClick={() => { exportSiteProductCsv(); }} className="flex-1 py-4 bg-charcoal text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition shadow-lg">Download CSV</button>
             </div>
           </div>
         </div>
@@ -4525,12 +4526,12 @@ export default function Home() {
 
       {/* Shopify Export Progress Modal – hidden when SHOPIFY_FEATURE_ENABLED is false */}
       {SHOPIFY_FEATURE_ENABLED && shopifyExportProgress === 'exporting' && (
-        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[400] flex items-center justify-center pt-4 px-4 pb-modal-safe">
+        <div className="fixed inset-0 bg-charcoal/90 backdrop-blur-md z-[400] flex items-center justify-center pt-4 px-4 pb-modal-safe">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] border-2 border-brand p-10 space-y-6 shadow-2xl animate-in zoom-in-95 text-center">
             <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto bg-brand/20 animate-pulse">
               <span className="text-3xl">⟳</span>
             </div>
-            <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Exporting to Shopify</h3>
+            <h3 className="text-xl font-black uppercase italic tracking-tighter text-foreground">Exporting to Shopify</h3>
             <p className="text-xs font-bold text-stone-500 uppercase tracking-wide">Syncing items... This may take a minute for many items.</p>
           </div>
         </div>
@@ -4538,12 +4539,12 @@ export default function Home() {
 
       {/* Shopify Export Confirmation Modal – hidden when SHOPIFY_FEATURE_ENABLED is false */}
       {SHOPIFY_FEATURE_ENABLED && shopifyExportProgress && shopifyExportProgress !== 'exporting' && (
-        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[400] flex items-center justify-center pt-4 px-4 pb-modal-safe">
+        <div className="fixed inset-0 bg-charcoal/90 backdrop-blur-md z-[400] flex items-center justify-center pt-4 px-4 pb-modal-safe">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] border-2 border-brand p-10 space-y-6 shadow-2xl animate-in zoom-in-95 text-center">
             <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto bg-brand/10 text-brand">
               <span className="text-2xl">✓</span>
             </div>
-            <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Export Complete</h3>
+            <h3 className="text-xl font-black uppercase italic tracking-tighter text-foreground">Export Complete</h3>
             <p className="text-xs font-bold text-stone-500 uppercase tracking-wide">
               {shopifyExportProgress.created > 0 || shopifyExportProgress.updated > 0
                 ? `${shopifyExportProgress.created} created, ${shopifyExportProgress.updated} updated.${shopifyExportProgress.errors.length > 0 ? ` ${shopifyExportProgress.errors.length} error(s).` : ''}`
@@ -4554,15 +4555,15 @@ export default function Home() {
             {shopifyExportProgress.errors.length > 0 && shopifyExportProgress.errors.length <= 3 && (
               <p className="text-[10px] text-stone-500 font-bold">{shopifyExportProgress.errors.join(' ')}</p>
             )}
-            <button onClick={() => setShopifyExportProgress(null)} className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-brand transition-all shadow-lg">Done</button>
+            <button onClick={() => setShopifyExportProgress(null)} className="w-full py-5 bg-charcoal text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-brand transition-all shadow-lg">Done</button>
           </div>
         </div>
       )}
 
       {editingItem && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
+        <div className="fixed inset-0 bg-charcoal/60 backdrop-blur-sm z-[200] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-brand p-8 space-y-6">
-            <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Manual Price Edit</h3>
+            <h3 className="text-xl font-black uppercase italic tracking-tighter text-foreground">Manual Price Edit</h3>
             {/* Rounding options */}
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[9px] font-bold text-stone-400 uppercase">Round display to</span>
@@ -4586,7 +4587,7 @@ export default function Home() {
             </div>
             <div className="flex gap-3">
               <button onClick={() => setEditingItem(null)} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
-              <button onClick={handleManualPriceSave} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition shadow-lg">Save Vault</button>
+              <button onClick={handleManualPriceSave} className="flex-1 py-4 bg-charcoal text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition shadow-lg">Save Vault</button>
             </div>
           </div>
         </div>
@@ -4594,10 +4595,10 @@ export default function Home() {
 
       {/* RECALCULATE MODAL (Individual) */}
       {recalcItem && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
+        <div className="fixed inset-0 bg-charcoal/60 backdrop-blur-sm z-[200] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-brand max-h-[95vh] overflow-hidden flex flex-col">
             <div className="overflow-y-auto flex-1 min-h-0 p-8 space-y-5 custom-scrollbar">
-            <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Scenario Calculator</h3>
+            <h3 className="text-xl font-black uppercase italic tracking-tighter text-foreground">Scenario Calculator</h3>
             <p className="text-[10px] text-stone-400 font-bold uppercase">Temporarily recalculate logic with custom inputs</p>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -4654,7 +4655,7 @@ export default function Home() {
             </div>
 
             {/* LIVE CALCULATION DISPLAY */}
-            <div className="p-4 bg-slate-900 rounded-2xl text-white space-y-2">
+            <div className="p-4 bg-charcoal rounded-2xl text-white space-y-2">
               {(() => {
                 const laborHours = recalcItem.hours || 1;
                 const effectiveRate = recalcParams.laborRate
@@ -4750,7 +4751,7 @@ export default function Home() {
 
             <div className="flex gap-3">
               <button onClick={() => { setRecalcItem(null); setRecalcParams({ gold: '', silver: '', platinum: '', palladium: '', laborRate: '' }); setRecalcItemFormulaMode('keep'); }} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Close Calculator</button>
-              <button onClick={handleRecalcSync} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition shadow-lg">Sync to Vault</button>
+              <button onClick={handleRecalcSync} className="flex-1 py-4 bg-charcoal text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition shadow-lg">Sync to Vault</button>
             </div>
             </div>
           </div>
@@ -4759,9 +4760,9 @@ export default function Home() {
 
       {/* Log Time Modal */}
       {showLogTimeModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
+        <div className="fixed inset-0 bg-charcoal/60 backdrop-blur-sm z-[200] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-brand p-8 space-y-5">
-            <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">{editingTimeEntryId ? 'Edit Time Entry' : 'Log Time'}</h3>
+            <h3 className="text-xl font-black uppercase italic tracking-tighter text-foreground">{editingTimeEntryId ? 'Edit Time Entry' : 'Log Time'}</h3>
             <p className="text-[10px] text-stone-400 font-bold uppercase">
               {editingTimeEntryId ? (logTimeItemId ? `Assigned to: ${(inventory.find(i => i.id === logTimeItemId)?.name || 'Piece').toUpperCase()}` : 'General / unassigned') : (logTimeItemId ? `Add time to: ${(inventory.find(i => i.id === logTimeItemId)?.name || 'Piece').toUpperCase()}` : 'Log general shop time (unassigned)')}
             </p>
@@ -4841,9 +4842,9 @@ export default function Home() {
             <div className="flex gap-3">
               <button onClick={() => { setShowLogTimeModal(false); setEditingTimeEntryId(null); setLogTimeItemId(null); setLogTimeItemSearch(''); setLogTimeItemDropdownOpen(false); setLogTimeHours(''); setLogTimeDate(''); setLogTimeNote(''); setLogTimeAllowItemSelect(false); }} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
               {editingTimeEntryId ? (
-                <button onClick={updateTimeEntry} disabled={!logTimeHours || parseFloat(logTimeHours) <= 0} className={`flex-1 py-4 rounded-2xl font-black text-[10px] uppercase transition shadow-lg ${!logTimeHours || parseFloat(logTimeHours) <= 0 ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-brand text-white hover:bg-slate-900'}`}>Update</button>
+                <button onClick={updateTimeEntry} disabled={!logTimeHours || parseFloat(logTimeHours) <= 0} className={`flex-1 py-4 rounded-2xl font-black text-[10px] uppercase transition shadow-lg ${!logTimeHours || parseFloat(logTimeHours) <= 0 ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-brand text-white hover:bg-forest'}`}>Update</button>
               ) : (
-                <button onClick={saveTimeEntry} disabled={!logTimeHours || parseFloat(logTimeHours) <= 0} className={`flex-1 py-4 rounded-2xl font-black text-[10px] uppercase transition shadow-lg ${!logTimeHours || parseFloat(logTimeHours) <= 0 ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-brand text-white hover:bg-slate-900'}`}>Add time</button>
+                <button onClick={saveTimeEntry} disabled={!logTimeHours || parseFloat(logTimeHours) <= 0} className={`flex-1 py-4 rounded-2xl font-black text-[10px] uppercase transition shadow-lg ${!logTimeHours || parseFloat(logTimeHours) <= 0 ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-brand text-white hover:bg-forest'}`}>Add time</button>
               )}
             </div>
           </div>
@@ -4852,9 +4853,9 @@ export default function Home() {
 
       {/* Quick Add Piece Modal (draft - time-only) */}
       {showQuickAddPiece && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
+        <div className="fixed inset-0 bg-charcoal/60 backdrop-blur-sm z-[200] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-brand p-8 space-y-5">
-            <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Quick Add Piece</h3>
+            <h3 className="text-xl font-black uppercase italic tracking-tighter text-foreground">Quick Add Piece</h3>
             <p className="text-[10px] text-stone-400 font-bold uppercase">Create a draft piece to track time. Add metal and pricing later.</p>
             <input
               placeholder="Piece name"
@@ -4865,7 +4866,7 @@ export default function Home() {
             />
             <div className="flex gap-3">
               <button onClick={() => { setShowQuickAddPiece(false); setQuickAddPieceName(''); }} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
-              <button onClick={addQuickAddPiece} disabled={savingToVault || !quickAddPieceName.trim()} className={`flex-1 py-4 rounded-2xl font-black text-[10px] uppercase transition shadow-lg ${savingToVault || !quickAddPieceName.trim() ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-brand text-white hover:bg-slate-900'}`}>{savingToVault ? 'Saving…' : 'Add piece'}</button>
+              <button onClick={addQuickAddPiece} disabled={savingToVault || !quickAddPieceName.trim()} className={`flex-1 py-4 rounded-2xl font-black text-[10px] uppercase transition shadow-lg ${savingToVault || !quickAddPieceName.trim() ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-brand text-white hover:bg-forest'}`}>{savingToVault ? 'Saving…' : 'Add piece'}</button>
             </div>
           </div>
         </div>
@@ -4873,10 +4874,10 @@ export default function Home() {
 
       {/* NEW: GLOBAL RECALCULATE MODAL */}
       {showGlobalRecalc && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
+        <div className="fixed inset-0 bg-charcoal/60 backdrop-blur-sm z-[200] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-brand max-h-[95vh] overflow-hidden flex flex-col">
             <div className="overflow-y-auto flex-1 min-h-0 p-8 space-y-5 custom-scrollbar">
-            <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Recalculate all items</h3>
+            <h3 className="text-xl font-black uppercase italic tracking-tighter text-foreground">Recalculate all items</h3>
             <p className="text-[10px] text-stone-400 font-bold uppercase">Update spot prices, labor rate, and formula for selected or all items</p>
 
             {/* Rounding options */}
@@ -4901,7 +4902,7 @@ export default function Home() {
                   palladium: prices.palladium ? String(prices.palladium) : '',
                   laborRate: recalcParams.laborRate
                 })}
-                className="w-full py-2.5 rounded-xl text-[10px] font-black uppercase bg-brand text-white hover:bg-slate-900 transition"
+                className="w-full py-2.5 rounded-xl text-[10px] font-black uppercase bg-brand text-white hover:bg-forest transition"
               >
                 Fill with current spot prices
               </button>
@@ -4943,7 +4944,7 @@ export default function Home() {
 
             <div className="flex gap-3">
               <button onClick={() => { setShowGlobalRecalc(false); setRecalcParams({ gold: '', silver: '', platinum: '', palladium: '', laborRate: '' }); setGlobalRecalcFormulaMode('keep'); }} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
-              <button onClick={handleGlobalRecalcSync} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition shadow-lg">Recalculate</button>
+              <button onClick={handleGlobalRecalcSync} className="flex-1 py-4 bg-charcoal text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition shadow-lg">Recalculate</button>
             </div>
             </div>
           </div>
@@ -4951,7 +4952,7 @@ export default function Home() {
       )}
 
       {showResetModal && (
-        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[300] flex items-center justify-center pt-4 px-4 pb-modal-safe">
+        <div className="fixed inset-0 bg-charcoal/90 backdrop-blur-md z-[300] flex items-center justify-center pt-4 px-4 pb-modal-safe">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] border-2 border-brand p-8 space-y-6 shadow-2xl animate-in zoom-in-95">
             <div className="text-center">
               <h3 className="text-xl font-black uppercase italic tracking-tighter">Secure the Vault</h3>
@@ -4975,7 +4976,7 @@ export default function Home() {
             </div>
             <button
               onClick={handleUpdatePassword}
-              className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-brand transition-all shadow-lg"
+              className="w-full py-5 bg-charcoal text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-brand transition-all shadow-lg"
             >
               Update Vault Access
             </button>
@@ -4984,7 +4985,7 @@ export default function Home() {
       )}
 
       {notification && (
-        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[400] flex items-center justify-center pt-4 px-4 pb-modal-safe">
+        <div className="fixed inset-0 bg-charcoal/90 backdrop-blur-md z-[400] flex items-center justify-center pt-4 px-4 pb-modal-safe">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] border-2 border-brand p-10 space-y-6 shadow-2xl animate-in zoom-in-95 text-center">
             <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-2 ${notification.type === 'error' ? 'bg-red-50 text-red-500' :
                 notification.type === 'info' ? 'bg-blue-50 text-blue-500' :
@@ -4995,7 +4996,7 @@ export default function Home() {
                 {notification.type === 'error' ? '⚠️' : notification.type === 'info' ? 'ℹ️' : notification.type === 'confirm' ? '❓' : '✨'}
               </span>
             </div>
-            <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900 leading-tight">{notification.title}</h3>
+            <h3 className="text-xl font-black uppercase italic tracking-tighter text-foreground leading-tight">{notification.title}</h3>
             <p className="text-xs font-bold text-stone-500 leading-relaxed normal-case">
               {notification.message}
             </p>
@@ -5003,17 +5004,17 @@ export default function Home() {
               {notification.type === 'confirm' ? (
                 <>
                   <button onClick={() => setNotification(null)} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
-                  <button onClick={() => { notification.onConfirm?.(); setNotification(null); }} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition shadow-lg">Confirm</button>
+                  <button onClick={() => { notification.onConfirm?.(); setNotification(null); }} className="flex-1 py-4 bg-charcoal text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition shadow-lg">Confirm</button>
                 </>
               ) : notification.onConfirm ? (
                 <>
                   <button onClick={() => setNotification(null)} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Dismiss</button>
-                  <button onClick={() => { notification.onConfirm?.(); setNotification(null); }} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition shadow-lg">Retry</button>
+                  <button onClick={() => { notification.onConfirm?.(); setNotification(null); }} className="flex-1 py-4 bg-charcoal text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition shadow-lg">Retry</button>
                 </>
               ) : (
                 <button
                   onClick={() => setNotification(null)}
-                  className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-brand transition-all shadow-lg"
+                  className="w-full py-5 bg-charcoal text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-brand transition-all shadow-lg"
                 >
                   Understood
                 </button>
@@ -5023,7 +5024,7 @@ export default function Home() {
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto flex flex-col min-h-[calc(100dvh-2rem-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px))] gap-6 md:min-h-0 md:space-y-6 md:gap-0 pb-[max(1rem,env(safe-area-inset-bottom,0px))] md:pb-[env(safe-area-inset-bottom,0px)]">
+      <div className="max-w-7xl mx-auto flex w-full min-h-0 flex-1 flex-col gap-6 overflow-hidden pb-[max(1rem,env(safe-area-inset-bottom,0px))] md:min-h-0 md:flex-none md:space-y-6 md:gap-0 md:overflow-visible md:pb-[env(safe-area-inset-bottom,0px)]">
         {/* HEADER */}
         <div className="flex flex-col md:flex-row justify-between items-center bg-white px-6 py-8 rounded-[2rem] border-2 shadow-sm gap-8 shrink-0 relative border-brand">
           <div className="hidden md:block md:w-1/4" />
@@ -5048,7 +5049,7 @@ export default function Home() {
             </a>
             <div className="flex flex-col items-center leading-none gap-1">
               <div className="flex items-center justify-center gap-2 mb-1">
-                <h1 className="text-3xl font-black uppercase italic tracking-[0.1em] text-slate-900 leading-none">THE VAULT</h1>
+                <h1 className="text-3xl font-black uppercase italic tracking-[0.1em] text-foreground leading-none">THE VAULT</h1>
               </div>
               <a
                 href={orgSiteUrl()}
@@ -5065,9 +5066,9 @@ export default function Home() {
             <div className="relative flex flex-col items-center md:items-end gap-2 w-full">
               {(!user || user.is_anonymous) ? (
                 <>
-                  <button onClick={() => { setShowAuth(!showAuth); setShowPassword(false); }} className="w-48 text-[10px] font-black uppercase bg-slate-900 text-white px-8 py-3 rounded-xl hover:bg-brand transition shadow-sm">Login / Sign Up</button>
+                  <button onClick={() => { setShowAuth(!showAuth); setShowPassword(false); }} className="w-48 text-[10px] font-black uppercase bg-charcoal text-white px-8 py-3 rounded-xl hover:bg-brand transition shadow-sm">Login / Sign Up</button>
                   {(!user || user.is_anonymous || !subscriptionStatus?.subscribed) && (
-                    <button onClick={() => setShowVaultPlusModal(true)} className="w-48 text-[10px] font-black uppercase bg-slate-900 text-white px-8 py-3 rounded-xl hover:bg-brand transition shadow-sm">
+                    <button onClick={() => setShowVaultPlusModal(true)} className="w-48 text-[10px] font-black uppercase bg-charcoal text-white px-8 py-3 rounded-xl hover:bg-brand transition shadow-sm">
                       Upgrade to Vault+
                     </button>
                   )}
@@ -5077,7 +5078,7 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={() => setShowAccountMenu(!showAccountMenu)}
-                    className="w-48 text-[10px] font-black uppercase px-8 py-3 rounded-xl transition bg-stone-100 text-slate-900 hover:bg-stone-200 flex items-center justify-center gap-1.5"
+                    className="w-48 text-[10px] font-black uppercase px-8 py-3 rounded-xl transition bg-stone-100 text-foreground hover:bg-stone-200 flex items-center justify-center gap-1.5"
                   >
                     <div className={`w-2 h-2 rounded-full shrink-0 ${user ? 'bg-brand animate-pulse' : 'bg-stone-300'}`} />
                     {profile?.logo_url ? (
@@ -5119,7 +5120,7 @@ export default function Home() {
                 </div>
               )}
               {user && !user.is_anonymous && subscriptionStatus !== null && !subscriptionStatus.subscribed && (
-                <button onClick={() => setShowVaultPlusModal(true)} className="w-48 text-[10px] font-black uppercase bg-slate-900 text-white px-8 py-3 rounded-xl hover:bg-brand transition shadow-sm">
+                <button onClick={() => setShowVaultPlusModal(true)} className="w-48 text-[10px] font-black uppercase bg-charcoal text-white px-8 py-3 rounded-xl hover:bg-brand transition shadow-sm">
                   Upgrade to Vault+
                 </button>
               )}
@@ -5127,7 +5128,7 @@ export default function Home() {
                 <GoogleOAuthProvider clientId={GOOGLE_WEB_CLIENT_ID}>
                 <div className="absolute right-0 mt-12 w-full md:w-80 bg-white p-6 rounded-3xl border-2 border-brand shadow-2xl z-[100] animate-in fade-in slide-in-from-top-2 mx-auto auth-menu-container">
                   <button onClick={() => { setShowAuth(false); setShowPassword(false); setSignUpAwaitingConfirmation(false); setPendingVaultPlusAfterAuth(false); }} className="absolute top-4 right-4 text-stone-300 hover:text-brand font-black text-sm">✕</button>
-                  <h3 className="text-sm font-black uppercase mb-4 text-center text-slate-900">Vault Access</h3>
+                  <h3 className="text-sm font-black uppercase mb-4 text-center text-foreground">Vault Access</h3>
                   {signUpAwaitingConfirmation ? (
                     <div className="space-y-4">
                       <p className="text-sm text-stone-600 text-center">We&apos;ve sent a verification link to <strong>{email}</strong>. Please confirm your account to get access to your Vault.</p>
@@ -5172,7 +5173,7 @@ export default function Home() {
                             {showPassword ? "Hide" : "Show"}
                           </button>
                         </div>
-                        <button type="submit" className="w-full bg-brand text-white py-3 rounded-xl font-black text-xs uppercase hover:bg-slate-900 transition shadow-md">{isSignUp ? 'Create Vault Account' : 'Open The Vault'}</button>
+                        <button type="submit" className="w-full bg-brand text-white py-3 rounded-xl font-black text-xs uppercase hover:bg-forest transition shadow-md">{isSignUp ? 'Create Vault Account' : 'Open The Vault'}</button>
                         {!isSignUp && (
                           <button type="button" onClick={handleResetPassword} className="w-full text-center text-[9px] font-black uppercase text-stone-600 hover:text-brand transition mt-2 tracking-widest">Forgot Password?</button>
                         )}
@@ -5202,7 +5203,7 @@ export default function Home() {
                   title={showPct ? "Today's % vs prior session close (from live data)" : undefined}
                 >
                   <p className="text-[9px] sm:text-[10px] font-black uppercase text-stone-400 truncate">{name}</p>
-                  <p className="text-base sm:text-xl font-bold tabular-nums text-slate-900">
+                  <p className="text-base sm:text-xl font-bold tabular-nums text-foreground">
                     {spot > 0 ? `$${spot.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '--.--'}
                   </p>
                   {showPct ? (
@@ -5253,12 +5254,12 @@ export default function Home() {
         </div>
 
         {/* Single full-width panel per tab - one visible at a time */}
-        <div className="w-full max-w-7xl mx-auto flex-1 min-h-0 flex flex-col overflow-hidden md:flex-initial md:max-h-[calc(100vh-5rem)]">
+        <div className="mx-auto flex w-full min-h-0 flex-1 flex-col overflow-hidden md:max-h-[calc(100vh-5rem)] md:flex-initial">
           {/* CALCULATOR PANEL */}
-          <div className={`flex flex-col flex-1 min-h-0 min-h-[50vh] lg:min-h-0 lg:max-h-[calc(100vh-5rem)] ${activeTab !== 'calculator' ? 'hidden' : ''}`}>
-            <div className="bg-white rounded-[2rem] shadow-xl border-2 border-brand overflow-hidden lg:h-full lg:min-h-0 lg:flex lg:flex-col">
-              <div className="overflow-y-auto lg:overflow-hidden lg:flex-1 lg:min-h-0 lg:flex lg:flex-col px-4 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom,0px))] md:p-8 md:pb-8 space-y-4 lg:space-y-4 min-h-0 custom-scrollbar">
-              <h2 className="text-2xl font-black uppercase italic tracking-tighter text-slate-900 shrink-0">Calculator</h2>
+          <div className={`flex min-h-0 flex-1 flex-col lg:max-h-[calc(100vh-5rem)] ${activeTab !== 'calculator' ? 'hidden' : ''}`}>
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[2rem] border-2 border-brand bg-white shadow-xl lg:h-full lg:min-h-0">
+              <div className="custom-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto px-4 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom,0px))] md:space-y-4 md:p-8 md:pb-8 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-hidden">
+              <h2 className="text-2xl font-black uppercase italic tracking-tighter text-foreground shrink-0">Calculator</h2>
 
               {/* Desktop: side-by-side layout with independent scrolling per column */}
               <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_1fr] lg:gap-10 xl:gap-12 lg:min-h-0 lg:flex-1 lg:overflow-hidden">
@@ -5365,7 +5366,7 @@ export default function Home() {
                     </div>
                   )}
                 </div>
-                <button onClick={addMetalToPiece} className="w-full bg-slate-900 text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-brand transition-colors">+ Add metal</button>
+                <button onClick={addMetalToPiece} className="w-full bg-charcoal text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-brand transition-colors">+ Add metal</button>
                 {metalList.map((m, i) => (
                   <div key={i} className="text-[10px] font-bold bg-white p-2 rounded border border-stone-100 flex justify-between items-center">
                     <span className="text-slate-700">{m.weight}{m.unit} {m.type}</span>
@@ -5400,7 +5401,7 @@ export default function Home() {
                     </div>
                   </div>
                 </div>
-                <button onClick={addStoneToPiece} className="w-full bg-slate-900 text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-brand transition-colors">+ Add stone</button>
+                <button onClick={addStoneToPiece} className="w-full bg-charcoal text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-brand transition-colors">+ Add stone</button>
                 {stoneList.map((stone, i) => (
                   <div key={i} className="text-[10px] font-bold bg-white p-2 rounded border border-stone-100 flex justify-between items-center">
                     <span className="text-slate-700">{stone.name} ${stone.cost.toFixed(2)} ×{stone.markup.toFixed(1)}</span>
@@ -5449,8 +5450,8 @@ export default function Home() {
                     <div className="flex gap-2 items-center">
                       <input type="number" min={0} placeholder="0" className="flex-1 p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22] focus:ring-2 focus:ring-brand/30 focus:outline-none pr-2" value={overheadCost} onChange={e => { const v = e.target.value === '' ? '' : Number(e.target.value); setOverheadCost(v); if (Number(v) > 0) setIncludeLaborSection(true); }} />
                       <div className="flex rounded-xl border border-stone-200 overflow-hidden bg-stone-50">
-                        <button type="button" onClick={() => setOverheadType('flat')} className={`px-3 py-2.5 text-[10px] font-black uppercase transition-colors ${overheadType === 'flat' ? 'bg-slate-900 text-white' : 'text-stone-400 hover:text-slate-700'}`}>$</button>
-                        <button type="button" onClick={() => setOverheadType('percent')} className={`px-3 py-2.5 text-[10px] font-black uppercase transition-colors ${overheadType === 'percent' ? 'bg-slate-900 text-white' : 'text-stone-400 hover:text-slate-700'}`}>%</button>
+                        <button type="button" onClick={() => setOverheadType('flat')} className={`px-3 py-2.5 text-[10px] font-black uppercase transition-colors ${overheadType === 'flat' ? 'bg-charcoal text-white' : 'text-stone-400 hover:text-slate-700'}`}>$</button>
+                        <button type="button" onClick={() => setOverheadType('percent')} className={`px-3 py-2.5 text-[10px] font-black uppercase transition-colors ${overheadType === 'percent' ? 'bg-charcoal text-white' : 'text-stone-400 hover:text-slate-700'}`}>%</button>
                       </div>
                     </div>
                     <details className="group mt-2">
@@ -5518,9 +5519,9 @@ export default function Home() {
                   </button>
                 {costBreakdownOpen && (
                 <div className="w-full p-4 rounded-xl bg-stone-100/80 border border-stone-200 space-y-3 text-left">
-                  <div className="flex justify-between items-center py-2 border-b border-stone-200"><span className="text-stone-500 font-bold uppercase text-[10px]">Materials Total (Metal+Stone+Other)</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator, undefined, calculatorFindingsMult).totalMaterials.toFixed(2)}</span></div>
-                  <div className="flex justify-between items-center py-2 border-b border-stone-200"><span className="text-stone-500 font-bold uppercase text-[10px]">Labor Total ({Number(calcHours) || 0}h)</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator, undefined, calculatorFindingsMult).labor.toFixed(2)}</span></div>
-                  <div className="flex justify-between items-center py-2"><span className="text-stone-500 font-bold uppercase text-[10px]">Overhead Total ({overheadType === 'percent' ? `${Number(calcOverheadCost) || 0}%` : 'Flat'})</span><span className="font-black text-slate-900">${calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator, undefined, calculatorFindingsMult).overhead.toFixed(2)}</span></div>
+                  <div className="flex justify-between items-center py-2 border-b border-stone-200"><span className="text-stone-500 font-bold uppercase text-[10px]">Materials Total (Metal+Stone+Other)</span><span className="font-black text-foreground">${calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator, undefined, calculatorFindingsMult).totalMaterials.toFixed(2)}</span></div>
+                  <div className="flex justify-between items-center py-2 border-b border-stone-200"><span className="text-stone-500 font-bold uppercase text-[10px]">Labor Total ({Number(calcHours) || 0}h)</span><span className="font-black text-foreground">${calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator, undefined, calculatorFindingsMult).labor.toFixed(2)}</span></div>
+                  <div className="flex justify-between items-center py-2"><span className="text-stone-500 font-bold uppercase text-[10px]">Overhead Total ({overheadType === 'percent' ? `${Number(calcOverheadCost) || 0}%` : 'Flat'})</span><span className="font-black text-foreground">${calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator, undefined, calculatorFindingsMult).overhead.toFixed(2)}</span></div>
                 </div>
                 )}
                 </div>
@@ -5574,7 +5575,7 @@ export default function Home() {
                                 Hide
                               </span>
                             </div>
-                            <p className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums">
+                            <p className="text-2xl sm:text-3xl font-black text-foreground tabular-nums">
                               ${(() => {
                                 const a = calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator, undefined, calculatorFindingsMult);
                                 const p = getStrategyPrices(a);
@@ -5648,7 +5649,7 @@ export default function Home() {
                     >
                       <div className="flex-1 min-w-0">
                         <p className="text-[10px] font-black text-brand uppercase tracking-tighter mb-1">Formula A</p>
-                        <p className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums">${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator, undefined, calculatorFindingsMult).retailA).toFixed(2)}</p>
+                        <p className="text-2xl sm:text-3xl font-black text-foreground tabular-nums">${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator, undefined, calculatorFindingsMult).retailA).toFixed(2)}</p>
                         <p className="text-[10px] font-semibold text-stone-500 mt-1">Wholesale ${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator, undefined, calculatorFindingsMult).wholesaleA).toFixed(2)}</p>
                       </div>
                     </button>
@@ -5671,7 +5672,7 @@ export default function Home() {
                             <input
                               type="number"
                               step="0.1"
-                              className="min-w-12 w-14 bg-white border border-stone-200 rounded-lg text-xs font-bold py-1.5 px-2 text-center outline-none text-slate-900 focus:border-brand"
+                              className="min-w-12 w-14 bg-white border border-stone-200 rounded-lg text-xs font-bold py-1.5 px-2 text-center outline-none text-foreground focus:border-brand"
                               value={retailMultA}
                               onChange={(e) => setRetailMultA(Number(e.target.value))}
                               onClick={(e) => e.stopPropagation()}
@@ -5693,7 +5694,7 @@ export default function Home() {
                     >
                       <div className="flex-1 min-w-0">
                         <p className="text-[10px] font-black text-brand uppercase tracking-tighter mb-1">Formula B</p>
-                        <p className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums">${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator, undefined, calculatorFindingsMult).retailB).toFixed(2)}</p>
+                        <p className="text-2xl sm:text-3xl font-black text-foreground tabular-nums">${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator, undefined, calculatorFindingsMult).retailB).toFixed(2)}</p>
                         <p className="text-[10px] font-semibold text-stone-500 mt-1">Wholesale ${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator, undefined, calculatorFindingsMult).wholesaleB).toFixed(2)}</p>
                       </div>
                     </button>
@@ -5714,7 +5715,7 @@ export default function Home() {
                             <input
                               type="number"
                               step="0.1"
-                              className="min-w-12 w-14 bg-white border border-stone-200 rounded-lg text-xs font-bold py-1.5 px-2 text-center outline-none text-slate-900 focus:border-brand"
+                              className="min-w-12 w-14 bg-white border border-stone-200 rounded-lg text-xs font-bold py-1.5 px-2 text-center outline-none text-foreground focus:border-brand"
                               value={markupB}
                               onChange={(e) => setMarkupB(Number(e.target.value))}
                               onClick={(e) => e.stopPropagation()}
@@ -5773,7 +5774,7 @@ export default function Home() {
                                 Hide
                               </span>
                             </div>
-                            <p className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums">
+                            <p className="text-2xl sm:text-3xl font-black text-foreground tabular-nums">
                               ${(() => {
                                 const a = calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator, undefined, calculatorFindingsMult);
                                 const p = getStrategyPrices(a);
@@ -5829,7 +5830,7 @@ export default function Home() {
                     {editingItemId && (
                       <button type="button" onClick={() => { setEditingItemId(null); setItemName(''); setMetalList([]); setStoneList([]); setHours(''); setRate(''); setOtherCosts(''); setOverheadCost(''); setFindingsRetailMultInput(''); setActiveTab('vault'); }} className="flex-1 py-4 rounded-2xl font-black uppercase tracking-[0.12em] text-sm bg-stone-200 text-stone-600 hover:bg-stone-300 transition-all">Cancel</button>
                     )}
-                    <button type="button" onClick={addToInventory} disabled={(isGuest && !token && hasTurnstile) || savingToVault} className={`${editingItemId ? 'flex-1' : 'w-full'} py-4 rounded-2xl font-black uppercase tracking-[0.12em] text-sm transition-all ${(isGuest && !token && hasTurnstile) || savingToVault ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-brand text-white shadow-lg hover:bg-slate-900 hover:shadow-xl active:scale-[0.98]'}`}>{(isGuest && !token && hasTurnstile) ? "Verifying…" : savingToVault ? "Saving…" : editingItemId ? "Update item" : "Save to vault"}</button>
+                    <button type="button" onClick={addToInventory} disabled={(isGuest && !token && hasTurnstile) || savingToVault} className={`${editingItemId ? 'flex-1' : 'w-full'} py-4 rounded-2xl font-black uppercase tracking-[0.12em] text-sm transition-all ${(isGuest && !token && hasTurnstile) || savingToVault ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-brand text-white shadow-lg hover:bg-forest hover:shadow-xl active:scale-[0.98]'}`}>{(isGuest && !token && hasTurnstile) ? "Verifying…" : savingToVault ? "Saving…" : editingItemId ? "Update item" : "Save to vault"}</button>
                   </div>
                 </div>
                 </div>
@@ -6155,7 +6156,7 @@ export default function Home() {
                 sizes="24px"
                 unoptimized
               />
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900">{ORG_NAME}</span>
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-foreground">{ORG_NAME}</span>
             </a>
             <a
               href={CREATOR_SITE_URL}
@@ -6166,14 +6167,16 @@ export default function Home() {
               {CREATOR_ATTRIBUTION_LABEL}
             </a>
             <InstallPrompt />
-            <a
-              href={privacyPolicyUrl()}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[8px] font-bold uppercase tracking-widest text-stone-300 hover:text-brand transition-colors mt-2"
-            >
-              Privacy Policy
-            </a>
+            {privacyFooterUrl ? (
+              <a
+                href={privacyFooterUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[8px] font-bold uppercase tracking-widest text-stone-300 hover:text-brand transition-colors mt-2"
+              >
+                Privacy Policy
+              </a>
+            ) : null}
           </div>
         </div>
       </div>
