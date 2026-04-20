@@ -34,7 +34,7 @@ Your app endpoint is ready at `/api/shopify/webhooks` with HMAC verification. Yo
    - **Delivery method:** HTTPS
    - **Endpoint URL:**
      ```
-     https://vault.bearsilverandstone.com/api/shopify/webhooks
+     https://vault.bouldermetalsmiths.com/api/shopify/webhooks
      ```
    - **Topics** or **Compliance topics:** select or add:
      - `customers/data_request`
@@ -101,7 +101,7 @@ After registration:
 
 | Item | Value |
 |------|-------|
-| Endpoint URL | `https://vault.bearsilverandstone.com/api/shopify/webhooks` |
+| Endpoint URL | `https://vault.bouldermetalsmiths.com/api/shopify/webhooks` |
 | Method | POST |
 | Compliance topics | `customers/data_request`, `customers/redact`, `shop/redact` |
 | HMAC header | `X-Shopify-Hmac-SHA256` |

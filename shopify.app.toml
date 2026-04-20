@@ -2,7 +2,7 @@
 
 client_id = "2f85e6218759957bed7c9fe7377e8833"
 name = "The Vault"
-application_url = "https://vault.bearsilverandstone.com/"
+application_url = "https://vault.bouldermetalsmiths.com/"
 embedded = false
 
 [webhooks]
@@ -23,6 +23,7 @@ redirect_urls = [
   "http://localhost:3000/api/shopify/callback",
   "http://localhost:3001/api/shopify/callback",
   "http://localhost:3002/api/shopify/callback",
+  "https://vault.bouldermetalsmiths.com/api/shopify/callback",
   "https://vault.bearsilverandstone.com/api/shopify/callback",
   "https://jewelry-price-calculator-gamma.vercel.app/api/shopify/callback",
   "https://jewelry-price-calculator-b6mp22086-claires-projects-4b85753e.vercel.app/api/shopify/callback"
