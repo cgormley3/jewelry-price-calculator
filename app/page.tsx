@@ -5202,7 +5202,7 @@ export default function Home() {
                   title={showPct ? "Today's % vs prior session close (from live data)" : undefined}
                 >
                   <p className="text-[9px] sm:text-[10px] font-black uppercase text-stone-400 truncate">{name}</p>
-                  <p className="text-base sm:text-xl font-bold tabular-nums">
+                  <p className="text-base sm:text-xl font-bold tabular-nums text-slate-900">
                     {spot > 0 ? `$${spot.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '--.--'}
                   </p>
                   {showPct ? (

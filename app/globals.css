@@ -34,11 +34,10 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #2a2624;
-    --foreground: #f6f1e9;
-  }
+/* Keep BOMA light theme on all viewports — do not follow prefers-color-scheme: dark
+   (mobile often reports dark; that made bg charcoal and body text cream on white cards). */
+html {
+  color-scheme: light;
 }
 
 body {
