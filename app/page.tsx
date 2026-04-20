@@ -90,7 +90,7 @@ const TimeTabPanel = dynamic<TimeTabPanelProps>(
   {
     ssr: false,
     loading: () => (
-      <div className="min-h-[50vh] rounded-[2.5rem] bg-stone-100 animate-pulse border-2 border-[#A5BEAC]/40" aria-hidden />
+      <div className="min-h-[50vh] rounded-[2.5rem] bg-stone-100 animate-pulse border-2 border-brand/40" aria-hidden />
     ),
   }
 );
@@ -100,7 +100,7 @@ const CompareTabPanel = dynamic<CompareTabPanelProps>(
   {
     ssr: false,
     loading: () => (
-      <div className="min-h-[50vh] rounded-2xl sm:rounded-[2.5rem] bg-stone-100 animate-pulse border-2 border-[#A5BEAC]/40" aria-hidden />
+      <div className="min-h-[50vh] rounded-2xl sm:rounded-[2.5rem] bg-stone-100 animate-pulse border-2 border-brand/40" aria-hidden />
     ),
   }
 );
@@ -110,7 +110,7 @@ const FormulasTabPanel = dynamic<FormulasTabPanelProps>(
   {
     ssr: false,
     loading: () => (
-      <div className="min-h-[50vh] rounded-[2.5rem] bg-stone-100 animate-pulse border-2 border-[#A5BEAC]/40" aria-hidden />
+      <div className="min-h-[50vh] rounded-[2.5rem] bg-stone-100 animate-pulse border-2 border-brand/40" aria-hidden />
     ),
   }
 );
@@ -120,7 +120,7 @@ const VaultTabPanel = dynamic<VaultTabPanelProps>(
   {
     ssr: false,
     loading: () => (
-      <div className="min-h-[50vh] rounded-[2.5rem] bg-stone-100 animate-pulse border-2 border-[#A5BEAC]/40" aria-hidden />
+      <div className="min-h-[50vh] rounded-[2.5rem] bg-stone-100 animate-pulse border-2 border-brand/40" aria-hidden />
     ),
   }
 );
@@ -3922,7 +3922,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-stone-50 px-4 pt-[calc(1rem+env(safe-area-inset-top,0px))] pb-[calc(1rem+env(safe-area-inset-bottom,0px))] md:p-10 text-slate-900 font-sans text-left relative">
+    <div className="min-h-screen bg-background px-4 pt-[calc(1rem+env(safe-area-inset-top,0px))] pb-[calc(1rem+env(safe-area-inset-bottom,0px))] md:p-10 text-foreground font-sans text-left relative">
 
       {/* Image Adjuster Modal */}
       {cropImage && (
@@ -3939,7 +3939,7 @@ export default function Home() {
 
             {/* Cropper Container - circular preview matches vault display (square crop saved for Shopify) */}
             <div
-              className="relative w-64 h-64 mx-auto rounded-full overflow-hidden border-4 border-[#A5BEAC] shadow-inner bg-stone-100 touch-none"
+              className="relative w-64 h-64 mx-auto rounded-full overflow-hidden border-4 border-brand shadow-inner bg-stone-100 touch-none"
               onPointerDown={handlePointerDown}
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
@@ -3987,7 +3987,7 @@ export default function Home() {
             <div className="space-y-4">
               <div className="flex justify-between items-center text-xs font-bold text-stone-400 uppercase">
                 <span>Zoom</span>
-                <button onClick={() => setRotation(r => (r + 90) % 360)} className="text-[#A5BEAC] hover:text-slate-900 transition-colors">⟳ Rotate 90°</button>
+                <button onClick={() => setRotation(r => (r + 90) % 360)} className="text-brand hover:text-slate-900 transition-colors">⟳ Rotate 90°</button>
               </div>
               <input
                 type="range"
@@ -3996,7 +3996,7 @@ export default function Home() {
                 step="0.01"
                 value={zoom}
                 onChange={(e) => setZoom(parseFloat(e.target.value))}
-                className="w-full h-2 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-[#A5BEAC]"
+                className="w-full h-2 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-brand"
               />
             </div>
 
@@ -4012,7 +4012,7 @@ export default function Home() {
               >
                 Cancel
               </button>
-              <button onClick={performCropAndUpload} className="flex-1 py-3 bg-slate-900 text-white rounded-xl font-bold text-xs uppercase hover:bg-[#A5BEAC] transition shadow-md">
+              <button onClick={performCropAndUpload} className="flex-1 py-3 bg-slate-900 text-white rounded-xl font-bold text-xs uppercase hover:bg-brand transition shadow-md">
                 {uploadingId ? 'Saving...' : 'Save Photo'}
               </button>
             </div>
@@ -4025,10 +4025,10 @@ export default function Home() {
       {/* Profile Settings Modal */}
       {showProfileModal && user && !user.is_anonymous && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[260] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
-          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-6">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-brand p-8 space-y-6">
             <div className="flex justify-between items-center">
               <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Profile</h3>
-              <button onClick={() => setShowProfileModal(false)} className="text-stone-300 hover:text-[#A5BEAC] font-black text-lg">✕</button>
+              <button onClick={() => setShowProfileModal(false)} className="text-stone-300 hover:text-brand font-black text-lg">✕</button>
             </div>
             <p className="text-xs text-stone-500">Your display name, company, and logo appear in PDF reports and exports.</p>
             <div className="space-y-4">
@@ -4037,7 +4037,7 @@ export default function Home() {
                 <input
                   type="text"
                   placeholder="Your name"
-                  className="w-full p-3 border border-stone-200 rounded-xl text-sm focus:border-[#A5BEAC] outline-none"
+                  className="w-full p-3 border border-stone-200 rounded-xl text-sm focus:border-brand outline-none"
                   value={profileDraft.display_name}
                   onChange={e => setProfileDraft(p => ({ ...p, display_name: e.target.value }))}
                 />
@@ -4047,7 +4047,7 @@ export default function Home() {
                 <input
                   type="text"
                   placeholder="Company or brand"
-                  className="w-full p-3 border border-stone-200 rounded-xl text-sm focus:border-[#A5BEAC] outline-none"
+                  className="w-full p-3 border border-stone-200 rounded-xl text-sm focus:border-brand outline-none"
                   value={profileDraft.company_name}
                   onChange={e => setProfileDraft(p => ({ ...p, company_name: e.target.value }))}
                 />
@@ -4125,7 +4125,7 @@ export default function Home() {
                       type="button"
                       onClick={() => profileLogoInputRef.current?.click()}
                       disabled={profileLogoUploading}
-                      className="text-[10px] font-black uppercase px-4 py-2 rounded-xl border-2 border-stone-200 hover:border-[#A5BEAC] transition disabled:opacity-50"
+                      className="text-[10px] font-black uppercase px-4 py-2 rounded-xl border-2 border-stone-200 hover:border-brand transition disabled:opacity-50"
                     >
                       {profileLogoUploading ? 'Uploading…' : profileDraft.logo_url ? 'Change logo' : 'Upload logo'}
                     </button>
@@ -4186,7 +4186,7 @@ export default function Home() {
                 }
               }}
               disabled={profileSaving}
-              className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition disabled:opacity-50"
+              className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition disabled:opacity-50"
             >
               {profileSaving ? 'Saving…' : 'Save'}
             </button>
@@ -4197,7 +4197,7 @@ export default function Home() {
       {/* Vault+ Upgrade Modal */}
       {showVaultPlusModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[250] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
-          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-6">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-brand p-8 space-y-6">
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Upgrade to Vault+</h3>
             {(!user || user.is_anonymous) ? (
               <>
@@ -4205,10 +4205,10 @@ export default function Home() {
                   Create your free Vault account first. Then upgrade for {VAULT_PLUS_PRICE_PHRASE} and unlock everything.
                 </p>
                 <ul className="text-[10px] font-bold text-stone-500 uppercase tracking-wider space-y-2">
-                  <li className="flex items-center gap-2"><span className="text-[#A5BEAC]">✓</span> Unlimited vault items</li>
-                  <li className="flex items-center gap-2"><span className="text-[#A5BEAC]">✓</span> Time tracking</li>
-                  <li className="flex items-center gap-2"><span className="text-[#A5BEAC]">✓</span> Custom price formulas</li>
-                  <li className="flex items-center gap-2"><span className="text-[#A5BEAC]">✓</span> Compare prices across formulas</li>
+                  <li className="flex items-center gap-2"><span className="text-brand">✓</span> Unlimited vault items</li>
+                  <li className="flex items-center gap-2"><span className="text-brand">✓</span> Time tracking</li>
+                  <li className="flex items-center gap-2"><span className="text-brand">✓</span> Custom price formulas</li>
+                  <li className="flex items-center gap-2"><span className="text-brand">✓</span> Compare prices across formulas</li>
                 </ul>
                 <div className="flex gap-3">
                   <button onClick={() => setShowVaultPlusModal(false)} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Maybe later</button>
@@ -4220,7 +4220,7 @@ export default function Home() {
                       setIsSignUp(true);
                       setShowPassword(false);
                     }}
-                    className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition shadow-lg"
+                    className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition shadow-lg"
                   >
                     Sign Up to Continue
                   </button>
@@ -4232,14 +4232,14 @@ export default function Home() {
                   Save vault items, log time, and use custom formulas. Vault+ unlocks everything—{VAULT_PLUS_PRICE_PHRASE}.
                 </p>
                 <ul className="text-[10px] font-bold text-stone-500 uppercase tracking-wider space-y-2">
-                  <li className="flex items-center gap-2"><span className="text-[#A5BEAC]">✓</span> Unlimited vault items</li>
-                  <li className="flex items-center gap-2"><span className="text-[#A5BEAC]">✓</span> Time tracking</li>
-                  <li className="flex items-center gap-2"><span className="text-[#A5BEAC]">✓</span> Custom price formulas</li>
-                  <li className="flex items-center gap-2"><span className="text-[#A5BEAC]">✓</span> Compare prices across formulas</li>
+                  <li className="flex items-center gap-2"><span className="text-brand">✓</span> Unlimited vault items</li>
+                  <li className="flex items-center gap-2"><span className="text-brand">✓</span> Time tracking</li>
+                  <li className="flex items-center gap-2"><span className="text-brand">✓</span> Custom price formulas</li>
+                  <li className="flex items-center gap-2"><span className="text-brand">✓</span> Compare prices across formulas</li>
                 </ul>
                 <div className="flex gap-3">
                   <button onClick={() => setShowVaultPlusModal(false)} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Maybe later</button>
-                  <button onClick={initiateVaultPlusCheckout} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition shadow-lg">Get Vault+</button>
+                  <button onClick={initiateVaultPlusCheckout} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition shadow-lg">Get Vault+</button>
                 </div>
               </>
             )}
@@ -4255,8 +4255,8 @@ export default function Home() {
           aria-live="polite"
           aria-busy="true"
         >
-          <div className="bg-white w-full max-w-sm rounded-[2.5rem] border-2 border-[#A5BEAC] p-10 space-y-6 shadow-2xl animate-in zoom-in-95 text-center">
-            <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto bg-[#A5BEAC]/20 animate-pulse">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] border-2 border-brand p-10 space-y-6 shadow-2xl animate-in zoom-in-95 text-center">
+            <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto bg-brand/20 animate-pulse">
               <span className="text-3xl" aria-hidden>
                 ⟳
               </span>
@@ -4270,12 +4270,12 @@ export default function Home() {
       {/* PDF Options Modal */}
       {showPDFOptions && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
-          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-6">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-brand p-8 space-y-6">
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">PDF Options</h3>
 
             <div className="space-y-3">
               <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setIncludeLiveInPDF(!includeLiveInPDF)}>
-                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${includeLiveInPDF ? 'bg-[#A5BEAC] border-[#A5BEAC] text-white' : 'bg-white border-stone-300'}`}>
+                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${includeLiveInPDF ? 'bg-brand border-brand text-white' : 'bg-white border-stone-300'}`}>
                   {includeLiveInPDF && '✓'}
                 </div>
                 <div>
@@ -4286,7 +4286,7 @@ export default function Home() {
 
               {/* Breakdown Toggle */}
               <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setIncludeBreakdownInPDF(!includeBreakdownInPDF)}>
-                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${includeBreakdownInPDF ? 'bg-[#A5BEAC] border-[#A5BEAC] text-white' : 'bg-white border-stone-300'}`}>
+                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${includeBreakdownInPDF ? 'bg-brand border-brand text-white' : 'bg-white border-stone-300'}`}>
                   {includeBreakdownInPDF && '✓'}
                 </div>
                 <div>
@@ -4297,7 +4297,7 @@ export default function Home() {
 
               {/* Notes Toggle */}
               <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setIncludeNotesInPDF(!includeNotesInPDF)}>
-                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${includeNotesInPDF ? 'bg-[#A5BEAC] border-[#A5BEAC] text-white' : 'bg-white border-stone-300'}`}>
+                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${includeNotesInPDF ? 'bg-brand border-brand text-white' : 'bg-white border-stone-300'}`}>
                   {includeNotesInPDF && '✓'}
                 </div>
                 <div>
@@ -4316,7 +4316,7 @@ export default function Home() {
                       key={pct ?? 'off'}
                       type="button"
                       onClick={() => setPdfWholesalePercentOfRetail(pct)}
-                      className={`py-2 px-3 rounded-xl text-[10px] font-black uppercase border transition-all ${pdfWholesalePercentOfRetail === pct ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-500 hover:border-stone-300'}`}
+                      className={`py-2 px-3 rounded-xl text-[10px] font-black uppercase border transition-all ${pdfWholesalePercentOfRetail === pct ? 'bg-brand text-white border-brand' : 'bg-white border-stone-200 text-stone-500 hover:border-stone-300'}`}
                     >
                       {pct == null ? 'Off' : `${pct}%`}
                     </button>
@@ -4342,7 +4342,7 @@ export default function Home() {
 
             <div className="flex gap-3">
               <button onClick={() => setShowPDFOptions(false)} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
-              <button onClick={exportDetailedPDF} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition shadow-lg">Download PDF</button>
+              <button onClick={exportDetailedPDF} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition shadow-lg">Download PDF</button>
             </div>
           </div>
         </div>
@@ -4351,7 +4351,7 @@ export default function Home() {
       {/* Connect Shopify Modal – hidden when SHOPIFY_FEATURE_ENABLED is false */}
       {SHOPIFY_FEATURE_ENABLED && showShopifyConnectModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
-          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-6">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-brand p-8 space-y-6">
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Connect Shopify</h3>
             <p className="text-[10px] text-stone-500 font-bold">Enter your Shopify store name (e.g. mystore or mystore.myshopify.com)</p>
             <input
@@ -4359,11 +4359,11 @@ export default function Home() {
               placeholder="mystore"
               value={shopifyConnectInput}
               onChange={(e) => setShopifyConnectInput(e.target.value)}
-              className="w-full p-4 bg-stone-50 border border-stone-200 rounded-2xl outline-none focus:border-[#A5BEAC] font-bold placeholder:text-stone-300"
+              className="w-full p-4 bg-stone-50 border border-stone-200 rounded-2xl outline-none focus:border-brand font-bold placeholder:text-stone-300"
             />
             <div className="flex gap-3">
               <button onClick={() => { setShowShopifyConnectModal(false); setShopifyConnectInput(''); }} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
-              <button onClick={initiateShopifyConnect} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition shadow-lg">Connect</button>
+              <button onClick={initiateShopifyConnect} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition shadow-lg">Connect</button>
             </div>
           </div>
         </div>
@@ -4372,33 +4372,33 @@ export default function Home() {
       {/* Export to Shopify Options Modal – hidden when SHOPIFY_FEATURE_ENABLED is false */}
       {SHOPIFY_FEATURE_ENABLED && showShopifyExportOptions && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
-          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-6">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-brand p-8 space-y-6">
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Export to Shopify</h3>
             <p className="text-[10px] text-stone-500 font-bold">Choose what to sync. Existing Shopify products with matching SKU will be updated, not duplicated.</p>
 
             <div className="space-y-3">
               <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setShopifyIncludeDescription(!shopifyIncludeDescription)}>
-                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${shopifyIncludeDescription ? 'bg-[#A5BEAC] border-[#A5BEAC] text-white' : 'bg-white border-stone-300'}`}>{shopifyIncludeDescription && '✓'}</div>
+                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${shopifyIncludeDescription ? 'bg-brand border-brand text-white' : 'bg-white border-stone-300'}`}>{shopifyIncludeDescription && '✓'}</div>
                 <div>
                   <p className="text-xs font-black uppercase text-slate-900">Include description</p>
                   <p className="text-[10px] text-stone-400 font-bold">Notes, metals, stones</p>
                 </div>
               </div>
               <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setShopifyIncludeImage(!shopifyIncludeImage)}>
-                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${shopifyIncludeImage ? 'bg-[#A5BEAC] border-[#A5BEAC] text-white' : 'bg-white border-stone-300'}`}>{shopifyIncludeImage && '✓'}</div>
+                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${shopifyIncludeImage ? 'bg-brand border-brand text-white' : 'bg-white border-stone-300'}`}>{shopifyIncludeImage && '✓'}</div>
                 <div>
                   <p className="text-xs font-black uppercase text-slate-900">Include image</p>
                   <p className="text-[10px] text-stone-400 font-bold">Adds our image without removing existing</p>
                 </div>
               </div>
               <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setShopifyIncludeRetail(!shopifyIncludeRetail)}>
-                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${shopifyIncludeRetail ? 'bg-[#A5BEAC] border-[#A5BEAC] text-white' : 'bg-white border-stone-300'}`}>{shopifyIncludeRetail && '✓'}</div>
+                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${shopifyIncludeRetail ? 'bg-brand border-brand text-white' : 'bg-white border-stone-300'}`}>{shopifyIncludeRetail && '✓'}</div>
                 <div>
                   <p className="text-xs font-black uppercase text-slate-900">Include retail price</p>
                 </div>
               </div>
               <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setShopifyIncludeWholesale(!shopifyIncludeWholesale)}>
-                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${shopifyIncludeWholesale ? 'bg-[#A5BEAC] border-[#A5BEAC] text-white' : 'bg-white border-stone-300'}`}>{shopifyIncludeWholesale && '✓'}</div>
+                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${shopifyIncludeWholesale ? 'bg-brand border-brand text-white' : 'bg-white border-stone-300'}`}>{shopifyIncludeWholesale && '✓'}</div>
                 <div>
                   <p className="text-xs font-black uppercase text-slate-900">Include wholesale price</p>
                   <p className="text-[10px] text-stone-400 font-bold">Compare-at price in Shopify</p>
@@ -4407,8 +4407,8 @@ export default function Home() {
               <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 space-y-2">
                 <p className="text-xs font-black uppercase text-slate-900">Price source</p>
                 <div className="flex gap-2">
-                  <button onClick={() => setShopifyPriceSource('saved')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase border transition-all ${shopifyPriceSource === 'saved' ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-500'}`}>Saved</button>
-                  <button onClick={() => setShopifyPriceSource('live')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase border transition-all ${shopifyPriceSource === 'live' ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-500'}`}>Live</button>
+                  <button onClick={() => setShopifyPriceSource('saved')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase border transition-all ${shopifyPriceSource === 'saved' ? 'bg-brand text-white border-brand' : 'bg-white border-stone-200 text-stone-500'}`}>Saved</button>
+                  <button onClick={() => setShopifyPriceSource('live')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase border transition-all ${shopifyPriceSource === 'live' ? 'bg-brand text-white border-brand' : 'bg-white border-stone-200 text-stone-500'}`}>Live</button>
                 </div>
                 <p className="text-[10px] text-stone-400 font-bold">Saved = vault values. Live = computed from current metals & formula.</p>
               </div>
@@ -4416,7 +4416,7 @@ export default function Home() {
 
             <div className="flex gap-3">
               <button onClick={() => setShowShopifyExportOptions(false)} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
-              <button onClick={() => { setShowShopifyExportOptions(false); exportToShopify(); }} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition shadow-lg">Export</button>
+              <button onClick={() => { setShowShopifyExportOptions(false); exportToShopify(); }} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition shadow-lg">Export</button>
             </div>
           </div>
         </div>
@@ -4424,7 +4424,7 @@ export default function Home() {
 
       {showSiteProductCsvModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
-          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-6 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-brand p-8 space-y-6 max-h-[90vh] overflow-y-auto">
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Export CSV for your site</h3>
             <p className="text-[10px] text-stone-500 font-bold">Download a product file to import into Shopify or Squarespace (no store connection required).</p>
 
@@ -4434,14 +4434,14 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => setSiteCsvPlatform('shopify')}
-                  className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase border transition-all ${siteCsvPlatform === 'shopify' ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-500'}`}
+                  className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase border transition-all ${siteCsvPlatform === 'shopify' ? 'bg-brand text-white border-brand' : 'bg-white border-stone-200 text-stone-500'}`}
                 >
                   Shopify
                 </button>
                 <button
                   type="button"
                   onClick={() => setSiteCsvPlatform('squarespace')}
-                  className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase border transition-all ${siteCsvPlatform === 'squarespace' ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-500'}`}
+                  className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase border transition-all ${siteCsvPlatform === 'squarespace' ? 'bg-brand text-white border-brand' : 'bg-white border-stone-200 text-stone-500'}`}
                 >
                   Squarespace
                 </button>
@@ -4450,14 +4450,14 @@ export default function Home() {
 
             <div className="space-y-3">
               <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setShopifyIncludeDescription(!shopifyIncludeDescription)}>
-                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${shopifyIncludeDescription ? 'bg-[#A5BEAC] border-[#A5BEAC] text-white' : 'bg-white border-stone-300'}`}>{shopifyIncludeDescription && '✓'}</div>
+                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${shopifyIncludeDescription ? 'bg-brand border-brand text-white' : 'bg-white border-stone-300'}`}>{shopifyIncludeDescription && '✓'}</div>
                 <div>
                   <p className="text-xs font-black uppercase text-slate-900">Include description</p>
                   <p className="text-[10px] text-stone-400 font-bold">Notes, metals, stones</p>
                 </div>
               </div>
               <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setShopifyIncludeWholesalePctOfRetail(!shopifyIncludeWholesalePctOfRetail)}>
-                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${shopifyIncludeWholesalePctOfRetail ? 'bg-[#A5BEAC] border-[#A5BEAC] text-white' : 'bg-white border-stone-300'}`}>{shopifyIncludeWholesalePctOfRetail && '✓'}</div>
+                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${shopifyIncludeWholesalePctOfRetail ? 'bg-brand border-brand text-white' : 'bg-white border-stone-300'}`}>{shopifyIncludeWholesalePctOfRetail && '✓'}</div>
                 <div>
                   <p className="text-xs font-black uppercase text-slate-900">Wholesale % of retail</p>
                   <p className="text-[10px] text-stone-400 font-bold">Extra column; % = wholesale ÷ retail using same rounded $ as Price / compare-at</p>
@@ -4467,21 +4467,21 @@ export default function Home() {
               {siteCsvPlatform === 'shopify' && (
                 <>
                   <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setShopifyIncludeImage(!shopifyIncludeImage)}>
-                    <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${shopifyIncludeImage ? 'bg-[#A5BEAC] border-[#A5BEAC] text-white' : 'bg-white border-stone-300'}`}>{shopifyIncludeImage && '✓'}</div>
+                    <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${shopifyIncludeImage ? 'bg-brand border-brand text-white' : 'bg-white border-stone-300'}`}>{shopifyIncludeImage && '✓'}</div>
                     <div>
                       <p className="text-xs font-black uppercase text-slate-900">Include image URL</p>
                       <p className="text-[10px] text-stone-400 font-bold">Shopify import column only</p>
                     </div>
                   </div>
                   <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setShopifyIncludeRetail(!shopifyIncludeRetail)}>
-                    <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${shopifyIncludeRetail ? 'bg-[#A5BEAC] border-[#A5BEAC] text-white' : 'bg-white border-stone-300'}`}>{shopifyIncludeRetail && '✓'}</div>
+                    <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${shopifyIncludeRetail ? 'bg-brand border-brand text-white' : 'bg-white border-stone-300'}`}>{shopifyIncludeRetail && '✓'}</div>
                     <div>
                       <p className="text-xs font-black uppercase text-slate-900">Include retail price</p>
                       <p className="text-[10px] text-stone-400 font-bold">Shopify only</p>
                     </div>
                   </div>
                   <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 flex items-center gap-4 cursor-pointer" onClick={() => setShopifyIncludeWholesale(!shopifyIncludeWholesale)}>
-                    <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${shopifyIncludeWholesale ? 'bg-[#A5BEAC] border-[#A5BEAC] text-white' : 'bg-white border-stone-300'}`}>{shopifyIncludeWholesale && '✓'}</div>
+                    <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${shopifyIncludeWholesale ? 'bg-brand border-brand text-white' : 'bg-white border-stone-300'}`}>{shopifyIncludeWholesale && '✓'}</div>
                     <div>
                       <p className="text-xs font-black uppercase text-slate-900">Include wholesale → compare-at</p>
                       <p className="text-[10px] text-stone-400 font-bold">Shopify only</p>
@@ -4490,8 +4490,8 @@ export default function Home() {
                   <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 space-y-2">
                     <p className="text-xs font-black uppercase text-slate-900">Price source</p>
                     <div className="flex gap-2">
-                      <button type="button" onClick={() => setShopifyPriceSource('saved')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase border transition-all ${shopifyPriceSource === 'saved' ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-500'}`}>Saved</button>
-                      <button type="button" onClick={() => setShopifyPriceSource('live')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase border transition-all ${shopifyPriceSource === 'live' ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-500'}`}>Live</button>
+                      <button type="button" onClick={() => setShopifyPriceSource('saved')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase border transition-all ${shopifyPriceSource === 'saved' ? 'bg-brand text-white border-brand' : 'bg-white border-stone-200 text-stone-500'}`}>Saved</button>
+                      <button type="button" onClick={() => setShopifyPriceSource('live')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase border transition-all ${shopifyPriceSource === 'live' ? 'bg-brand text-white border-brand' : 'bg-white border-stone-200 text-stone-500'}`}>Live</button>
                     </div>
                     <p className="text-[10px] text-stone-400 font-bold">Saved = vault values. Live = computed from current metals and formula.</p>
                   </div>
@@ -4506,8 +4506,8 @@ export default function Home() {
                   <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 space-y-2">
                     <p className="text-xs font-black uppercase text-slate-900">Price source for %</p>
                     <div className="flex gap-2">
-                      <button type="button" onClick={() => setShopifyPriceSource('saved')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase border transition-all ${shopifyPriceSource === 'saved' ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-500'}`}>Saved</button>
-                      <button type="button" onClick={() => setShopifyPriceSource('live')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase border transition-all ${shopifyPriceSource === 'live' ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-500'}`}>Live</button>
+                      <button type="button" onClick={() => setShopifyPriceSource('saved')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase border transition-all ${shopifyPriceSource === 'saved' ? 'bg-brand text-white border-brand' : 'bg-white border-stone-200 text-stone-500'}`}>Saved</button>
+                      <button type="button" onClick={() => setShopifyPriceSource('live')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase border transition-all ${shopifyPriceSource === 'live' ? 'bg-brand text-white border-brand' : 'bg-white border-stone-200 text-stone-500'}`}>Live</button>
                     </div>
                     <p className="text-[10px] text-stone-400 font-bold">Used when “Wholesale % of retail” is checked. Matches your vault price rounding setting.</p>
                   </div>
@@ -4517,7 +4517,7 @@ export default function Home() {
 
             <div className="flex gap-3">
               <button type="button" onClick={() => setShowSiteProductCsvModal(false)} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
-              <button type="button" onClick={() => { exportSiteProductCsv(); }} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition shadow-lg">Download CSV</button>
+              <button type="button" onClick={() => { exportSiteProductCsv(); }} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition shadow-lg">Download CSV</button>
             </div>
           </div>
         </div>
@@ -4526,8 +4526,8 @@ export default function Home() {
       {/* Shopify Export Progress Modal – hidden when SHOPIFY_FEATURE_ENABLED is false */}
       {SHOPIFY_FEATURE_ENABLED && shopifyExportProgress === 'exporting' && (
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[400] flex items-center justify-center pt-4 px-4 pb-modal-safe">
-          <div className="bg-white w-full max-w-sm rounded-[2.5rem] border-2 border-[#A5BEAC] p-10 space-y-6 shadow-2xl animate-in zoom-in-95 text-center">
-            <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto bg-[#A5BEAC]/20 animate-pulse">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] border-2 border-brand p-10 space-y-6 shadow-2xl animate-in zoom-in-95 text-center">
+            <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto bg-brand/20 animate-pulse">
               <span className="text-3xl">⟳</span>
             </div>
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Exporting to Shopify</h3>
@@ -4539,8 +4539,8 @@ export default function Home() {
       {/* Shopify Export Confirmation Modal – hidden when SHOPIFY_FEATURE_ENABLED is false */}
       {SHOPIFY_FEATURE_ENABLED && shopifyExportProgress && shopifyExportProgress !== 'exporting' && (
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[400] flex items-center justify-center pt-4 px-4 pb-modal-safe">
-          <div className="bg-white w-full max-w-sm rounded-[2.5rem] border-2 border-[#A5BEAC] p-10 space-y-6 shadow-2xl animate-in zoom-in-95 text-center">
-            <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto bg-[#A5BEAC]/10 text-[#A5BEAC]">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] border-2 border-brand p-10 space-y-6 shadow-2xl animate-in zoom-in-95 text-center">
+            <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto bg-brand/10 text-brand">
               <span className="text-2xl">✓</span>
             </div>
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Export Complete</h3>
@@ -4554,14 +4554,14 @@ export default function Home() {
             {shopifyExportProgress.errors.length > 0 && shopifyExportProgress.errors.length <= 3 && (
               <p className="text-[10px] text-stone-500 font-bold">{shopifyExportProgress.errors.join(' ')}</p>
             )}
-            <button onClick={() => setShopifyExportProgress(null)} className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-[#A5BEAC] transition-all shadow-lg">Done</button>
+            <button onClick={() => setShopifyExportProgress(null)} className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-brand transition-all shadow-lg">Done</button>
           </div>
         </div>
       )}
 
       {editingItem && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
-          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-6">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-brand p-8 space-y-6">
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Manual Price Edit</h3>
             {/* Rounding options */}
             <div className="flex flex-wrap items-center gap-2">
@@ -4573,20 +4573,20 @@ export default function Home() {
                   setManualRetail(r(Number(editingItem.retail)).toFixed(2));
                   setManualWholesale(r(Number(editingItem.wholesale)).toFixed(2));
                 }}
-                  className={`py-1.5 px-2.5 rounded-lg text-[9px] font-black uppercase border transition-all ${priceRounding === opt ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-stone-50 border-stone-200 text-stone-500'}`}>
+                  className={`py-1.5 px-2.5 rounded-lg text-[9px] font-black uppercase border transition-all ${priceRounding === opt ? 'bg-brand text-white border-brand' : 'bg-stone-50 border-stone-200 text-stone-500'}`}>
                   {opt === 'none' ? 'None' : `$${opt}`}
                 </button>
               ))}
             </div>
             <div className="space-y-4">
               <div><label className="text-[10px] font-black uppercase text-stone-400 mb-1 block">New Retail Price ($)</label>
-                <input type="number" className="w-full p-4 bg-stone-50 border rounded-2xl outline-none focus:border-[#A5BEAC] font-bold" value={manualRetail} onChange={(e) => setManualRetail(e.target.value)} /></div>
+                <input type="number" className="w-full p-4 bg-stone-50 border rounded-2xl outline-none focus:border-brand font-bold" value={manualRetail} onChange={(e) => setManualRetail(e.target.value)} /></div>
               <div><label className="text-[10px] font-black uppercase text-stone-400 mb-1 block">New Wholesale Cost ($)</label>
-                <input type="number" className="w-full p-4 bg-stone-50 border rounded-2xl outline-none focus:border-[#A5BEAC] font-bold" value={manualWholesale} onChange={(e) => setManualWholesale(e.target.value)} /></div>
+                <input type="number" className="w-full p-4 bg-stone-50 border rounded-2xl outline-none focus:border-brand font-bold" value={manualWholesale} onChange={(e) => setManualWholesale(e.target.value)} /></div>
             </div>
             <div className="flex gap-3">
               <button onClick={() => setEditingItem(null)} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
-              <button onClick={handleManualPriceSave} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition shadow-lg">Save Vault</button>
+              <button onClick={handleManualPriceSave} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition shadow-lg">Save Vault</button>
             </div>
           </div>
         </div>
@@ -4595,7 +4595,7 @@ export default function Home() {
       {/* RECALCULATE MODAL (Individual) */}
       {recalcItem && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
-          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] max-h-[95vh] overflow-hidden flex flex-col">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-brand max-h-[95vh] overflow-hidden flex flex-col">
             <div className="overflow-y-auto flex-1 min-h-0 p-8 space-y-5 custom-scrollbar">
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Scenario Calculator</h3>
             <p className="text-[10px] text-stone-400 font-bold uppercase">Temporarily recalculate logic with custom inputs</p>
@@ -4604,7 +4604,7 @@ export default function Home() {
               <span className="text-[9px] font-bold text-stone-400 uppercase">Round prices to</span>
               {(['none', 1, 5, 10, 25] as const).map(opt => (
                 <button key={opt} type="button" onClick={() => setPriceRoundingWithPersist(opt)}
-                  className={`py-1.5 px-2.5 rounded-lg text-[9px] font-black uppercase border transition-all ${priceRounding === opt ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-stone-50 border-stone-200 text-stone-500'}`}>
+                  className={`py-1.5 px-2.5 rounded-lg text-[9px] font-black uppercase border transition-all ${priceRounding === opt ? 'bg-brand text-white border-brand' : 'bg-stone-50 border-stone-200 text-stone-500'}`}>
                   {opt === 'none' ? 'None' : `$${opt}`}
                 </button>
               ))}
@@ -4614,26 +4614,26 @@ export default function Home() {
               <p className="text-[9px] text-stone-500 italic">Leave blank to keep the previously saved spot price for each metal.</p>
               {recalcItem.metals.some((m: any) => m.type.toLowerCase().includes('gold')) && (
                 <div><label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Gold spot ($/ozt)</label>
-                  <input type="number" placeholder={`${prices.gold}`} className="w-full p-3 bg-white border rounded-xl outline-none focus:border-[#A5BEAC] font-bold text-sm" value={recalcParams.gold} onChange={(e) => setRecalcParams({ ...recalcParams, gold: e.target.value })} /></div>
+                  <input type="number" placeholder={`${prices.gold}`} className="w-full p-3 bg-white border rounded-xl outline-none focus:border-brand font-bold text-sm" value={recalcParams.gold} onChange={(e) => setRecalcParams({ ...recalcParams, gold: e.target.value })} /></div>
               )}
               {recalcItem.metals.some((m: any) => m.type.toLowerCase().includes('silver')) && (
                 <div><label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Silver spot ($/ozt)</label>
-                  <input type="number" placeholder={`${prices.silver}`} className="w-full p-3 bg-white border rounded-xl outline-none focus:border-[#A5BEAC] font-bold text-sm" value={recalcParams.silver} onChange={(e) => setRecalcParams({ ...recalcParams, silver: e.target.value })} /></div>
+                  <input type="number" placeholder={`${prices.silver}`} className="w-full p-3 bg-white border rounded-xl outline-none focus:border-brand font-bold text-sm" value={recalcParams.silver} onChange={(e) => setRecalcParams({ ...recalcParams, silver: e.target.value })} /></div>
               )}
               {recalcItem.metals.some((m: any) => m.type.toLowerCase().includes('platinum')) && (
                 <div><label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Platinum spot ($/ozt)</label>
-                  <input type="number" placeholder={`${prices.platinum}`} className="w-full p-3 bg-white border rounded-xl outline-none focus:border-[#A5BEAC] font-bold text-sm" value={recalcParams.platinum} onChange={(e) => setRecalcParams({ ...recalcParams, platinum: e.target.value })} /></div>
+                  <input type="number" placeholder={`${prices.platinum}`} className="w-full p-3 bg-white border rounded-xl outline-none focus:border-brand font-bold text-sm" value={recalcParams.platinum} onChange={(e) => setRecalcParams({ ...recalcParams, platinum: e.target.value })} /></div>
               )}
               {recalcItem.metals.some((m: any) => m.type.toLowerCase().includes('palladium')) && (
                 <div><label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Palladium spot ($/ozt)</label>
-                  <input type="number" placeholder={`${prices.palladium}`} className="w-full p-3 bg-white border rounded-xl outline-none focus:border-[#A5BEAC] font-bold text-sm" value={recalcParams.palladium} onChange={(e) => setRecalcParams({ ...recalcParams, palladium: e.target.value })} /></div>
+                  <input type="number" placeholder={`${prices.palladium}`} className="w-full p-3 bg-white border rounded-xl outline-none focus:border-brand font-bold text-sm" value={recalcParams.palladium} onChange={(e) => setRecalcParams({ ...recalcParams, palladium: e.target.value })} /></div>
               )}
 
               <hr className="border-stone-200" />
 
               <div>
                 <label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">New Labor Rate ($/hr)</label>
-                <input type="number" placeholder="Enter rate to recalculate..." className="w-full p-3 bg-white border rounded-xl outline-none focus:border-[#A5BEAC] font-bold text-sm" value={recalcParams.laborRate} onChange={(e) => setRecalcParams({ ...recalcParams, laborRate: e.target.value })} />
+                <input type="number" placeholder="Enter rate to recalculate..." className="w-full p-3 bg-white border rounded-xl outline-none focus:border-brand font-bold text-sm" value={recalcParams.laborRate} onChange={(e) => setRecalcParams({ ...recalcParams, laborRate: e.target.value })} />
               </div>
             </div>
 
@@ -4642,7 +4642,7 @@ export default function Home() {
               <select
                 value={recalcItemFormulaMode}
                 onChange={(e) => setRecalcItemFormulaMode(e.target.value)}
-                className="w-full p-3 rounded-xl border border-stone-200 bg-white text-sm font-bold outline-none focus:border-[#A5BEAC]"
+                className="w-full p-3 rounded-xl border border-stone-200 bg-white text-sm font-bold outline-none focus:border-brand"
               >
                 <option value="keep">Keep this item&apos;s current formula</option>
                 <option value="A">Apply Formula A</option>
@@ -4750,7 +4750,7 @@ export default function Home() {
 
             <div className="flex gap-3">
               <button onClick={() => { setRecalcItem(null); setRecalcParams({ gold: '', silver: '', platinum: '', palladium: '', laborRate: '' }); setRecalcItemFormulaMode('keep'); }} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Close Calculator</button>
-              <button onClick={handleRecalcSync} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition shadow-lg">Sync to Vault</button>
+              <button onClick={handleRecalcSync} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition shadow-lg">Sync to Vault</button>
             </div>
             </div>
           </div>
@@ -4760,7 +4760,7 @@ export default function Home() {
       {/* Log Time Modal */}
       {showLogTimeModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
-          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-5">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-brand p-8 space-y-5">
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">{editingTimeEntryId ? 'Edit Time Entry' : 'Log Time'}</h3>
             <p className="text-[10px] text-stone-400 font-bold uppercase">
               {editingTimeEntryId ? (logTimeItemId ? `Assigned to: ${(inventory.find(i => i.id === logTimeItemId)?.name || 'Piece').toUpperCase()}` : 'General / unassigned') : (logTimeItemId ? `Add time to: ${(inventory.find(i => i.id === logTimeItemId)?.name || 'Piece').toUpperCase()}` : 'Log general shop time (unassigned)')}
@@ -4776,14 +4776,14 @@ export default function Home() {
                   onChange={e => { setLogTimeItemSearch(e.target.value); setLogTimeItemDropdownOpen(true); }}
                   onFocus={() => { setLogTimeItemDropdownOpen(true); setLogTimeItemSearch(logTimeItemId ? (inventory.find((i: any) => i.id === logTimeItemId)?.name || '') : ''); }}
                   onBlur={() => setTimeout(() => setLogTimeItemDropdownOpen(false), 150)}
-                  className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl outline-none focus:border-[#A5BEAC] text-sm font-bold"
+                  className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl outline-none focus:border-brand text-sm font-bold"
                 />
                 {logTimeItemDropdownOpen && (
                   <div className="absolute top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white border border-stone-200 rounded-xl shadow-lg z-50">
                     <button
                       type="button"
                       onClick={() => { setLogTimeItemId(null); setLogTimeItemSearch(''); setLogTimeItemDropdownOpen(false); }}
-                      className={`w-full text-left px-3 py-2.5 text-sm font-bold hover:bg-stone-50 first:rounded-t-xl ${!logTimeItemId ? 'bg-[#A5BEAC]/10 text-[#A5BEAC]' : 'text-stone-600'}`}
+                      className={`w-full text-left px-3 py-2.5 text-sm font-bold hover:bg-stone-50 first:rounded-t-xl ${!logTimeItemId ? 'bg-brand/10 text-brand' : 'text-stone-600'}`}
                     >
                       General / unassigned
                     </button>
@@ -4794,7 +4794,7 @@ export default function Home() {
                           key={i.id}
                           type="button"
                           onClick={() => { setLogTimeItemId(i.id); setLogTimeItemSearch(''); setLogTimeItemDropdownOpen(false); }}
-                          className={`w-full text-left px-3 py-2.5 text-sm font-bold hover:bg-stone-50 last:rounded-b-xl ${logTimeItemId === i.id ? 'bg-[#A5BEAC]/10 text-[#A5BEAC]' : 'text-stone-800'}`}
+                          className={`w-full text-left px-3 py-2.5 text-sm font-bold hover:bg-stone-50 last:rounded-b-xl ${logTimeItemId === i.id ? 'bg-brand/10 text-brand' : 'text-stone-800'}`}
                         >
                           {(i.name || '').toUpperCase()}
                         </button>
@@ -4810,7 +4810,7 @@ export default function Home() {
               <label className="text-[9px] font-bold text-stone-400 uppercase block mb-1">Date worked</label>
               <input
                 type="date"
-                className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl outline-none focus:border-[#A5BEAC] text-sm font-bold"
+                className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl outline-none focus:border-brand text-sm font-bold"
                 value={logTimeDate || localTodayYYYYMMDD()}
                 onChange={e => setLogTimeDate(e.target.value)}
               />
@@ -4823,7 +4823,7 @@ export default function Home() {
                 min={0.01}
                 step={0.25}
                 placeholder="e.g. 2.5"
-                className="w-full p-4 bg-stone-50 border border-stone-200 rounded-xl outline-none focus:border-[#A5BEAC] font-bold"
+                className="w-full p-4 bg-stone-50 border border-stone-200 rounded-xl outline-none focus:border-brand font-bold"
                 value={logTimeHours}
                 onChange={e => setLogTimeHours(e.target.value)}
               />
@@ -4833,7 +4833,7 @@ export default function Home() {
               <input
                 type="text"
                 placeholder="e.g. Polishing, stone setting"
-                className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl outline-none focus:border-[#A5BEAC] text-sm"
+                className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl outline-none focus:border-brand text-sm"
                 value={logTimeNote}
                 onChange={e => setLogTimeNote(e.target.value)}
               />
@@ -4841,9 +4841,9 @@ export default function Home() {
             <div className="flex gap-3">
               <button onClick={() => { setShowLogTimeModal(false); setEditingTimeEntryId(null); setLogTimeItemId(null); setLogTimeItemSearch(''); setLogTimeItemDropdownOpen(false); setLogTimeHours(''); setLogTimeDate(''); setLogTimeNote(''); setLogTimeAllowItemSelect(false); }} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
               {editingTimeEntryId ? (
-                <button onClick={updateTimeEntry} disabled={!logTimeHours || parseFloat(logTimeHours) <= 0} className={`flex-1 py-4 rounded-2xl font-black text-[10px] uppercase transition shadow-lg ${!logTimeHours || parseFloat(logTimeHours) <= 0 ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-[#A5BEAC] text-white hover:bg-slate-900'}`}>Update</button>
+                <button onClick={updateTimeEntry} disabled={!logTimeHours || parseFloat(logTimeHours) <= 0} className={`flex-1 py-4 rounded-2xl font-black text-[10px] uppercase transition shadow-lg ${!logTimeHours || parseFloat(logTimeHours) <= 0 ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-brand text-white hover:bg-slate-900'}`}>Update</button>
               ) : (
-                <button onClick={saveTimeEntry} disabled={!logTimeHours || parseFloat(logTimeHours) <= 0} className={`flex-1 py-4 rounded-2xl font-black text-[10px] uppercase transition shadow-lg ${!logTimeHours || parseFloat(logTimeHours) <= 0 ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-[#A5BEAC] text-white hover:bg-slate-900'}`}>Add time</button>
+                <button onClick={saveTimeEntry} disabled={!logTimeHours || parseFloat(logTimeHours) <= 0} className={`flex-1 py-4 rounded-2xl font-black text-[10px] uppercase transition shadow-lg ${!logTimeHours || parseFloat(logTimeHours) <= 0 ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-brand text-white hover:bg-slate-900'}`}>Add time</button>
               )}
             </div>
           </div>
@@ -4853,19 +4853,19 @@ export default function Home() {
       {/* Quick Add Piece Modal (draft - time-only) */}
       {showQuickAddPiece && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
-          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] p-8 space-y-5">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-brand p-8 space-y-5">
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Quick Add Piece</h3>
             <p className="text-[10px] text-stone-400 font-bold uppercase">Create a draft piece to track time. Add metal and pricing later.</p>
             <input
               placeholder="Piece name"
-              className="w-full p-4 bg-stone-50 border border-stone-200 rounded-xl outline-none focus:border-[#A5BEAC] font-bold"
+              className="w-full p-4 bg-stone-50 border border-stone-200 rounded-xl outline-none focus:border-brand font-bold"
               value={quickAddPieceName}
               onChange={e => setQuickAddPieceName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && addQuickAddPiece()}
             />
             <div className="flex gap-3">
               <button onClick={() => { setShowQuickAddPiece(false); setQuickAddPieceName(''); }} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
-              <button onClick={addQuickAddPiece} disabled={savingToVault || !quickAddPieceName.trim()} className={`flex-1 py-4 rounded-2xl font-black text-[10px] uppercase transition shadow-lg ${savingToVault || !quickAddPieceName.trim() ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-[#A5BEAC] text-white hover:bg-slate-900'}`}>{savingToVault ? 'Saving…' : 'Add piece'}</button>
+              <button onClick={addQuickAddPiece} disabled={savingToVault || !quickAddPieceName.trim()} className={`flex-1 py-4 rounded-2xl font-black text-[10px] uppercase transition shadow-lg ${savingToVault || !quickAddPieceName.trim() ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-brand text-white hover:bg-slate-900'}`}>{savingToVault ? 'Saving…' : 'Add piece'}</button>
             </div>
           </div>
         </div>
@@ -4874,7 +4874,7 @@ export default function Home() {
       {/* NEW: GLOBAL RECALCULATE MODAL */}
       {showGlobalRecalc && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
-          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-[#A5BEAC] max-h-[95vh] overflow-hidden flex flex-col">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-brand max-h-[95vh] overflow-hidden flex flex-col">
             <div className="overflow-y-auto flex-1 min-h-0 p-8 space-y-5 custom-scrollbar">
             <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900">Recalculate all items</h3>
             <p className="text-[10px] text-stone-400 font-bold uppercase">Update spot prices, labor rate, and formula for selected or all items</p>
@@ -4884,7 +4884,7 @@ export default function Home() {
               <span className="text-[9px] font-bold text-stone-400 uppercase">Round prices to</span>
               {(['none', 1, 5, 10, 25] as const).map(opt => (
                 <button key={opt} type="button" onClick={() => setPriceRoundingWithPersist(opt)}
-                  className={`py-1.5 px-2.5 rounded-lg text-[9px] font-black uppercase border transition-all ${priceRounding === opt ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-stone-50 border-stone-200 text-stone-500'}`}>
+                  className={`py-1.5 px-2.5 rounded-lg text-[9px] font-black uppercase border transition-all ${priceRounding === opt ? 'bg-brand text-white border-brand' : 'bg-stone-50 border-stone-200 text-stone-500'}`}>
                   {opt === 'none' ? 'None' : `$${opt}`}
                 </button>
               ))}
@@ -4901,27 +4901,27 @@ export default function Home() {
                   palladium: prices.palladium ? String(prices.palladium) : '',
                   laborRate: recalcParams.laborRate
                 })}
-                className="w-full py-2.5 rounded-xl text-[10px] font-black uppercase bg-[#A5BEAC] text-white hover:bg-slate-900 transition"
+                className="w-full py-2.5 rounded-xl text-[10px] font-black uppercase bg-brand text-white hover:bg-slate-900 transition"
               >
                 Fill with current spot prices
               </button>
               <div><label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Gold spot ($/ozt)</label>
-                <input type="number" placeholder={`${prices.gold}`} className="w-full p-3 bg-white border rounded-xl outline-none focus:border-[#A5BEAC] font-bold text-sm" value={recalcParams.gold} onChange={(e) => setRecalcParams({ ...recalcParams, gold: e.target.value })} /></div>
+                <input type="number" placeholder={`${prices.gold}`} className="w-full p-3 bg-white border rounded-xl outline-none focus:border-brand font-bold text-sm" value={recalcParams.gold} onChange={(e) => setRecalcParams({ ...recalcParams, gold: e.target.value })} /></div>
 
               <div><label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Silver spot ($/ozt)</label>
-                <input type="number" placeholder={`${prices.silver}`} className="w-full p-3 bg-white border rounded-xl outline-none focus:border-[#A5BEAC] font-bold text-sm" value={recalcParams.silver} onChange={(e) => setRecalcParams({ ...recalcParams, silver: e.target.value })} /></div>
+                <input type="number" placeholder={`${prices.silver}`} className="w-full p-3 bg-white border rounded-xl outline-none focus:border-brand font-bold text-sm" value={recalcParams.silver} onChange={(e) => setRecalcParams({ ...recalcParams, silver: e.target.value })} /></div>
 
               <div><label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Platinum spot ($/ozt)</label>
-                <input type="number" placeholder={`${prices.platinum}`} className="w-full p-3 bg-white border rounded-xl outline-none focus:border-[#A5BEAC] font-bold text-sm" value={recalcParams.platinum} onChange={(e) => setRecalcParams({ ...recalcParams, platinum: e.target.value })} /></div>
+                <input type="number" placeholder={`${prices.platinum}`} className="w-full p-3 bg-white border rounded-xl outline-none focus:border-brand font-bold text-sm" value={recalcParams.platinum} onChange={(e) => setRecalcParams({ ...recalcParams, platinum: e.target.value })} /></div>
 
               <div><label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">Palladium spot ($/ozt)</label>
-                <input type="number" placeholder={`${prices.palladium}`} className="w-full p-3 bg-white border rounded-xl outline-none focus:border-[#A5BEAC] font-bold text-sm" value={recalcParams.palladium} onChange={(e) => setRecalcParams({ ...recalcParams, palladium: e.target.value })} /></div>
+                <input type="number" placeholder={`${prices.palladium}`} className="w-full p-3 bg-white border rounded-xl outline-none focus:border-brand font-bold text-sm" value={recalcParams.palladium} onChange={(e) => setRecalcParams({ ...recalcParams, palladium: e.target.value })} /></div>
 
               <hr className="border-stone-200" />
 
               <div>
                 <label className="text-[9px] font-black uppercase text-stone-400 mb-1 block">New Labor Rate ($/hr)</label>
-                <input type="number" placeholder="Enter new rate..." className="w-full p-3 bg-white border rounded-xl outline-none focus:border-[#A5BEAC] font-bold text-sm" value={recalcParams.laborRate} onChange={(e) => setRecalcParams({ ...recalcParams, laborRate: e.target.value })} />
+                <input type="number" placeholder="Enter new rate..." className="w-full p-3 bg-white border rounded-xl outline-none focus:border-brand font-bold text-sm" value={recalcParams.laborRate} onChange={(e) => setRecalcParams({ ...recalcParams, laborRate: e.target.value })} />
               </div>
             </div>
 
@@ -4930,7 +4930,7 @@ export default function Home() {
               <select
                 value={globalRecalcFormulaMode}
                 onChange={(e) => setGlobalRecalcFormulaMode(e.target.value)}
-                className="w-full p-3 rounded-xl border border-stone-200 bg-white text-sm font-bold outline-none focus:border-[#A5BEAC]"
+                className="w-full p-3 rounded-xl border border-stone-200 bg-white text-sm font-bold outline-none focus:border-brand"
               >
                 <option value="keep">Keep each item&apos;s current formula</option>
                 <option value="A">Apply Formula A to all</option>
@@ -4943,7 +4943,7 @@ export default function Home() {
 
             <div className="flex gap-3">
               <button onClick={() => { setShowGlobalRecalc(false); setRecalcParams({ gold: '', silver: '', platinum: '', palladium: '', laborRate: '' }); setGlobalRecalcFormulaMode('keep'); }} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
-              <button onClick={handleGlobalRecalcSync} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition shadow-lg">Recalculate</button>
+              <button onClick={handleGlobalRecalcSync} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition shadow-lg">Recalculate</button>
             </div>
             </div>
           </div>
@@ -4952,7 +4952,7 @@ export default function Home() {
 
       {showResetModal && (
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[300] flex items-center justify-center pt-4 px-4 pb-modal-safe">
-          <div className="bg-white w-full max-w-sm rounded-[2.5rem] border-2 border-[#A5BEAC] p-8 space-y-6 shadow-2xl animate-in zoom-in-95">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] border-2 border-brand p-8 space-y-6 shadow-2xl animate-in zoom-in-95">
             <div className="text-center">
               <h3 className="text-xl font-black uppercase italic tracking-tighter">Secure the Vault</h3>
               <p className="text-[10px] text-stone-400 font-bold uppercase mt-2">Enter your new master password</p>
@@ -4961,21 +4961,21 @@ export default function Home() {
               <input
                 type={showPassword ? "text" : "password"}
                 placeholder="New Password"
-                className="w-full p-4 bg-stone-50 border rounded-2xl outline-none focus:border-[#A5BEAC] font-bold"
+                className="w-full p-4 bg-stone-50 border rounded-2xl outline-none focus:border-brand font-bold"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black uppercase text-stone-300 hover:text-[#A5BEAC]"
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black uppercase text-stone-300 hover:text-brand"
               >
                 {showPassword ? "Hide" : "Show"}
               </button>
             </div>
             <button
               onClick={handleUpdatePassword}
-              className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-[#A5BEAC] transition-all shadow-lg"
+              className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-brand transition-all shadow-lg"
             >
               Update Vault Access
             </button>
@@ -4985,11 +4985,11 @@ export default function Home() {
 
       {notification && (
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[400] flex items-center justify-center pt-4 px-4 pb-modal-safe">
-          <div className="bg-white w-full max-w-sm rounded-[2.5rem] border-2 border-[#A5BEAC] p-10 space-y-6 shadow-2xl animate-in zoom-in-95 text-center">
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] border-2 border-brand p-10 space-y-6 shadow-2xl animate-in zoom-in-95 text-center">
             <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-2 ${notification.type === 'error' ? 'bg-red-50 text-red-500' :
                 notification.type === 'info' ? 'bg-blue-50 text-blue-500' :
                   notification.type === 'confirm' ? 'bg-amber-50 text-amber-500' :
-                    'bg-[#A5BEAC]/10 text-[#A5BEAC]'
+                    'bg-brand/10 text-brand'
               }`}>
               <span className="text-2xl">
                 {notification.type === 'error' ? '⚠️' : notification.type === 'info' ? 'ℹ️' : notification.type === 'confirm' ? '❓' : '✨'}
@@ -5003,17 +5003,17 @@ export default function Home() {
               {notification.type === 'confirm' ? (
                 <>
                   <button onClick={() => setNotification(null)} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Cancel</button>
-                  <button onClick={() => { notification.onConfirm?.(); setNotification(null); }} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition shadow-lg">Confirm</button>
+                  <button onClick={() => { notification.onConfirm?.(); setNotification(null); }} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition shadow-lg">Confirm</button>
                 </>
               ) : notification.onConfirm ? (
                 <>
                   <button onClick={() => setNotification(null)} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Dismiss</button>
-                  <button onClick={() => { notification.onConfirm?.(); setNotification(null); }} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-[#A5BEAC] transition shadow-lg">Retry</button>
+                  <button onClick={() => { notification.onConfirm?.(); setNotification(null); }} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition shadow-lg">Retry</button>
                 </>
               ) : (
                 <button
                   onClick={() => setNotification(null)}
-                  className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-[#A5BEAC] transition-all shadow-lg"
+                  className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-brand transition-all shadow-lg"
                 >
                   Understood
                 </button>
@@ -5025,17 +5025,18 @@ export default function Home() {
 
       <div className="max-w-7xl mx-auto flex flex-col min-h-[calc(100dvh-2rem-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px))] gap-6 md:min-h-0 md:space-y-6 md:gap-0 pb-[max(1rem,env(safe-area-inset-bottom,0px))] md:pb-[env(safe-area-inset-bottom,0px)]">
         {/* HEADER */}
-        <div className="flex flex-col md:flex-row justify-between items-center bg-white px-6 py-8 rounded-[2rem] border-2 shadow-sm gap-8 shrink-0 relative border-[#A5BEAC]">
+        <div className="flex flex-col md:flex-row justify-between items-center bg-white px-6 py-8 rounded-[2rem] border-2 shadow-sm gap-8 shrink-0 relative border-brand">
           <div className="hidden md:block md:w-1/4" />
           <div className="flex flex-col items-center justify-center text-center w-full md:w-2/4">
             <NextImage
               src={BOMA_HEADER_LOGO_PATH}
               alt={ORG_NAME}
-              width={64}
-              height={64}
-              className="w-12 h-12 object-contain bg-transparent block mb-3"
-              sizes="48px"
+              width={1024}
+              height={1024}
+              className="h-16 sm:h-[4.75rem] w-auto max-w-[min(100%,220px)] sm:max-w-[260px] object-contain object-center block mb-3"
+              sizes="(max-width: 640px) 220px, 260px"
               priority
+              unoptimized
             />
             <div className="flex flex-col items-center leading-none gap-1">
               <div className="flex items-center justify-center gap-2 mb-1">
@@ -5046,21 +5047,13 @@ export default function Home() {
                   href={orgSiteUrl()}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[9px] font-black uppercase tracking-[0.12em] text-stone-600 hover:text-[#A5BEAC] transition-colors text-center max-w-[20rem]"
+                  className="text-[9px] font-black uppercase tracking-[0.12em] text-stone-600 hover:text-brand transition-colors text-center max-w-[20rem]"
                 >
                   {ORG_NAME}
                 </a>
               ) : (
                 <span className="text-[9px] font-black uppercase tracking-[0.12em] text-stone-600 text-center max-w-[20rem]">{ORG_NAME}</span>
               )}
-              <a
-                href={CREATOR_SITE_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[8px] font-bold uppercase tracking-[0.08em] text-stone-400 hover:text-[#A5BEAC] transition-colors text-center max-w-[22rem] leading-snug"
-              >
-                {CREATOR_ATTRIBUTION_LABEL}
-              </a>
             </div>
           </div>
 
@@ -5068,9 +5061,9 @@ export default function Home() {
             <div className="relative flex flex-col items-center md:items-end gap-2 w-full">
               {(!user || user.is_anonymous) ? (
                 <>
-                  <button onClick={() => { setShowAuth(!showAuth); setShowPassword(false); }} className="w-48 text-[10px] font-black uppercase bg-slate-900 text-white px-8 py-3 rounded-xl hover:bg-[#A5BEAC] transition shadow-sm">Login / Sign Up</button>
+                  <button onClick={() => { setShowAuth(!showAuth); setShowPassword(false); }} className="w-48 text-[10px] font-black uppercase bg-slate-900 text-white px-8 py-3 rounded-xl hover:bg-brand transition shadow-sm">Login / Sign Up</button>
                   {(!user || user.is_anonymous || !subscriptionStatus?.subscribed) && (
-                    <button onClick={() => setShowVaultPlusModal(true)} className="w-48 text-[10px] font-black uppercase bg-slate-900 text-white px-8 py-3 rounded-xl hover:bg-[#A5BEAC] transition shadow-sm">
+                    <button onClick={() => setShowVaultPlusModal(true)} className="w-48 text-[10px] font-black uppercase bg-slate-900 text-white px-8 py-3 rounded-xl hover:bg-brand transition shadow-sm">
                       Upgrade to Vault+
                     </button>
                   )}
@@ -5082,14 +5075,14 @@ export default function Home() {
                     onClick={() => setShowAccountMenu(!showAccountMenu)}
                     className="w-48 text-[10px] font-black uppercase px-8 py-3 rounded-xl transition bg-stone-100 text-slate-900 hover:bg-stone-200 flex items-center justify-center gap-1.5"
                   >
-                    <div className={`w-2 h-2 rounded-full shrink-0 ${user ? 'bg-[#A5BEAC] animate-pulse' : 'bg-stone-300'}`} />
+                    <div className={`w-2 h-2 rounded-full shrink-0 ${user ? 'bg-brand animate-pulse' : 'bg-stone-300'}`} />
                     {profile?.logo_url ? (
                       <img src={`${profile.logo_url}${profile.logo_url.includes('?') ? '&' : '?'}t=${profileLogoCacheBuster}`} alt="" className="w-6 h-6 rounded-full object-cover shrink-0" />
                     ) : null}
                     {profile?.company_name || profile?.display_name || user.email?.split('@')[0] || 'Account'} {showAccountMenu ? '▲' : '▼'}
                   </button>
                   {showAccountMenu && (
-                    <div className="absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[100] overflow-hidden animate-in fade-in slide-in-from-top-2">
+                    <div className="absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-2xl border-2 border-brand z-[100] overflow-hidden animate-in fade-in slide-in-from-top-2">
                       {subscriptionStatus?.subscribed && (
                         <button onClick={() => { initiateManageSubscription(); setShowAccountMenu(false); }} className="w-full px-4 py-3 text-left text-[10px] font-black uppercase text-slate-700 hover:bg-stone-50 border-b border-stone-100 transition-colors">
                           Manage Subscription
@@ -5122,22 +5115,22 @@ export default function Home() {
                 </div>
               )}
               {user && !user.is_anonymous && subscriptionStatus !== null && !subscriptionStatus.subscribed && (
-                <button onClick={() => setShowVaultPlusModal(true)} className="w-48 text-[10px] font-black uppercase bg-slate-900 text-white px-8 py-3 rounded-xl hover:bg-[#A5BEAC] transition shadow-sm">
+                <button onClick={() => setShowVaultPlusModal(true)} className="w-48 text-[10px] font-black uppercase bg-slate-900 text-white px-8 py-3 rounded-xl hover:bg-brand transition shadow-sm">
                   Upgrade to Vault+
                 </button>
               )}
               {showAuth ? (
                 <GoogleOAuthProvider clientId={GOOGLE_WEB_CLIENT_ID}>
-                <div className="absolute right-0 mt-12 w-full md:w-80 bg-white p-6 rounded-3xl border-2 border-[#A5BEAC] shadow-2xl z-[100] animate-in fade-in slide-in-from-top-2 mx-auto auth-menu-container">
-                  <button onClick={() => { setShowAuth(false); setShowPassword(false); setSignUpAwaitingConfirmation(false); setPendingVaultPlusAfterAuth(false); }} className="absolute top-4 right-4 text-stone-300 hover:text-[#A5BEAC] font-black text-sm">✕</button>
+                <div className="absolute right-0 mt-12 w-full md:w-80 bg-white p-6 rounded-3xl border-2 border-brand shadow-2xl z-[100] animate-in fade-in slide-in-from-top-2 mx-auto auth-menu-container">
+                  <button onClick={() => { setShowAuth(false); setShowPassword(false); setSignUpAwaitingConfirmation(false); setPendingVaultPlusAfterAuth(false); }} className="absolute top-4 right-4 text-stone-300 hover:text-brand font-black text-sm">✕</button>
                   <h3 className="text-sm font-black uppercase mb-4 text-center text-slate-900">Vault Access</h3>
                   {signUpAwaitingConfirmation ? (
                     <div className="space-y-4">
                       <p className="text-sm text-stone-600 text-center">We&apos;ve sent a verification link to <strong>{email}</strong>. Please confirm your account to get access to your Vault.</p>
-                      <button type="button" onClick={handleResendConfirmation} disabled={resendingConfirmation} className="w-full py-3 rounded-xl text-[10px] font-black uppercase border-2 border-[#A5BEAC] bg-[#A5BEAC]/10 text-slate-800 hover:bg-[#A5BEAC] hover:text-white transition disabled:opacity-50">
+                      <button type="button" onClick={handleResendConfirmation} disabled={resendingConfirmation} className="w-full py-3 rounded-xl text-[10px] font-black uppercase border-2 border-brand bg-brand/10 text-slate-800 hover:bg-brand hover:text-white transition disabled:opacity-50">
                         {resendingConfirmation ? 'Sending…' : 'Resend confirmation email'}
                       </button>
-                      <button type="button" onClick={() => { setSignUpAwaitingConfirmation(false); setIsSignUp(false); }} className="w-full text-center text-[9px] font-black uppercase text-stone-600 hover:text-[#A5BEAC] transition tracking-widest">Switch to Login</button>
+                      <button type="button" onClick={() => { setSignUpAwaitingConfirmation(false); setIsSignUp(false); }} className="w-full text-center text-[9px] font-black uppercase text-stone-600 hover:text-brand transition tracking-widest">Switch to Login</button>
                     </div>
                   ) : (
                     <div className="space-y-0">
@@ -5153,16 +5146,16 @@ export default function Home() {
                         />
                       </div>
                       <div className="flex border-b border-stone-100 mb-4">
-                        <button onClick={() => { setIsSignUp(false); setShowPassword(false); }} className={`flex-1 py-2 text-[10px] font-black uppercase ${!isSignUp ? 'text-[#A5BEAC] border-b-2 border-[#A5BEAC]' : 'text-stone-300'}`}>Login</button>
-                        <button onClick={() => { setIsSignUp(true); setShowPassword(false); }} className={`flex-1 py-2 text-[10px] font-black uppercase ${isSignUp ? 'text-[#A5BEAC] border-b-2 border-[#A5BEAC]' : 'text-stone-300'}`}>Sign Up</button>
+                        <button onClick={() => { setIsSignUp(false); setShowPassword(false); }} className={`flex-1 py-2 text-[10px] font-black uppercase ${!isSignUp ? 'text-brand border-b-2 border-brand' : 'text-stone-300'}`}>Login</button>
+                        <button onClick={() => { setIsSignUp(true); setShowPassword(false); }} className={`flex-1 py-2 text-[10px] font-black uppercase ${isSignUp ? 'text-brand border-b-2 border-brand' : 'text-stone-300'}`}>Sign Up</button>
                       </div>
                       <form onSubmit={handleAuth} className="space-y-3">
-                        <input type="email" placeholder="Email" className="w-full p-3 border rounded-xl text-sm outline-none focus:border-[#A5BEAC] transition" value={email} onChange={e => setEmail(e.target.value)} required />
+                        <input type="email" placeholder="Email" className="w-full p-3 border rounded-xl text-sm outline-none focus:border-brand transition" value={email} onChange={e => setEmail(e.target.value)} required />
                         <div className="relative">
                           <input
                             type={showPassword ? "text" : "password"}
                             placeholder="Password"
-                            className="w-full p-3 border rounded-xl text-sm outline-none focus:border-[#A5BEAC] transition"
+                            className="w-full p-3 border rounded-xl text-sm outline-none focus:border-brand transition"
                             value={password}
                             onChange={e => setPassword(e.target.value)}
                             required
@@ -5170,14 +5163,14 @@ export default function Home() {
                           <button
                             type="button"
                             onClick={() => setShowPassword(!showPassword)}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black uppercase text-stone-300 hover:text-[#A5BEAC]"
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black uppercase text-stone-300 hover:text-brand"
                           >
                             {showPassword ? "Hide" : "Show"}
                           </button>
                         </div>
-                        <button type="submit" className="w-full bg-[#A5BEAC] text-white py-3 rounded-xl font-black text-xs uppercase hover:bg-slate-900 transition shadow-md">{isSignUp ? 'Create Vault Account' : 'Open The Vault'}</button>
+                        <button type="submit" className="w-full bg-brand text-white py-3 rounded-xl font-black text-xs uppercase hover:bg-slate-900 transition shadow-md">{isSignUp ? 'Create Vault Account' : 'Open The Vault'}</button>
                         {!isSignUp && (
-                          <button type="button" onClick={handleResetPassword} className="w-full text-center text-[9px] font-black uppercase text-stone-600 hover:text-[#A5BEAC] transition mt-2 tracking-widest">Forgot Password?</button>
+                          <button type="button" onClick={handleResetPassword} className="w-full text-center text-[9px] font-black uppercase text-stone-600 hover:text-brand transition mt-2 tracking-widest">Forgot Password?</button>
                         )}
                       </form>
                     </div>
@@ -5201,7 +5194,7 @@ export default function Home() {
               return (
                 <div
                   key={name}
-                  className="bg-white p-2.5 sm:p-4 rounded-xl border-l-4 border-[#A5BEAC] shadow-sm text-center md:text-left min-w-0"
+                  className="bg-white p-2.5 sm:p-4 rounded-xl border-l-4 border-brand shadow-sm text-center md:text-left min-w-0"
                   title={showPct ? "Today's % vs prior session close (from live data)" : undefined}
                 >
                   <p className="text-[9px] sm:text-[10px] font-black uppercase text-stone-400 truncate">{name}</p>
@@ -5227,7 +5220,7 @@ export default function Home() {
 
         {/* Tab Navigation — horizontal scroll on small screens; even-width row on md+ */}
         <div className="w-full px-2 shrink-0">
-          <div className="bg-white rounded-2xl border border-[#A5BEAC] shadow-sm p-2 w-full max-w-7xl mx-auto">
+          <div className="bg-white rounded-2xl border border-brand shadow-sm p-2 w-full max-w-7xl mx-auto">
             <div
               className="flex w-full gap-1 overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] scroll-smooth md:overflow-visible"
               role="tablist"
@@ -5240,14 +5233,14 @@ export default function Home() {
                   role="tab"
                   aria-selected={activeTab === t.id}
                   onClick={() => setActiveTab(t.id)}
-                  className={`flex-shrink-0 md:flex-1 md:min-w-0 py-3 px-3 md:px-4 text-xs md:text-sm font-black uppercase tracking-tighter transition-all rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A5BEAC] focus-visible:ring-offset-2 ${t.id === 'vault' ? 'relative flex items-center justify-center gap-1.5' : ''} ${activeTab === t.id ? 'bg-[#A5BEAC] text-white shadow-inner' : t.id === 'vault' && inventory.length > 0 ? 'text-stone-500' : 'text-stone-400 hover:text-stone-600'}`}
+                  className={`flex-shrink-0 md:flex-1 md:min-w-0 py-3 px-3 md:px-4 text-xs md:text-sm font-black uppercase tracking-tighter transition-all rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 ${t.id === 'vault' ? 'relative flex items-center justify-center gap-1.5' : ''} ${activeTab === t.id ? 'bg-brand text-white shadow-inner' : t.id === 'vault' && inventory.length > 0 ? 'text-stone-500' : 'text-stone-400 hover:text-stone-600'}`}
                 >
                   {t.label}
                   {t.id === 'vault' && inventory.length > 0 && activeTab === 'vault' ? (
                     <span className="text-[10px] font-bold opacity-90">({inventory.length})</span>
                   ) : null}
                   {t.id === 'vault' && inventory.length > 0 && activeTab !== 'vault' ? (
-                    <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#A5BEAC] animate-pulse" aria-hidden />
+                    <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-brand animate-pulse" aria-hidden />
                   ) : null}
                 </button>
               ))}
@@ -5259,7 +5252,7 @@ export default function Home() {
         <div className="w-full max-w-7xl mx-auto flex-1 min-h-0 flex flex-col overflow-hidden md:flex-initial md:max-h-[calc(100vh-5rem)]">
           {/* CALCULATOR PANEL */}
           <div className={`flex flex-col flex-1 min-h-0 min-h-[50vh] lg:min-h-0 lg:max-h-[calc(100vh-5rem)] ${activeTab !== 'calculator' ? 'hidden' : ''}`}>
-            <div className="bg-white rounded-[2rem] shadow-xl border-2 border-[#A5BEAC] overflow-hidden lg:h-full lg:min-h-0 lg:flex lg:flex-col">
+            <div className="bg-white rounded-[2rem] shadow-xl border-2 border-brand overflow-hidden lg:h-full lg:min-h-0 lg:flex lg:flex-col">
               <div className="overflow-y-auto lg:overflow-hidden lg:flex-1 lg:min-h-0 lg:flex lg:flex-col px-4 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom,0px))] md:p-8 md:pb-8 space-y-4 lg:space-y-4 min-h-0 custom-scrollbar">
               <h2 className="text-2xl font-black uppercase italic tracking-tighter text-slate-900 shrink-0">Calculator</h2>
 
@@ -5268,7 +5261,7 @@ export default function Home() {
               {/* LEFT: Components - metal, stones, labor (overscroll-behavior not contained so scroll chains to page at boundaries) */}
               <div className="lg:rounded-2xl lg:bg-stone-50/50 lg:border lg:border-stone-100 lg:min-h-0 lg:overflow-hidden lg:flex lg:flex-col">
               <div className="space-y-4 lg:p-5 lg:pr-6 lg:overflow-y-auto lg:custom-scrollbar lg:flex-1 lg:min-h-0">
-              <p className="text-[10px] font-black uppercase tracking-widest text-[#A5BEAC] lg:mb-1 hidden lg:block">Components</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-brand lg:mb-1 hidden lg:block">Components</p>
               {/* Calculator section tabs: one visible at a time */}
               <div className="space-y-3 max-md:scroll-mt-2">
                 <div>
@@ -5282,11 +5275,11 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={() => setActiveCalculatorTab('metal')}
-                    className={`flex items-center justify-center gap-1 sm:gap-1.5 px-2 py-2.5 sm:px-4 sm:py-3 rounded-xl min-h-[44px] text-[10px] sm:text-xs font-black uppercase tracking-wide transition-all min-w-0 ${activeCalculatorTab === 'metal' ? 'bg-[#A5BEAC] text-white shadow-sm ring-1 ring-[#A5BEAC]/30' : 'bg-stone-50 text-slate-700 border border-stone-200/90 hover:border-[#A5BEAC]/40 hover:bg-white active:bg-stone-100'}`}
+                    className={`flex items-center justify-center gap-1 sm:gap-1.5 px-2 py-2.5 sm:px-4 sm:py-3 rounded-xl min-h-[44px] text-[10px] sm:text-xs font-black uppercase tracking-wide transition-all min-w-0 ${activeCalculatorTab === 'metal' ? 'bg-brand text-white shadow-sm ring-1 ring-brand/30' : 'bg-stone-50 text-slate-700 border border-stone-200/90 hover:border-brand/40 hover:bg-white active:bg-stone-100'}`}
                   >
                     <span className="truncate">Metal</span>
                     <span
-                      className={`shrink-0 w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center text-[8px] sm:text-[9px] font-black border cursor-default ${activeCalculatorTab === 'metal' ? 'bg-white/20 text-white border-white/40' : 'bg-[#A5BEAC] text-white border-[#A5BEAC]'}`}
+                      className={`shrink-0 w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center text-[8px] sm:text-[9px] font-black border cursor-default ${activeCalculatorTab === 'metal' ? 'bg-white/20 text-white border-white/40' : 'bg-brand text-white border-brand'}`}
                       title="Metals are required to add this piece to the vault"
                     >
                       ✓
@@ -5295,7 +5288,7 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={() => setActiveCalculatorTab('stones')}
-                    className={`flex items-center justify-center gap-1 sm:gap-1.5 px-2 py-2.5 sm:px-4 sm:py-3 rounded-xl min-h-[44px] text-[10px] sm:text-xs font-black uppercase tracking-wide transition-all min-w-0 ${activeCalculatorTab === 'stones' ? 'bg-[#A5BEAC] text-white shadow-sm ring-1 ring-[#A5BEAC]/30' : 'bg-stone-50 text-slate-700 border border-stone-200/90 hover:border-[#A5BEAC]/40 hover:bg-white active:bg-stone-100'}`}
+                    className={`flex items-center justify-center gap-1 sm:gap-1.5 px-2 py-2.5 sm:px-4 sm:py-3 rounded-xl min-h-[44px] text-[10px] sm:text-xs font-black uppercase tracking-wide transition-all min-w-0 ${activeCalculatorTab === 'stones' ? 'bg-brand text-white shadow-sm ring-1 ring-brand/30' : 'bg-stone-50 text-slate-700 border border-stone-200/90 hover:border-brand/40 hover:bg-white active:bg-stone-100'}`}
                   >
                     <span className="truncate">Stones</span>
                     <span
@@ -5303,7 +5296,7 @@ export default function Home() {
                       tabIndex={0}
                       onClick={(e) => { e.stopPropagation(); setActiveCalculatorTab('stones'); setIncludeStonesSection(!includeStonesSection); }}
                       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveCalculatorTab('stones'); setIncludeStonesSection(!includeStonesSection); } }}
-                      className={`shrink-0 w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center text-[8px] sm:text-[9px] font-black border-2 transition-colors ${activeCalculatorTab === 'stones' && includeStonesSection ? 'bg-white/20 text-white border-white/40' : includeStonesSection ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white text-stone-400 border-stone-200'}`}
+                      className={`shrink-0 w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center text-[8px] sm:text-[9px] font-black border-2 transition-colors ${activeCalculatorTab === 'stones' && includeStonesSection ? 'bg-white/20 text-white border-white/40' : includeStonesSection ? 'bg-brand text-white border-brand' : 'bg-white text-stone-400 border-stone-200'}`}
                       title={includeStonesSection ? 'Included in price (click to exclude)' : 'Excluded from price (click to include)'}
                     >
                       {includeStonesSection ? '✓' : ''}
@@ -5312,7 +5305,7 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={() => setActiveCalculatorTab('labor')}
-                    className={`flex items-center justify-center gap-1 sm:gap-1.5 px-2 py-2.5 sm:px-4 sm:py-3 rounded-xl min-h-[44px] text-[10px] sm:text-xs font-black uppercase tracking-wide transition-all min-w-0 ${activeCalculatorTab === 'labor' ? 'bg-[#A5BEAC] text-white shadow-sm ring-1 ring-[#A5BEAC]/30' : 'bg-stone-50 text-slate-700 border border-stone-200/90 hover:border-[#A5BEAC]/40 hover:bg-white active:bg-stone-100'}`}
+                    className={`flex items-center justify-center gap-1 sm:gap-1.5 px-2 py-2.5 sm:px-4 sm:py-3 rounded-xl min-h-[44px] text-[10px] sm:text-xs font-black uppercase tracking-wide transition-all min-w-0 ${activeCalculatorTab === 'labor' ? 'bg-brand text-white shadow-sm ring-1 ring-brand/30' : 'bg-stone-50 text-slate-700 border border-stone-200/90 hover:border-brand/40 hover:bg-white active:bg-stone-100'}`}
                   >
                     <span className="truncate sm:hidden">Labor</span>
                     <span className="truncate hidden sm:inline">Labor & other</span>
@@ -5321,7 +5314,7 @@ export default function Home() {
                       tabIndex={0}
                       onClick={(e) => { e.stopPropagation(); setActiveCalculatorTab('labor'); setIncludeLaborSection(!includeLaborSection); }}
                       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveCalculatorTab('labor'); setIncludeLaborSection(!includeLaborSection); } }}
-                      className={`shrink-0 w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center text-[8px] sm:text-[9px] font-black border-2 transition-colors ${activeCalculatorTab === 'labor' && includeLaborSection ? 'bg-white/20 text-white border-white/40' : includeLaborSection ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white text-stone-400 border-stone-200'}`}
+                      className={`shrink-0 w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center text-[8px] sm:text-[9px] font-black border-2 transition-colors ${activeCalculatorTab === 'labor' && includeLaborSection ? 'bg-white/20 text-white border-white/40' : includeLaborSection ? 'bg-brand text-white border-brand' : 'bg-white text-stone-400 border-stone-200'}`}
                       title={includeLaborSection ? 'Included in price (click to exclude)' : 'Excluded from price (click to include)'}
                     >
                       {includeLaborSection ? '✓' : ''}
@@ -5334,15 +5327,15 @@ export default function Home() {
               <div className="space-y-2 pt-2 md:pt-3">
                 <p className="text-[10px] font-black uppercase tracking-wider text-stone-400">Metal components</p>
                 <div className="p-4 max-md:bg-white max-md:border max-md:border-stone-200 max-md:shadow-sm md:bg-stone-50 rounded-2xl md:border-2 md:border-dotted md:border-stone-300 space-y-3">
-                <select className="w-full p-3 border border-stone-200 rounded-xl font-bold bg-white focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none transition-shadow" value={tempMetal} onChange={e => setTempMetal(e.target.value)}>
+                <select className="w-full p-3 border border-stone-200 rounded-xl font-bold bg-white focus:border-[#2d4a22] focus:ring-2 focus:ring-brand/30 focus:outline-none transition-shadow" value={tempMetal} onChange={e => setTempMetal(e.target.value)}>
                   <option>Sterling Silver</option><option>10K Gold</option><option>14K Gold</option><option>18K Gold</option><option>22K Gold</option><option>24K Gold</option><option>Platinum 950</option><option>Palladium</option>
                 </select>
                 <div className="flex gap-2">
-                  <input type="text" inputMode="decimal" autoComplete="off" placeholder="Weight" className="w-full p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none transition-shadow tabular-nums" value={tempWeight} onChange={e => { const t = e.target.value; if (t === '' || /^[0-9]*\.?[0-9]*$/.test(t)) setTempWeight(t); }} />
-                  <select className="p-3 border border-stone-200 rounded-xl text-[10px] font-bold focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none" value={tempUnit} onChange={e => setTempUnit(e.target.value)}>{Object.keys(UNIT_TO_GRAMS).map(u => <option key={u}>{u}</option>)}</select>
+                  <input type="text" inputMode="decimal" autoComplete="off" placeholder="Weight" className="w-full p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22] focus:ring-2 focus:ring-brand/30 focus:outline-none transition-shadow tabular-nums" value={tempWeight} onChange={e => { const t = e.target.value; if (t === '' || /^[0-9]*\.?[0-9]*$/.test(t)) setTempWeight(t); }} />
+                  <select className="p-3 border border-stone-200 rounded-xl text-[10px] font-bold focus:border-[#2d4a22] focus:ring-2 focus:ring-brand/30 focus:outline-none" value={tempUnit} onChange={e => setTempUnit(e.target.value)}>{Object.keys(UNIT_TO_GRAMS).map(u => <option key={u}>{u}</option>)}</select>
                 </div>
                 <div className="space-y-2">
-                  <select className="w-full p-3 border border-stone-200 rounded-xl text-[10px] font-bold bg-white focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none" value={useManualPrice ? "manual" : "spot"} onChange={(e) => setUseManualPrice(e.target.value === "manual")}>
+                  <select className="w-full p-3 border border-stone-200 rounded-xl text-[10px] font-bold bg-white focus:border-[#2d4a22] focus:ring-2 focus:ring-brand/30 focus:outline-none" value={useManualPrice ? "manual" : "spot"} onChange={(e) => setUseManualPrice(e.target.value === "manual")}>
                     <option value="spot">Use live spot ($/ozt)</option>
                     <option value="manual">Custom spot ($/ozt)</option>
                   </select>
@@ -5360,7 +5353,7 @@ export default function Home() {
                           if (t.includes('palladium')) return String(prices.palladium || '');
                           return 'e.g. 2650';
                         })()}
-                        className="w-full p-3 border border-[#A5BEAC] rounded-xl text-sm focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none"
+                        className="w-full p-3 border border-brand rounded-xl text-sm focus:ring-2 focus:ring-brand/30 focus:outline-none"
                         value={manualPriceInput}
                         onChange={(e) => { const t = e.target.value; if (t === '' || /^[0-9]*\.?[0-9]*$/.test(t)) setManualPriceInput(t); }}
                       />
@@ -5368,7 +5361,7 @@ export default function Home() {
                     </div>
                   )}
                 </div>
-                <button onClick={addMetalToPiece} className="w-full bg-slate-900 text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#A5BEAC] transition-colors">+ Add metal</button>
+                <button onClick={addMetalToPiece} className="w-full bg-slate-900 text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-brand transition-colors">+ Add metal</button>
                 {metalList.map((m, i) => (
                   <div key={i} className="text-[10px] font-bold bg-white p-2 rounded border border-stone-100 flex justify-between items-center">
                     <span className="text-slate-700">{m.weight}{m.unit} {m.type}</span>
@@ -5386,24 +5379,24 @@ export default function Home() {
                 <input
                   type="text"
                   placeholder="Stone name (optional — e.g. Diamond, Ruby)"
-                  className="w-full p-3 border border-stone-200 rounded-xl font-bold bg-white focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none text-[10px]"
+                  className="w-full p-3 border border-stone-200 rounded-xl font-bold bg-white focus:border-[#2d4a22] focus:ring-2 focus:ring-brand/30 focus:outline-none text-[10px]"
                   value={tempStoneName}
                   onChange={e => setTempStoneName(e.target.value)}
                 />
                 <div className="flex gap-2 items-end">
                   <div className="flex-1">
                     <label className="block text-[10px] font-bold text-stone-500 uppercase mb-1">Cost ($)</label>
-                    <input type="number" min={0} placeholder="0" className="w-full p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none" value={tempStoneCost} onChange={e => setTempStoneCost(e.target.value === '' ? '' : Number(e.target.value))} />
+                    <input type="number" min={0} placeholder="0" className="w-full p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22] focus:ring-2 focus:ring-brand/30 focus:outline-none" value={tempStoneCost} onChange={e => setTempStoneCost(e.target.value === '' ? '' : Number(e.target.value))} />
                   </div>
                   <div className="w-28">
                     <label className="block text-[10px] font-bold text-stone-500 uppercase mb-1">Multiplier (×)</label>
-                    <div className="flex items-center border border-stone-200 rounded-xl focus-within:ring-2 focus-within:ring-[#A5BEAC]/30 focus-within:border-[#2d4a22] bg-white">
+                    <div className="flex items-center border border-stone-200 rounded-xl focus-within:ring-2 focus-within:ring-brand/30 focus-within:border-[#2d4a22] bg-white">
                       <span className="pl-3 text-stone-400 font-black text-sm">×</span>
                       <input type="number" min={0} step="0.1" placeholder="2" className="flex-1 p-3 pl-1 pr-3 text-[10px] font-bold focus:outline-none bg-transparent w-14" value={tempStoneMarkup} onChange={e => setTempStoneMarkup(Number(e.target.value))} />
                     </div>
                   </div>
                 </div>
-                <button onClick={addStoneToPiece} className="w-full bg-slate-900 text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#A5BEAC] transition-colors">+ Add stone</button>
+                <button onClick={addStoneToPiece} className="w-full bg-slate-900 text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-brand transition-colors">+ Add stone</button>
                 {stoneList.map((stone, i) => (
                   <div key={i} className="text-[10px] font-bold bg-white p-2 rounded border border-stone-100 flex justify-between items-center">
                     <span className="text-slate-700">{stone.name} ${stone.cost.toFixed(2)} ×{stone.markup.toFixed(1)}</span>
@@ -5440,17 +5433,17 @@ export default function Home() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-[10px] font-bold text-stone-500 uppercase mb-1">Labor $/hr</label>
-                      <input type="number" min={0} placeholder="0" className="w-full p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none" value={rate} onChange={e => { const v = e.target.value === '' ? '' : Number(e.target.value); setRate(v); if (Number(v) > 0) setIncludeLaborSection(true); }} />
+                      <input type="number" min={0} placeholder="0" className="w-full p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22] focus:ring-2 focus:ring-brand/30 focus:outline-none" value={rate} onChange={e => { const v = e.target.value === '' ? '' : Number(e.target.value); setRate(v); if (Number(v) > 0) setIncludeLaborSection(true); }} />
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-stone-500 uppercase mb-1">Hours</label>
-                      <input type="number" min={0} step="0.1" placeholder="0" className="w-full p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none" value={hours} onChange={e => { const v = e.target.value === '' ? '' : Number(e.target.value); setHours(v); if (Number(v) > 0) setIncludeLaborSection(true); }} />
+                      <input type="number" min={0} step="0.1" placeholder="0" className="w-full p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22] focus:ring-2 focus:ring-brand/30 focus:outline-none" value={hours} onChange={e => { const v = e.target.value === '' ? '' : Number(e.target.value); setHours(v); if (Number(v) > 0) setIncludeLaborSection(true); }} />
                     </div>
                   </div>
                   <div>
                     <label className="block text-[10px] font-bold text-stone-500 uppercase mb-1">Overhead</label>
                     <div className="flex gap-2 items-center">
-                      <input type="number" min={0} placeholder="0" className="flex-1 p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none pr-2" value={overheadCost} onChange={e => { const v = e.target.value === '' ? '' : Number(e.target.value); setOverheadCost(v); if (Number(v) > 0) setIncludeLaborSection(true); }} />
+                      <input type="number" min={0} placeholder="0" className="flex-1 p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22] focus:ring-2 focus:ring-brand/30 focus:outline-none pr-2" value={overheadCost} onChange={e => { const v = e.target.value === '' ? '' : Number(e.target.value); setOverheadCost(v); if (Number(v) > 0) setIncludeLaborSection(true); }} />
                       <div className="flex rounded-xl border border-stone-200 overflow-hidden bg-stone-50">
                         <button type="button" onClick={() => setOverheadType('flat')} className={`px-3 py-2.5 text-[10px] font-black uppercase transition-colors ${overheadType === 'flat' ? 'bg-slate-900 text-white' : 'text-stone-400 hover:text-slate-700'}`}>$</button>
                         <button type="button" onClick={() => setOverheadType('percent')} className={`px-3 py-2.5 text-[10px] font-black uppercase transition-colors ${overheadType === 'percent' ? 'bg-slate-900 text-white' : 'text-stone-400 hover:text-slate-700'}`}>%</button>
@@ -5479,12 +5472,12 @@ export default function Home() {
                   </div>
                   <div>
                     <label className="block text-[10px] font-bold text-stone-500 uppercase mb-1">Findings / other ($)</label>
-                    <input type="number" min={0} placeholder="0" className="w-full p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22] focus:ring-2 focus:ring-[#A5BEAC]/30 focus:outline-none" value={otherCosts} onChange={e => { const v = e.target.value === '' ? '' : Number(e.target.value); setOtherCosts(v); if (Number(v) > 0) setIncludeLaborSection(true); }} />
+                    <input type="number" min={0} placeholder="0" className="w-full p-3 border border-stone-200 rounded-xl focus:border-[#2d4a22] focus:ring-2 focus:ring-brand/30 focus:outline-none" value={otherCosts} onChange={e => { const v = e.target.value === '' ? '' : Number(e.target.value); setOtherCosts(v); if (Number(v) > 0) setIncludeLaborSection(true); }} />
                   </div>
                   {strategy !== 'custom' && (
                     <div>
                       <label className="block text-[10px] font-bold text-stone-500 uppercase mb-1">Findings retail × <span className="normal-case text-stone-400 font-semibold">(optional)</span></label>
-                      <div className="flex items-center border border-stone-200 rounded-xl focus-within:ring-2 focus-within:ring-[#A5BEAC]/30 focus-within:border-[#2d4a22] bg-white">
+                      <div className="flex items-center border border-stone-200 rounded-xl focus-within:ring-2 focus-within:ring-brand/30 focus-within:border-[#2d4a22] bg-white">
                         <span className="pl-3 text-stone-400 font-black text-sm">×</span>
                         <input
                           type="text"
@@ -5506,9 +5499,9 @@ export default function Home() {
               </div>
               </div>
               {/* RIGHT: Prices - cost breakdown, formula cards, save */}
-              <div className="mt-6 lg:mt-0 flex flex-col min-h-0 lg:min-h-0 lg:rounded-2xl lg:bg-white lg:border-2 lg:border-[#A5BEAC]/20 lg:shadow-sm lg:overflow-hidden">
+              <div className="mt-6 lg:mt-0 flex flex-col min-h-0 lg:min-h-0 lg:rounded-2xl lg:bg-white lg:border-2 lg:border-brand/20 lg:shadow-sm lg:overflow-hidden">
               <div className="flex flex-col gap-5 lg:p-6 lg:overflow-y-auto lg:custom-scrollbar lg:flex-1 lg:min-h-0">
-                <p className="text-[10px] font-black uppercase tracking-widest text-[#A5BEAC] hidden lg:block">Your price</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-brand hidden lg:block">Your price</p>
                 <div className="w-full space-y-2">
                   <button
                     type="button"
@@ -5540,7 +5533,7 @@ export default function Home() {
                       key={opt}
                       type="button"
                       onClick={() => setPriceRoundingWithPersist(opt)}
-                      className={`py-2 px-3 rounded-xl text-[9px] font-black uppercase border transition-all ${priceRounding === opt ? 'bg-[#A5BEAC] text-white border-[#A5BEAC] shadow-sm' : 'bg-stone-50 border-stone-200 text-stone-500 hover:bg-stone-100 hover:border-stone-300'}`}
+                      className={`py-2 px-3 rounded-xl text-[9px] font-black uppercase border transition-all ${priceRounding === opt ? 'bg-brand text-white border-brand shadow-sm' : 'bg-stone-50 border-stone-200 text-stone-500 hover:bg-stone-100 hover:border-stone-300'}`}
                     >
                       {opt === 'none' ? 'None' : `$${opt}`}
                     </button>
@@ -5551,7 +5544,7 @@ export default function Home() {
                   {formulas.length > 0 && (
                     customStrategyExpanded ? (
                       <div
-                        className={`rounded-2xl border-2 transition-all overflow-hidden lg:shadow-sm ${strategy === 'custom' ? 'border-[#A5BEAC] bg-stone-50 shadow-md ring-2 ring-[#A5BEAC]/20' : 'border-stone-100 bg-white hover:border-stone-200'}`}
+                        className={`rounded-2xl border-2 transition-all overflow-hidden lg:shadow-sm ${strategy === 'custom' ? 'border-brand bg-stone-50 shadow-md ring-2 ring-brand/20' : 'border-stone-100 bg-white hover:border-stone-200'}`}
                       >
                         <div className="w-full p-5">
                           <button
@@ -5566,7 +5559,7 @@ export default function Home() {
                             className="w-full text-left"
                           >
                             <div className="flex items-center justify-between gap-2 mb-1">
-                              <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter">Custom</p>
+                              <p className="text-[10px] font-black text-brand uppercase tracking-tighter">Custom</p>
                               <span
                                 role="button"
                                 tabIndex={0}
@@ -5606,7 +5599,7 @@ export default function Home() {
                                   setCustomFormulaModel({ formula_base: PRESET_A.base, formula_wholesale: PRESET_A.wholesale, formula_retail: PRESET_A.retail });
                                 }
                               }}
-                              className="w-full p-3 rounded-xl border border-stone-200 bg-white text-sm font-bold outline-none focus:border-[#A5BEAC]"
+                              className="w-full p-3 rounded-xl border border-stone-200 bg-white text-sm font-bold outline-none focus:border-brand"
                             >
                               <option value="">Choose a formula…</option>
                               {formulas.map((f) => (
@@ -5616,7 +5609,7 @@ export default function Home() {
                             <button
                               type="button"
                               onClick={() => setActiveTab('formulas')}
-                              className="mt-2 text-[9px] font-bold text-[#A5BEAC] hover:underline"
+                              className="mt-2 text-[9px] font-bold text-brand hover:underline"
                             >
                               Manage formulas →
                             </button>
@@ -5634,15 +5627,15 @@ export default function Home() {
                           setCustomStrategyExpanded(true);
                           setStrategy('custom');
                         }}
-                        className="w-full flex items-center justify-between gap-2 py-3 px-4 rounded-xl border-2 border-dashed border-stone-200 bg-stone-50/50 hover:border-[#A5BEAC]/50 hover:bg-stone-50 text-left transition-colors group"
+                        className="w-full flex items-center justify-between gap-2 py-3 px-4 rounded-xl border-2 border-dashed border-stone-200 bg-stone-50/50 hover:border-brand/50 hover:bg-stone-50 text-left transition-colors group"
                       >
-                        <span className="text-[10px] font-black uppercase tracking-wider text-stone-500 group-hover:text-[#A5BEAC]">Use Custom Formula</span>
-                        <span className="text-stone-400 text-xs group-hover:text-[#A5BEAC]">+</span>
+                        <span className="text-[10px] font-black uppercase tracking-wider text-stone-500 group-hover:text-brand">Use Custom Formula</span>
+                        <span className="text-stone-400 text-xs group-hover:text-brand">+</span>
                       </button>
                     )
                   )}
                   <div
-                    className={`rounded-2xl border-2 transition-all overflow-hidden lg:shadow-sm ${strategy === 'A' ? 'border-[#A5BEAC] bg-stone-50 shadow-md ring-2 ring-[#A5BEAC]/20' : 'border-stone-100 bg-white hover:border-stone-200'}`}
+                    className={`rounded-2xl border-2 transition-all overflow-hidden lg:shadow-sm ${strategy === 'A' ? 'border-brand bg-stone-50 shadow-md ring-2 ring-brand/20' : 'border-stone-100 bg-white hover:border-stone-200'}`}
                   >
                     <button
                       type="button"
@@ -5650,7 +5643,7 @@ export default function Home() {
                       className="w-full flex flex-col sm:flex-row sm:items-stretch sm:gap-4 p-5 text-left"
                     >
                       <div className="flex-1 min-w-0">
-                        <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter mb-1">Formula A</p>
+                        <p className="text-[10px] font-black text-brand uppercase tracking-tighter mb-1">Formula A</p>
                         <p className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums">${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator, undefined, calculatorFindingsMult).retailA).toFixed(2)}</p>
                         <p className="text-[10px] font-semibold text-stone-500 mt-1">Wholesale ${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator, undefined, calculatorFindingsMult).wholesaleA).toFixed(2)}</p>
                       </div>
@@ -5674,7 +5667,7 @@ export default function Home() {
                             <input
                               type="number"
                               step="0.1"
-                              className="min-w-12 w-14 bg-white border border-stone-200 rounded-lg text-xs font-bold py-1.5 px-2 text-center outline-none text-slate-900 focus:border-[#A5BEAC]"
+                              className="min-w-12 w-14 bg-white border border-stone-200 rounded-lg text-xs font-bold py-1.5 px-2 text-center outline-none text-slate-900 focus:border-brand"
                               value={retailMultA}
                               onChange={(e) => setRetailMultA(Number(e.target.value))}
                               onClick={(e) => e.stopPropagation()}
@@ -5687,7 +5680,7 @@ export default function Home() {
                   </div>
 
                   <div
-                    className={`rounded-2xl border-2 transition-all overflow-hidden lg:shadow-sm ${strategy === 'B' ? 'border-[#A5BEAC] bg-stone-50 shadow-md ring-2 ring-[#A5BEAC]/20' : 'border-stone-100 bg-white hover:border-stone-200'}`}
+                    className={`rounded-2xl border-2 transition-all overflow-hidden lg:shadow-sm ${strategy === 'B' ? 'border-brand bg-stone-50 shadow-md ring-2 ring-brand/20' : 'border-stone-100 bg-white hover:border-stone-200'}`}
                   >
                     <button
                       type="button"
@@ -5695,7 +5688,7 @@ export default function Home() {
                       className="w-full flex flex-col sm:flex-row sm:items-stretch sm:gap-4 p-5 text-left"
                     >
                       <div className="flex-1 min-w-0">
-                        <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter mb-1">Formula B</p>
+                        <p className="text-[10px] font-black text-brand uppercase tracking-tighter mb-1">Formula B</p>
                         <p className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums">${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator, undefined, calculatorFindingsMult).retailB).toFixed(2)}</p>
                         <p className="text-[10px] font-semibold text-stone-500 mt-1">Wholesale ${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator, undefined, calculatorFindingsMult).wholesaleB).toFixed(2)}</p>
                       </div>
@@ -5717,7 +5710,7 @@ export default function Home() {
                             <input
                               type="number"
                               step="0.1"
-                              className="min-w-12 w-14 bg-white border border-stone-200 rounded-lg text-xs font-bold py-1.5 px-2 text-center outline-none text-slate-900 focus:border-[#A5BEAC]"
+                              className="min-w-12 w-14 bg-white border border-stone-200 rounded-lg text-xs font-bold py-1.5 px-2 text-center outline-none text-slate-900 focus:border-brand"
                               value={markupB}
                               onChange={(e) => setMarkupB(Number(e.target.value))}
                               onClick={(e) => e.stopPropagation()}
@@ -5743,14 +5736,14 @@ export default function Home() {
                           setCustomStrategyExpanded(true);
                           setStrategy('custom');
                         }}
-                        className="w-full flex items-center justify-between gap-2 py-3 px-4 rounded-xl border-2 border-dashed border-stone-200 bg-stone-50/50 hover:border-[#A5BEAC]/50 hover:bg-stone-50 text-left transition-colors group"
+                        className="w-full flex items-center justify-between gap-2 py-3 px-4 rounded-xl border-2 border-dashed border-stone-200 bg-stone-50/50 hover:border-brand/50 hover:bg-stone-50 text-left transition-colors group"
                       >
-                        <span className="text-[10px] font-black uppercase tracking-wider text-stone-500 group-hover:text-[#A5BEAC]">Add Custom Price Formula</span>
-                        <span className="text-stone-400 text-xs group-hover:text-[#A5BEAC]">+</span>
+                        <span className="text-[10px] font-black uppercase tracking-wider text-stone-500 group-hover:text-brand">Add Custom Price Formula</span>
+                        <span className="text-stone-400 text-xs group-hover:text-brand">+</span>
                       </button>
                     ) : (
                       <div
-                        className={`rounded-2xl border-2 transition-all overflow-hidden lg:shadow-sm ${strategy === 'custom' ? 'border-[#A5BEAC] bg-stone-50 shadow-md ring-2 ring-[#A5BEAC]/20' : 'border-stone-100 bg-white hover:border-stone-200'}`}
+                        className={`rounded-2xl border-2 transition-all overflow-hidden lg:shadow-sm ${strategy === 'custom' ? 'border-brand bg-stone-50 shadow-md ring-2 ring-brand/20' : 'border-stone-100 bg-white hover:border-stone-200'}`}
                       >
                         <div className="w-full p-5">
                           <button
@@ -5765,7 +5758,7 @@ export default function Home() {
                             className="w-full text-left"
                           >
                             <div className="flex items-center justify-between gap-2 mb-1">
-                              <p className="text-[10px] font-black text-[#A5BEAC] uppercase tracking-tighter">Custom</p>
+                              <p className="text-[10px] font-black text-brand uppercase tracking-tighter">Custom</p>
                               <span
                                 role="button"
                                 tabIndex={0}
@@ -5796,7 +5789,7 @@ export default function Home() {
                             <button
                               type="button"
                               onClick={() => { setActiveTab('formulas'); setFormulaEditorOpen(true); setEditingFormulaId(null); setFormulaDraftName(''); setFormulaDraftTokens({ base: formulaToTokens(PRESET_A.base), wholesale: formulaToTokens(PRESET_A.wholesale), retail: formulaToTokens(PRESET_A.retail) }); }}
-                              className="w-full py-2.5 px-3 rounded-xl border-2 border-dashed border-stone-200 bg-stone-50/50 hover:border-[#A5BEAC]/50 text-left text-[10px] font-bold text-stone-500 hover:text-[#A5BEAC] transition"
+                              className="w-full py-2.5 px-3 rounded-xl border-2 border-dashed border-stone-200 bg-stone-50/50 hover:border-brand/50 text-left text-[10px] font-bold text-stone-500 hover:text-brand transition"
                             >
                               Create your first formula →
                             </button>
@@ -5815,13 +5808,13 @@ export default function Home() {
                 <div className="w-full space-y-4 p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-stone-50/80 border border-stone-100 lg:border-stone-200/60">
                   <input
                     placeholder="Product name"
-                    className="w-full p-4 bg-white border border-stone-200 rounded-xl outline-none focus:border-[#A5BEAC] focus:ring-2 focus:ring-[#A5BEAC]/30 transition-all font-bold placeholder:font-normal placeholder:text-stone-400"
+                    className="w-full p-4 bg-white border border-stone-200 rounded-xl outline-none focus:border-brand focus:ring-2 focus:ring-brand/30 transition-all font-bold placeholder:font-normal placeholder:text-stone-400"
                     value={itemName}
                     onChange={e => setItemName(e.target.value)}
                   />
                   {!editingItemId && (
                     <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={saveAsDraft} onChange={e => setSaveAsDraft(e.target.checked)} className="w-4 h-4 accent-[#A5BEAC] rounded border-stone-300" />
+                      <input type="checkbox" checked={saveAsDraft} onChange={e => setSaveAsDraft(e.target.checked)} className="w-4 h-4 accent-brand rounded border-stone-300" />
                       <span className="text-[10px] font-bold text-stone-600 uppercase">Save as draft / time-only</span>
                     </label>
                   )}
@@ -5832,7 +5825,7 @@ export default function Home() {
                     {editingItemId && (
                       <button type="button" onClick={() => { setEditingItemId(null); setItemName(''); setMetalList([]); setStoneList([]); setHours(''); setRate(''); setOtherCosts(''); setOverheadCost(''); setFindingsRetailMultInput(''); setActiveTab('vault'); }} className="flex-1 py-4 rounded-2xl font-black uppercase tracking-[0.12em] text-sm bg-stone-200 text-stone-600 hover:bg-stone-300 transition-all">Cancel</button>
                     )}
-                    <button type="button" onClick={addToInventory} disabled={(isGuest && !token && hasTurnstile) || savingToVault} className={`${editingItemId ? 'flex-1' : 'w-full'} py-4 rounded-2xl font-black uppercase tracking-[0.12em] text-sm transition-all ${(isGuest && !token && hasTurnstile) || savingToVault ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-[#A5BEAC] text-white shadow-lg hover:bg-slate-900 hover:shadow-xl active:scale-[0.98]'}`}>{(isGuest && !token && hasTurnstile) ? "Verifying…" : savingToVault ? "Saving…" : editingItemId ? "Update item" : "Save to vault"}</button>
+                    <button type="button" onClick={addToInventory} disabled={(isGuest && !token && hasTurnstile) || savingToVault} className={`${editingItemId ? 'flex-1' : 'w-full'} py-4 rounded-2xl font-black uppercase tracking-[0.12em] text-sm transition-all ${(isGuest && !token && hasTurnstile) || savingToVault ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-brand text-white shadow-lg hover:bg-slate-900 hover:shadow-xl active:scale-[0.98]'}`}>{(isGuest && !token && hasTurnstile) ? "Verifying…" : savingToVault ? "Saving…" : editingItemId ? "Update item" : "Save to vault"}</button>
                   </div>
                 </div>
                 </div>
@@ -6152,10 +6145,11 @@ export default function Home() {
                 <NextImage
                   src={BOMA_HEADER_LOGO_PATH}
                   alt=""
-                  width={64}
-                  height={64}
-                  className="w-6 h-6 object-contain"
+                  width={1024}
+                  height={1024}
+                  className="h-6 w-6 object-contain"
                   sizes="24px"
+                  unoptimized
                 />
                 <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900">{ORG_NAME}</span>
               </a>
@@ -6165,10 +6159,11 @@ export default function Home() {
                 <NextImage
                   src={BOMA_HEADER_LOGO_PATH}
                   alt=""
-                  width={64}
-                  height={64}
-                  className="w-6 h-6 object-contain"
+                  width={1024}
+                  height={1024}
+                  className="h-6 w-6 object-contain"
                   sizes="24px"
+                  unoptimized
                 />
                 <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900">{ORG_NAME}</span>
               </div>
@@ -6177,7 +6172,7 @@ export default function Home() {
               href={CREATOR_SITE_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[8px] font-bold uppercase tracking-[0.12em] text-stone-400 hover:text-[#A5BEAC] transition-colors text-center max-w-md leading-snug"
+              className="text-[8px] font-bold uppercase tracking-[0.12em] text-stone-400 hover:text-brand transition-colors text-center max-w-md leading-snug"
             >
               {CREATOR_ATTRIBUTION_LABEL}
             </a>
@@ -6186,7 +6181,7 @@ export default function Home() {
               href={privacyPolicyUrl()}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[8px] font-bold uppercase tracking-widest text-stone-300 hover:text-[#A5BEAC] transition-colors mt-2"
+              className="text-[8px] font-bold uppercase tracking-widest text-stone-300 hover:text-brand transition-colors mt-2"
             >
               Privacy Policy
             </a>

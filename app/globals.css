@@ -1,22 +1,43 @@
 @import "tailwindcss";
 
+/* BOMA brand palette — Primary: canvas + text (Boulder Metalsmithing Association) */
 :root {
-  /* stone-50: matches iOS PWA splash + main app shell (layout themeColor) */
-  --background: #fafaf9;
-  --foreground: #171717;
+  /* 1–2 Cream / canvas */
+  --boma-pale-cream: #f6f1e9;
+  --boma-canvas-warm: #efe8dc;
+  /* 3–4 Charcoal + slate (text / cool neutrals) */
+  --boma-charcoal: #3a3634;
+  --boma-slate: #556070;
+  /* 5–6 Terracotta “red primary” + deep rust (CTAs, borders, accents) */
+  --boma-terracotta: #c2573a;
+  --boma-deep-rust: #8c3a1e;
+  /* 7–8 Golden brown + dark espresso brown */
+  --boma-golden-brown: #b17a41;
+  --boma-dark-brown: #4a3a2a;
+  /* App shell */
+  --background: var(--boma-pale-cream);
+  --foreground: var(--boma-dark-brown);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  /* UI accent = deep rust; terracotta + golden brown for secondary highlights */
+  --color-brand: var(--boma-deep-rust);
+  --color-brand-secondary: var(--boma-golden-brown);
+  --color-brand-warm: var(--boma-terracotta);
+  --color-brand-dark: var(--boma-dark-brown);
+  --color-boma-charcoal: var(--boma-charcoal);
+  --color-boma-slate: var(--boma-slate);
+  --color-brand-muted: color-mix(in srgb, var(--boma-deep-rust) 50%, var(--boma-slate));
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #2a2624;
+    --foreground: #f6f1e9;
   }
 }
 
@@ -44,11 +65,11 @@ body {
   background: transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #A5BEAC;
+  background: var(--boma-deep-rust);
   border-radius: 10px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #A5BEAC;
+  background: var(--boma-golden-brown);
 }
 .custom-scrollbar {
   -webkit-overflow-scrolling: touch;

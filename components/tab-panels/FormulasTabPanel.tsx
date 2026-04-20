@@ -104,7 +104,7 @@ export default function FormulasTabPanel(props: FormulasTabPanelProps) {
   } = props;
 
   return (
-          <div className="bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm flex flex-col flex-1 min-h-0 min-h-[50vh] lg:min-h-0 lg:max-h-[calc(100vh-5rem)] overflow-hidden">
+          <div className="bg-white rounded-[2.5rem] border-2 border-brand shadow-sm flex flex-col flex-1 min-h-0 min-h-[50vh] lg:min-h-0 lg:max-h-[calc(100vh-5rem)] overflow-hidden">
             <div className="p-6 border-b border-stone-100 bg-white space-y-4 rounded-t-[2.5rem] shrink-0">
               <div className="flex justify-between items-center">
                 <h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Saved Formulas</h2>
@@ -116,7 +116,7 @@ export default function FormulasTabPanel(props: FormulasTabPanelProps) {
                     setFormulaDraftTokens({ base: formulaToTokens(PRESET_A.base), wholesale: formulaToTokens(PRESET_A.wholesale), retail: formulaToTokens(PRESET_A.retail) });
                     setFormulaEditorOpen(true);
                   }}
-                  className="px-4 py-2 rounded-xl bg-[#A5BEAC] text-white text-xs font-black uppercase hover:bg-slate-900 transition"
+                  className="px-4 py-2 rounded-xl bg-brand text-white text-xs font-black uppercase hover:bg-slate-900 transition"
                 >
                   Create formula
                 </button>
@@ -139,7 +139,7 @@ export default function FormulasTabPanel(props: FormulasTabPanelProps) {
                       setFormulaDraftTokens({ base: formulaToTokens(PRESET_A.base), wholesale: formulaToTokens(PRESET_A.wholesale), retail: formulaToTokens(PRESET_A.retail) });
                       setFormulaEditorOpen(true);
                     }}
-                    className="px-4 py-2 rounded-xl bg-[#A5BEAC] text-white text-xs font-black uppercase hover:bg-slate-900 transition"
+                    className="px-4 py-2 rounded-xl bg-brand text-white text-xs font-black uppercase hover:bg-slate-900 transition"
                   >
                     Create your first formula
                   </button>
@@ -150,7 +150,7 @@ export default function FormulasTabPanel(props: FormulasTabPanelProps) {
                     <span className="text-[9px] font-bold text-stone-400 uppercase">Round preview to</span>
                     {(['none', 1, 5, 10, 25] as const).map(opt => (
                       <button key={opt} type="button" onClick={() => setPriceRoundingWithPersist(opt)}
-                        className={`py-1.5 px-2.5 rounded-lg text-[9px] font-black uppercase border transition-all ${priceRounding === opt ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-500'}`}>
+                        className={`py-1.5 px-2.5 rounded-lg text-[9px] font-black uppercase border transition-all ${priceRounding === opt ? 'bg-brand text-white border-brand' : 'bg-white border-stone-200 text-stone-500'}`}>
                         {opt === 'none' ? 'None' : `$${opt}`}
                       </button>
                     ))}
@@ -162,7 +162,7 @@ export default function FormulasTabPanel(props: FormulasTabPanelProps) {
                       value={formulaDraftName}
                       onChange={(e) => setFormulaDraftName(e.target.value)}
                       placeholder="e.g. High-End Retail"
-                      className="w-full p-3 rounded-xl border border-stone-200 bg-white text-sm font-bold outline-none focus:border-[#A5BEAC]"
+                      className="w-full p-3 rounded-xl border border-stone-200 bg-white text-sm font-bold outline-none focus:border-brand"
                     />
                   </div>
                   <FormulaBuilder
@@ -251,7 +251,7 @@ export default function FormulasTabPanel(props: FormulasTabPanelProps) {
                       }}
                       disabled={savingFormula || !formulaValid}
                       title={!formulaValid ? 'Formula must be valid to save' : undefined}
-                      className="px-4 py-2 rounded-xl bg-[#A5BEAC] text-white text-xs font-black uppercase hover:bg-slate-900 transition disabled:opacity-50"
+                      className="px-4 py-2 rounded-xl bg-brand text-white text-xs font-black uppercase hover:bg-slate-900 transition disabled:opacity-50"
                     >
                       {savingFormula ? 'Saving…' : 'Save'}
                     </button>
@@ -273,7 +273,7 @@ export default function FormulasTabPanel(props: FormulasTabPanelProps) {
                   {formulas.map((f) => (
                     <div
                       key={f.id}
-                      className="p-4 rounded-xl border border-stone-200 bg-white hover:border-[#A5BEAC]/50 transition flex items-start justify-between gap-4"
+                      className="p-4 rounded-xl border border-stone-200 bg-white hover:border-brand/50 transition flex items-start justify-between gap-4"
                     >
                       <div className="min-w-0">
                         <p className="font-black text-slate-900 truncate">{f.name}</p>
@@ -311,7 +311,7 @@ export default function FormulasTabPanel(props: FormulasTabPanelProps) {
                             } catch { /* ignore */ }
                           }}
                           title={f.is_starred ? 'Remove as default' : 'Set as default in Calculator'}
-                          className={`p-1.5 rounded-lg border transition ${f.is_starred ? 'text-amber-500 border-amber-300 bg-amber-50' : 'text-stone-400 border-stone-200 hover:border-[#A5BEAC] hover:text-[#A5BEAC]'}`}
+                          className={`p-1.5 rounded-lg border transition ${f.is_starred ? 'text-amber-500 border-amber-300 bg-amber-50' : 'text-stone-400 border-stone-200 hover:border-brand hover:text-brand'}`}
                         >
                           {f.is_starred ? '★' : '☆'}
                         </button>
@@ -323,7 +323,7 @@ export default function FormulasTabPanel(props: FormulasTabPanelProps) {
                             setFormulaDraftTokens({ base: formulaToTokens(f.formula_base), wholesale: formulaToTokens(f.formula_wholesale), retail: formulaToTokens(f.formula_retail) });
                             setFormulaEditorOpen(true);
                           }}
-                          className="px-2 py-1 rounded-lg text-[10px] font-bold border border-stone-200 hover:border-[#A5BEAC] transition"
+                          className="px-2 py-1 rounded-lg text-[10px] font-bold border border-stone-200 hover:border-brand transition"
                         >
                           Edit
                         </button>

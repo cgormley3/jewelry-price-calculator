@@ -70,14 +70,14 @@ export default function TimeTabPanel({
   deleteTimeEntry,
 }: TimeTabPanelProps) {
   return (
-    <div className="bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm flex flex-col flex-1 min-h-0 min-h-[50vh] lg:min-h-0 lg:max-h-[calc(100vh-5rem)] overflow-hidden">
+    <div className="bg-white rounded-[2.5rem] border-2 border-brand shadow-sm flex flex-col flex-1 min-h-0 min-h-[50vh] lg:min-h-0 lg:max-h-[calc(100vh-5rem)] overflow-hidden">
       <div className="p-6 border-b border-stone-100 bg-white space-y-4 rounded-t-[2.5rem] shrink-0">
         <div className="flex justify-between items-center flex-wrap gap-3">
           <h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Time Tracking</h2>
           <button
             type="button"
             onClick={onOpenLogTimeHeader}
-            className="px-4 py-2 rounded-xl bg-[#A5BEAC] text-white text-xs font-black uppercase hover:bg-slate-900 transition"
+            className="px-4 py-2 rounded-xl bg-brand text-white text-xs font-black uppercase hover:bg-slate-900 transition"
           >
             Log time
           </button>
@@ -91,11 +91,11 @@ export default function TimeTabPanel({
           </div>
         ) : (
           <>
-            <div className="bg-stone-50 rounded-2xl border-2 border-[#A5BEAC]/30 p-6 space-y-4">
+            <div className="bg-stone-50 rounded-2xl border-2 border-brand/30 p-6 space-y-4">
               <p className="text-[9px] font-black uppercase text-stone-400">Live Timer</p>
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="flex items-baseline gap-2">
-                  <span className={`text-4xl sm:text-5xl font-black tabular-nums ${timerStartedAt ? "text-[#A5BEAC] animate-pulse" : timerPausedElapsed > 0 ? "text-slate-900" : "text-stone-300"}`}>
+                  <span className={`text-4xl sm:text-5xl font-black tabular-nums ${timerStartedAt ? "text-brand animate-pulse" : timerPausedElapsed > 0 ? "text-slate-900" : "text-stone-300"}`}>
                     {timerElapsedDisplay}
                   </span>
                   <span className="text-sm font-bold text-stone-400">
@@ -107,7 +107,7 @@ export default function TimeTabPanel({
                     <button
                       type="button"
                       onClick={() => setTimerStartedAt(Date.now())}
-                      className="px-6 py-3 rounded-xl bg-[#A5BEAC] text-white text-sm font-black uppercase hover:bg-slate-900 transition shadow-lg flex items-center gap-2"
+                      className="px-6 py-3 rounded-xl bg-brand text-white text-sm font-black uppercase hover:bg-slate-900 transition shadow-lg flex items-center gap-2"
                     >
                       <span className="w-3 h-3 rounded-full bg-white" /> Start
                     </button>
@@ -120,7 +120,7 @@ export default function TimeTabPanel({
                         setTimerPausedElapsed(elapsed);
                         setTimerStartedAt(null);
                       }}
-                      className="px-6 py-3 rounded-xl bg-slate-900 text-white text-sm font-black uppercase hover:bg-[#A5BEAC] transition shadow-lg"
+                      className="px-6 py-3 rounded-xl bg-slate-900 text-white text-sm font-black uppercase hover:bg-brand transition shadow-lg"
                     >
                       Stop
                     </button>
@@ -130,7 +130,7 @@ export default function TimeTabPanel({
                       <button
                         type="button"
                         onClick={onOpenLogTimeFromStoppedTimer}
-                        className="px-6 py-3 rounded-xl bg-[#A5BEAC] text-white text-sm font-black uppercase hover:bg-slate-900 transition shadow-lg"
+                        className="px-6 py-3 rounded-xl bg-brand text-white text-sm font-black uppercase hover:bg-slate-900 transition shadow-lg"
                       >
                         Log time
                       </button>
@@ -147,7 +147,7 @@ export default function TimeTabPanel({
                           setTimerStartedAt(Date.now() - timerPausedElapsed * 1000);
                           setTimerPausedElapsed(0);
                         }}
-                        className="px-6 py-3 rounded-xl border-2 border-[#A5BEAC] text-[#A5BEAC] text-sm font-black uppercase hover:bg-[#A5BEAC]/10 transition"
+                        className="px-6 py-3 rounded-xl border-2 border-brand text-brand text-sm font-black uppercase hover:bg-brand/10 transition"
                       >
                         Resume
                       </button>
@@ -177,14 +177,14 @@ export default function TimeTabPanel({
                 type="date"
                 value={timeFilterDateFrom}
                 onChange={(e) => setTimeFilterDateFrom(e.target.value)}
-                className="py-2 px-3 rounded-lg border border-stone-200 text-xs font-bold outline-none focus:border-[#A5BEAC]"
+                className="py-2 px-3 rounded-lg border border-stone-200 text-xs font-bold outline-none focus:border-brand"
               />
               <span className="text-stone-300">–</span>
               <input
                 type="date"
                 value={timeFilterDateTo}
                 onChange={(e) => setTimeFilterDateTo(e.target.value)}
-                className="py-2 px-3 rounded-lg border border-stone-200 text-xs font-bold outline-none focus:border-[#A5BEAC]"
+                className="py-2 px-3 rounded-lg border border-stone-200 text-xs font-bold outline-none focus:border-brand"
               />
               <div ref={timeFilterItemDropdownRef} className="relative min-w-[140px]">
                 <input
@@ -212,7 +212,7 @@ export default function TimeTabPanel({
                     );
                   }}
                   onBlur={() => setTimeout(() => setTimeFilterItemDropdownOpen(false), 150)}
-                  className="w-full py-2 px-3 rounded-lg border border-stone-200 text-xs font-bold outline-none focus:border-[#A5BEAC]"
+                  className="w-full py-2 px-3 rounded-lg border border-stone-200 text-xs font-bold outline-none focus:border-brand"
                 />
                 {timeFilterItemDropdownOpen && (
                   <div className="absolute top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white border border-stone-200 rounded-xl shadow-lg z-50 min-w-[180px]">
@@ -223,7 +223,7 @@ export default function TimeTabPanel({
                         setTimeFilterItemSearch("");
                         setTimeFilterItemDropdownOpen(false);
                       }}
-                      className={`w-full text-left px-3 py-2.5 text-xs font-bold hover:bg-stone-50 first:rounded-t-xl ${!timeFilterItemId ? "bg-[#A5BEAC]/10 text-[#A5BEAC]" : "text-stone-600"}`}
+                      className={`w-full text-left px-3 py-2.5 text-xs font-bold hover:bg-stone-50 first:rounded-t-xl ${!timeFilterItemId ? "bg-brand/10 text-brand" : "text-stone-600"}`}
                     >
                       All pieces
                     </button>
@@ -234,7 +234,7 @@ export default function TimeTabPanel({
                         setTimeFilterItemSearch("");
                         setTimeFilterItemDropdownOpen(false);
                       }}
-                      className={`w-full text-left px-3 py-2.5 text-xs font-bold hover:bg-stone-50 ${timeFilterItemId === "_unassigned" ? "bg-[#A5BEAC]/10 text-[#A5BEAC]" : "text-stone-600"}`}
+                      className={`w-full text-left px-3 py-2.5 text-xs font-bold hover:bg-stone-50 ${timeFilterItemId === "_unassigned" ? "bg-brand/10 text-brand" : "text-stone-600"}`}
                     >
                       General / unassigned
                     </button>
@@ -253,7 +253,7 @@ export default function TimeTabPanel({
                             setTimeFilterItemSearch("");
                             setTimeFilterItemDropdownOpen(false);
                           }}
-                          className={`w-full text-left px-3 py-2.5 text-xs font-bold hover:bg-stone-50 last:rounded-b-xl ${timeFilterItemId === i.id ? "bg-[#A5BEAC]/10 text-[#A5BEAC]" : "text-stone-800"}`}
+                          className={`w-full text-left px-3 py-2.5 text-xs font-bold hover:bg-stone-50 last:rounded-b-xl ${timeFilterItemId === i.id ? "bg-brand/10 text-brand" : "text-stone-800"}`}
                         >
                           {(i.name || "").toUpperCase()}
                         </button>
@@ -300,7 +300,7 @@ export default function TimeTabPanel({
                     const isDeleting = deletingTimeEntryId === e.id;
                     const hasExplicitWorkDate = !!(e.logged_on && /^\d{4}-\d{2}-\d{2}$/.test(e.logged_on));
                     return (
-                      <div key={e.id} className="flex items-center justify-between gap-4 py-3 px-4 rounded-xl border border-stone-200 bg-white hover:border-[#A5BEAC]/50 transition">
+                      <div key={e.id} className="flex items-center justify-between gap-4 py-3 px-4 rounded-xl border border-stone-200 bg-white hover:border-brand/50 transition">
                         <div className="min-w-0 flex-1">
                           <p className="font-bold text-slate-900 truncate">{itemName}</p>
                           <p className="text-[10px] text-stone-500">
@@ -326,11 +326,11 @@ export default function TimeTabPanel({
                           {e.note && <p className="text-[10px] text-stone-400 mt-0.5 truncate">{e.note}</p>}
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-sm font-black text-[#A5BEAC]">{hrs}h</span>
+                          <span className="text-sm font-black text-brand">{hrs}h</span>
                           <button
                             type="button"
                             onClick={() => openEditTimeModal(e)}
-                            className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 hover:bg-stone-100 hover:text-[#A5BEAC] transition"
+                            className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 hover:bg-stone-100 hover:text-brand transition"
                             title="Edit"
                           >
                             <span className="text-xs">✎</span>

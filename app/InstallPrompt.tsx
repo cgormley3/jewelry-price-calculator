@@ -20,7 +20,7 @@ export default function InstallPrompt() {
   if (!showPrompt) return null;
 
   return (
-    <div className="mt-10 p-6 bg-[#A5BEAC]/10 rounded-[2rem] border-2 border-dashed border-[#A5BEAC]/30 text-center mx-4 mb-10">
+    <div className="mt-10 p-6 bg-brand/10 rounded-[2rem] border-2 border-dashed border-brand/30 text-center mx-4 mb-10">
       <p className="text-[10px] font-black uppercase text-slate-700 tracking-widest">
         Install The Vault
       </p>

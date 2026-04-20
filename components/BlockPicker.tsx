@@ -66,7 +66,7 @@ export default function BlockPicker({ onSelect, onClose, excludeBase, anchorRef 
             key={`val-${v}`}
             type="button"
             onClick={() => handleSelect({ kind: 'value', value: v })}
-            className="min-h-[44px] min-w-[44px] px-2 py-1.5 rounded-lg text-[10px] font-bold uppercase border border-stone-200 bg-white text-slate-700 active:border-[#A5BEAC] transition-all"
+            className="min-h-[44px] min-w-[44px] px-2 py-1.5 rounded-lg text-[10px] font-bold uppercase border border-stone-200 bg-white text-slate-700 active:border-brand transition-all"
           >
             {VALUE_LABELS[v]}
           </button>
@@ -79,7 +79,7 @@ export default function BlockPicker({ onSelect, onClose, excludeBase, anchorRef 
             key={`op-${o}`}
             type="button"
             onClick={() => handleSelect({ kind: 'op', op: o })}
-            className="min-h-[44px] min-w-[44px] px-2 py-1.5 rounded-lg text-[10px] font-bold uppercase border border-stone-200 bg-stone-100 text-stone-600 active:border-[#A5BEAC] transition-all"
+            className="min-h-[44px] min-w-[44px] px-2 py-1.5 rounded-lg text-[10px] font-bold uppercase border border-stone-200 bg-stone-100 text-stone-600 active:border-brand transition-all"
           >
             {OP_LABELS[o]}
           </button>
@@ -89,7 +89,7 @@ export default function BlockPicker({ onSelect, onClose, excludeBase, anchorRef 
       <button
         type="button"
         onClick={() => handleSelect({ kind: 'constant', value: 1 })}
-        className="min-h-[44px] min-w-[44px] px-2 py-1.5 rounded-lg text-[10px] font-bold border border-stone-200 bg-white text-slate-700 active:border-[#A5BEAC] transition-all"
+        className="min-h-[44px] min-w-[44px] px-2 py-1.5 rounded-lg text-[10px] font-bold border border-stone-200 bg-white text-slate-700 active:border-brand transition-all"
       >
         #
       </button>

@@ -109,7 +109,7 @@ function FormulaSlot({
               ref={addButtonRef}
               type="button"
               onClick={(e) => { e.stopPropagation(); onAddClick(); }}
-              className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg text-lg font-bold border-2 border-[#A5BEAC] bg-[#A5BEAC]/10 text-[#A5BEAC] hover:bg-[#A5BEAC] hover:text-white active:bg-[#A5BEAC] active:text-white transition-all"
+              className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg text-lg font-bold border-2 border-brand bg-brand/10 text-brand hover:bg-brand hover:text-white active:bg-brand active:text-white transition-all"
               aria-label={`Add block to ${label}`}
             >
               +
@@ -253,12 +253,12 @@ function SortableTokenChip({
     <span
       ref={setNodeRef}
       style={style}
-      className={`inline-flex items-center gap-0.5 rounded-md bg-white border text-[10px] font-bold touch-manipulation ${isDragging ? 'opacity-60 border-[#A5BEAC] shadow-lg z-50' : 'border-stone-200'}`}
+      className={`inline-flex items-center gap-0.5 rounded-md bg-white border text-[10px] font-bold touch-manipulation ${isDragging ? 'opacity-60 border-brand shadow-lg z-50' : 'border-stone-200'}`}
     >
       <span
         {...attributes}
         {...listeners}
-        className={`flex items-center justify-center text-stone-400 hover:text-[#A5BEAC] cursor-grab active:cursor-grabbing -ml-0.5 ${isMobile ? 'min-w-[36px] min-h-[44px]' : 'min-w-[20px] min-h-[28px]'}`}
+        className={`flex items-center justify-center text-stone-400 hover:text-brand cursor-grab active:cursor-grabbing -ml-0.5 ${isMobile ? 'min-w-[36px] min-h-[44px]' : 'min-w-[20px] min-h-[28px]'}`}
         aria-label="Drag to reorder"
       >
         <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" className="opacity-60">
@@ -373,7 +373,7 @@ export default function FormulaBuilder({
               wholesale: formulaToTokens(PRESET_A.wholesale),
               retail: formulaToTokens(PRESET_A.retail),
             })}
-            className="px-2 py-1 rounded-lg text-[9px] font-bold border border-stone-200 bg-white hover:border-[#A5BEAC]"
+            className="px-2 py-1 rounded-lg text-[9px] font-bold border border-stone-200 bg-white hover:border-brand"
           >
             Load Preset A
           </button>
@@ -384,7 +384,7 @@ export default function FormulaBuilder({
               wholesale: formulaToTokens(PRESET_B.wholesale),
               retail: formulaToTokens(PRESET_B.retail),
             })}
-            className="px-2 py-1 rounded-lg text-[9px] font-bold border border-stone-200 bg-white hover:border-[#A5BEAC]"
+            className="px-2 py-1 rounded-lg text-[9px] font-bold border border-stone-200 bg-white hover:border-brand"
           >
             Load Preset B
           </button>

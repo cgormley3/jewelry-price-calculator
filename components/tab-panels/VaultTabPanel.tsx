@@ -258,7 +258,7 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
   } = props;
 
   return (
-          <div className="bg-white rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm flex flex-col flex-1 min-h-0 min-h-[50vh] lg:min-h-0 lg:max-h-[calc(100vh-5rem)] overflow-hidden">
+          <div className="bg-white rounded-[2.5rem] border-2 border-brand shadow-sm flex flex-col flex-1 min-h-0 min-h-[50vh] lg:min-h-0 lg:max-h-[calc(100vh-5rem)] overflow-hidden">
             <div className="p-6 border-b border-stone-100 bg-white space-y-4 rounded-t-[2.5rem] shrink-0">
               <div className="flex justify-between items-center text-left">
                 <div>
@@ -278,7 +278,7 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                     <button
                       ref={filterButtonRef}
                       onClick={() => setShowFilterMenu(!showFilterMenu)}
-                      className={`filter-menu-trigger w-full h-full min-h-[48px] sm:min-h-0 flex items-center justify-center rounded-2xl border-2 transition-all ${showFilterMenu ? 'bg-slate-900 text-white border-slate-900' : 'bg-white border-stone-200 text-stone-400 hover:border-[#A5BEAC] shadow-sm'}`}
+                      className={`filter-menu-trigger w-full h-full min-h-[48px] sm:min-h-0 flex items-center justify-center rounded-2xl border-2 transition-all ${showFilterMenu ? 'bg-slate-900 text-white border-slate-900' : 'bg-white border-stone-200 text-stone-400 hover:border-brand shadow-sm'}`}
                     >
                       <span className="text-lg">⚡</span>
                     </button>
@@ -286,7 +286,7 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                     {/* Filter Menu Dropdown - rendered via portal to avoid overflow clipping when vault has no items */}
                     {showFilterMenu && filterDropdownRect && typeof document !== 'undefined' && createPortal(
                       <div
-                        className="filter-menu-dropdown fixed w-[min(18rem,calc(100vw-1rem))] max-h-[min(85dvh,calc(100dvh-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px)-1rem))] bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[9999] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2"
+                        className="filter-menu-dropdown fixed w-[min(18rem,calc(100vw-1rem))] max-h-[min(85dvh,calc(100dvh-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px)-1rem))] bg-white rounded-2xl shadow-2xl border-2 border-brand z-[9999] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2"
                         style={{ top: filterDropdownRect.top, left: filterDropdownRect.left }}
                       >
                         <div className="overflow-y-auto overscroll-contain touch-pan-y p-4 space-y-4 min-h-0 flex-1 custom-scrollbar">
@@ -295,7 +295,7 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                           <button onClick={() => {
                             setFilterLocation('All'); setFilterTag('All'); setFilterStrategy('All'); setFilterMetal('All'); setFilterStatus('Active');
                             setFilterMinPrice(''); setFilterMaxPrice(''); setFilterStartDate(''); setFilterEndDate('');
-                          }} className="text-[9px] font-bold text-[#A5BEAC] uppercase hover:text-slate-900">Reset</button>
+                          }} className="text-[9px] font-bold text-brand uppercase hover:text-slate-900">Reset</button>
                         </div>
 
                         {/* Location */}
@@ -311,9 +311,9 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                         <div className="space-y-1">
                           <label className="text-[9px] font-bold text-stone-400 uppercase">Tag</label>
                           <div className="flex flex-wrap gap-2">
-                            <button key="All" onClick={() => setFilterTag('All')} className={`py-1.5 px-2 rounded-lg text-[9px] font-black uppercase border ${filterTag === 'All' ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-400'}`}>All</button>
+                            <button key="All" onClick={() => setFilterTag('All')} className={`py-1.5 px-2 rounded-lg text-[9px] font-black uppercase border ${filterTag === 'All' ? 'bg-brand text-white border-brand' : 'bg-white border-stone-200 text-stone-400'}`}>All</button>
                             {uniqueTags.map(t => (
-                              <button key={t} onClick={() => setFilterTag(t)} className={`py-1.5 px-2 rounded-lg text-[9px] font-black uppercase border ${filterTag === t ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-400'}`}>{t}</button>
+                              <button key={t} onClick={() => setFilterTag(t)} className={`py-1.5 px-2 rounded-lg text-[9px] font-black uppercase border ${filterTag === t ? 'bg-brand text-white border-brand' : 'bg-white border-stone-200 text-stone-400'}`}>{t}</button>
                             ))}
                           </div>
                         </div>
@@ -333,7 +333,7 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                           <label className="text-[9px] font-bold text-stone-400 uppercase">Formula</label>
                           <div className="flex gap-2">
                             {['All', 'A', 'B', 'custom'].map(s => (
-                              <button key={s} onClick={() => setFilterStrategy(s)} className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase border ${filterStrategy === s ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-400'}`}>{s === 'custom' ? 'Custom' : s}</button>
+                              <button key={s} onClick={() => setFilterStrategy(s)} className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase border ${filterStrategy === s ? 'bg-brand text-white border-brand' : 'bg-white border-stone-200 text-stone-400'}`}>{s === 'custom' ? 'Custom' : s}</button>
                             ))}
                           </div>
                         </div>
@@ -343,7 +343,7 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                           <label className="text-[9px] font-bold text-stone-400 uppercase">Metal Type</label>
                           <div className="grid grid-cols-2 gap-2">
                             {['All', 'Gold', 'Silver', 'Platinum'].map(m => (
-                              <button key={m} onClick={() => setFilterMetal(m)} className={`py-1.5 rounded-lg text-[9px] font-black uppercase border ${filterMetal === m ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-400'}`}>{m}</button>
+                              <button key={m} onClick={() => setFilterMetal(m)} className={`py-1.5 rounded-lg text-[9px] font-black uppercase border ${filterMetal === m ? 'bg-brand text-white border-brand' : 'bg-white border-stone-200 text-stone-400'}`}>{m}</button>
                             ))}
                           </div>
                         </div>
@@ -367,7 +367,7 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                     <input
                       type="text"
                       placeholder="Search by name, tag, metal, location..."
-                      className="w-full h-full min-h-[48px] sm:min-h-0 pl-10 pr-4 bg-white border-2 border-stone-200 rounded-full md:rounded-xl text-xs font-bold outline-none focus:border-[#A5BEAC] focus:ring-2 focus:ring-[#A5BEAC]/25 transition-all shadow-sm"
+                      className="w-full h-full min-h-[48px] sm:min-h-0 pl-10 pr-4 bg-white border-2 border-stone-200 rounded-full md:rounded-xl text-xs font-bold outline-none focus:border-brand focus:ring-2 focus:ring-brand/25 transition-all shadow-sm"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                     />
@@ -377,7 +377,7 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                 <div className="flex gap-2 shrink-0 md:items-stretch">
                   <button
                     onClick={() => setShowQuickAddPiece(true)}
-                    className="min-h-[48px] sm:min-h-0 flex-1 md:flex-initial px-4 rounded-2xl text-[10px] font-black uppercase tracking-wide bg-[#A5BEAC] text-white border-2 border-[#A5BEAC] hover:bg-slate-900 hover:border-slate-900 transition shadow-md flex items-center justify-center"
+                    className="min-h-[48px] sm:min-h-0 flex-1 md:flex-initial px-4 rounded-2xl text-[10px] font-black uppercase tracking-wide bg-brand text-white border-2 border-brand hover:bg-slate-900 hover:border-slate-900 transition shadow-md flex items-center justify-center"
                   >
                     Quick add piece
                   </button>
@@ -386,7 +386,7 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                       {/* Desktop: Select All as standalone button */}
                       <button
                         onClick={toggleSelectAll}
-                        className="hidden md:flex px-4 rounded-2xl text-[10px] font-black uppercase items-center justify-center gap-2 transition shadow-sm bg-white text-slate-700 hover:bg-stone-50 border-2 border-stone-200 hover:border-[#A5BEAC]/50"
+                        className="hidden md:flex px-4 rounded-2xl text-[10px] font-black uppercase items-center justify-center gap-2 transition shadow-sm bg-white text-slate-700 hover:bg-stone-50 border-2 border-stone-200 hover:border-brand/50"
                         title={selectedItems.size === filteredInventory.length && filteredInventory.length > 0 ? 'Deselect all' : 'Select all items'}
                       >
                         {selectedItems.size === filteredInventory.length && filteredInventory.length > 0 ? 'Deselect All' : 'Select All'}
@@ -395,17 +395,17 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                       <div className="md:hidden relative vault-menu-container min-h-[48px] sm:h-full flex-1 min-w-0">
                         <button
                           onClick={() => setShowVaultMenu(!showVaultMenu)}
-                          className="vault-menu-trigger w-full h-full min-h-[48px] sm:min-h-0 sm:w-auto px-4 rounded-2xl text-[10px] font-black uppercase tracking-wide flex items-center justify-center gap-2 transition shadow-sm bg-white text-slate-700 hover:bg-stone-50 border-2 border-stone-200 hover:border-[#A5BEAC]/50"
+                          className="vault-menu-trigger w-full h-full min-h-[48px] sm:min-h-0 sm:w-auto px-4 rounded-2xl text-[10px] font-black uppercase tracking-wide flex items-center justify-center gap-2 transition shadow-sm bg-white text-slate-700 hover:bg-stone-50 border-2 border-stone-200 hover:border-brand/50"
                           title="Select All, Export options"
                         >
                           More {showVaultMenu ? '▲' : '▼'}
                         </button>
                         {showVaultMenu && (
-                        <div className="vault-menu-dropdown absolute right-0 mt-2 w-56 max-h-[80vh] bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[50] overflow-hidden animate-in fade-in flex flex-col">
+                        <div className="vault-menu-dropdown absolute right-0 mt-2 w-56 max-h-[80vh] bg-white rounded-2xl shadow-2xl border-2 border-brand z-[50] overflow-hidden animate-in fade-in flex flex-col">
                           <div className="overflow-y-auto min-h-0 flex-1 custom-scrollbar">
                           <div className="px-4 py-3 border-b border-stone-100 flex items-center justify-between">
                             <span className="text-[10px] font-black uppercase text-slate-900">Select All</span>
-                            <input type="checkbox" onChange={toggleSelectAll} checked={selectedItems.size === filteredInventory.length && filteredInventory.length > 0} className="accent-[#A5BEAC] w-4 h-4 cursor-pointer" />
+                            <input type="checkbox" onChange={toggleSelectAll} checked={selectedItems.size === filteredInventory.length && filteredInventory.length > 0} className="accent-brand w-4 h-4 cursor-pointer" />
                           </div>
                           {/* Mobile only: action items merged into More */}
                           <div className="md:hidden">
@@ -447,21 +447,21 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                 {/* Row 2: Action bar when items exist (desktop only; mobile uses More dropdown) */}
                 {filteredInventory.length > 0 && (
                   <div className="hidden md:flex flex-wrap gap-2">
-                      <button onClick={() => { setShowGlobalRecalc(true); }} className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase bg-white text-slate-700 border-2 border-stone-200 hover:border-[#A5BEAC] hover:bg-stone-50 transition shadow-sm">
+                      <button onClick={() => { setShowGlobalRecalc(true); }} className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase bg-white text-slate-700 border-2 border-stone-200 hover:border-brand hover:bg-stone-50 transition shadow-sm">
                         Recalculate {selectedItems.size > 0 ? `Selected (${selectedItems.size})` : 'All'} items
                       </button>
                       {SHOPIFY_FEATURE_ENABLED && shopifyConnected && (
-                        <button onClick={() => { setShowShopifyExportOptions(true); }} disabled={shopifyExporting} className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase transition shadow-sm ${shopifyExporting ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-white text-slate-700 border-2 border-stone-200 hover:border-[#A5BEAC] hover:bg-stone-50'}`}>
+                        <button onClick={() => { setShowShopifyExportOptions(true); }} disabled={shopifyExporting} className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase transition shadow-sm ${shopifyExporting ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-white text-slate-700 border-2 border-stone-200 hover:border-brand hover:bg-stone-50'}`}>
                           {shopifyExporting ? 'Exporting…' : `Export to Shopify ${selectedItems.size > 0 ? `(${selectedItems.size})` : `(${filteredInventory.length})`}`}
                         </button>
                       )}
-                      <button onClick={() => { setShowPDFOptions(true); }} className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase bg-white text-slate-700 border-2 border-stone-200 hover:border-[#A5BEAC] hover:bg-stone-50 transition shadow-sm">
+                      <button onClick={() => { setShowPDFOptions(true); }} className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase bg-white text-slate-700 border-2 border-stone-200 hover:border-brand hover:bg-stone-50 transition shadow-sm">
                         Export PDF {selectedItems.size > 0 && `(${selectedItems.size})`}
                       </button>
-                      <button onClick={() => exportToCSV()} className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase bg-white text-slate-700 border-2 border-stone-200 hover:border-[#A5BEAC] hover:bg-stone-50 transition shadow-sm">
+                      <button onClick={() => exportToCSV()} className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase bg-white text-slate-700 border-2 border-stone-200 hover:border-brand hover:bg-stone-50 transition shadow-sm">
                         Export CSV {selectedItems.size > 0 && `(${selectedItems.size})`}
                       </button>
-                      <button type="button" onClick={() => setShowSiteProductCsvModal(true)} className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase bg-white text-slate-700 border-2 border-stone-200 hover:border-[#A5BEAC] hover:bg-stone-50 transition shadow-sm">
+                      <button type="button" onClick={() => setShowSiteProductCsvModal(true)} className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase bg-white text-slate-700 border-2 border-stone-200 hover:border-brand hover:bg-stone-50 transition shadow-sm">
                         Export CSV for your site {selectedItems.size > 0 && `(${selectedItems.size})`}
                       </button>
                     </div>
@@ -476,7 +476,7 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
             >
               <div className="will-change-transform" style={{ transform: `translate3d(0, ${vaultPullPx}px, 0)` }}>
                 {(vaultPullPx > 6 || vaultPullRefreshing) && (
-                  <div className="flex flex-col items-center justify-center gap-1 py-1 text-[#A5BEAC] pointer-events-none select-none" aria-hidden>
+                  <div className="flex flex-col items-center justify-center gap-1 py-1 text-brand pointer-events-none select-none" aria-hidden>
                     <span
                       className={`text-xl leading-none inline-block origin-center ${vaultPullRefreshing ? 'animate-spin' : ''}`}
                       style={
@@ -500,13 +500,13 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                     <>
                       <p className="text-stone-600 font-bold uppercase text-xs tracking-wider">To see your items upgrade to Vault+ ({VAULT_PLUS_PRICE_PHRASE})</p>
                       <div className="flex flex-col sm:flex-row gap-2 items-center justify-center">
-                        <button onClick={() => setShowVaultPlusModal(true)} className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-[#A5BEAC] text-white hover:bg-slate-900 transition shadow-sm">
+                        <button onClick={() => setShowVaultPlusModal(true)} className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-brand text-white hover:bg-slate-900 transition shadow-sm">
                           Upgrade to Vault+
                         </button>
                         {VAULT_REFRESH_AND_STRIPE_SYNC_UI_ENABLED && (
                           <>
-                            <button type="button" onClick={() => { setLoading(true); void fetchInventory(); }} className="text-[10px] font-bold uppercase text-stone-400 hover:text-[#A5BEAC] transition">Refresh</button>
-                            <button type="button" disabled={syncingVaultPlus} onClick={() => { void syncVaultPlusFromStripe(); }} className="text-[10px] font-bold uppercase text-[#A5BEAC] hover:text-slate-900 transition disabled:opacity-50">
+                            <button type="button" onClick={() => { setLoading(true); void fetchInventory(); }} className="text-[10px] font-bold uppercase text-stone-400 hover:text-brand transition">Refresh</button>
+                            <button type="button" disabled={syncingVaultPlus} onClick={() => { void syncVaultPlusFromStripe(); }} className="text-[10px] font-bold uppercase text-brand hover:text-slate-900 transition disabled:opacity-50">
                               {syncingVaultPlus ? 'Syncing…' : 'Sync from Stripe'}
                             </button>
                           </>
@@ -520,7 +520,7 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                         <button
                           type="button"
                           onClick={() => setShowVaultPlusModal(true)}
-                          className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-[#A5BEAC] text-white hover:bg-slate-900 transition shadow-sm"
+                          className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-brand text-white hover:bg-slate-900 transition shadow-sm"
                         >
                           Upgrade to Vault+
                         </button>
@@ -554,7 +554,7 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                           setVaultDiagnostic('Diagnostic failed. Check the browser console.');
                         }
                       }}
-                      className="text-[9px] font-bold uppercase text-stone-400 hover:text-[#A5BEAC] transition underline"
+                      className="text-[9px] font-bold uppercase text-stone-400 hover:text-brand transition underline"
                     >
                       Not seeing items? Diagnose
                     </button>
@@ -563,7 +563,7 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                     <div className="mt-4 p-4 bg-stone-50 rounded-xl text-left">
                       <p className="text-xs font-mono text-slate-700 break-all whitespace-pre-wrap">{vaultDiagnostic}</p>
                       {(vaultDiagnostic.includes('UPDATE inventory') || vaultDiagnostic.includes('UPDATE subscriptions')) && (
-                        <button onClick={() => { setVaultDiagnostic(null); setLoading(true); fetchInventory(); }} className="mt-2 text-[10px] font-bold uppercase text-[#A5BEAC] hover:underline">I ran the SQL — Refresh</button>
+                        <button onClick={() => { setVaultDiagnostic(null); setLoading(true); fetchInventory(); }} className="mt-2 text-[10px] font-bold uppercase text-brand hover:underline">I ran the SQL — Refresh</button>
                       )}
                     </div>
                   )}
@@ -609,7 +609,7 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                           type="checkbox"
                           checked={selectedItems.has(item.id)}
                           onChange={() => toggleSelection(item.id)}
-                          className="w-5 h-5 accent-[#A5BEAC] cursor-pointer rounded-md border-stone-300"
+                          className="w-5 h-5 accent-brand cursor-pointer rounded-md border-stone-300"
                         />
                       </div>
 
@@ -644,7 +644,7 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                                   <input
                                     type="text"
                                     // FIXED: Added min-w-0 to prevent flex item blowout on mobile
-                                    className="flex-1 bg-stone-50 border-2 border-[#A5BEAC] rounded-xl px-4 py-2 text-sm font-black uppercase outline-none shadow-inner min-w-0"
+                                    className="flex-1 bg-stone-50 border-2 border-brand rounded-xl px-4 py-2 text-sm font-black uppercase outline-none shadow-inner min-w-0"
                                     value={newNameValue}
                                     autoFocus
                                     onChange={(e) => setNewNameValue(e.target.value)}
@@ -653,7 +653,7 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                                       if (e.key === 'Escape') setEditingNameId(null);
                                     }}
                                   />
-                                  <button onClick={() => renameItem(item.id)} className="w-10 h-10 flex items-center justify-center bg-[#A5BEAC] text-white rounded-xl font-black text-lg shadow-sm hover:bg-slate-900 transition-colors shrink-0">✓</button>
+                                  <button onClick={() => renameItem(item.id)} className="w-10 h-10 flex items-center justify-center bg-brand text-white rounded-xl font-black text-lg shadow-sm hover:bg-slate-900 transition-colors shrink-0">✓</button>
                                 </div>
                               ) : (
                                 <div className="flex items-start flex-nowrap gap-2 w-full">
@@ -663,7 +663,7 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                                   <div className="relative shrink-0 pt-0.5 item-menu-container">
                                     <button
                                       onClick={() => setOpenMenuId(openMenuId === item.id ? null : item.id)}
-                                      className="item-menu-trigger w-8 h-8 flex items-center justify-center rounded-full bg-stone-50 text-[#A5BEAC] border border-stone-100 hover:bg-stone-100 transition-all shadow-sm"
+                                      className="item-menu-trigger w-8 h-8 flex items-center justify-center rounded-full bg-stone-50 text-brand border border-stone-100 hover:bg-stone-100 transition-all shadow-sm"
                                     >
                                       <span className="text-[10px] transform transition-transform duration-200" style={{ transform: openMenuId === item.id ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
                                     </button>
@@ -839,7 +839,7 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                                         />
                                         <button
                                           onClick={() => addCustomTag(item.id)}
-                                          className="w-full py-1 bg-[#A5BEAC] text-white rounded text-[9px] font-bold uppercase hover:bg-slate-900"
+                                          className="w-full py-1 bg-brand text-white rounded text-[9px] font-bold uppercase hover:bg-slate-900"
                                         >
                                           Add +
                                         </button>
@@ -887,7 +887,7 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                                         />
                                         <button
                                           onClick={() => addCustomLocation(item.id)}
-                                          className="w-full py-1 bg-[#A5BEAC] text-white rounded text-[9px] font-bold uppercase hover:bg-slate-900"
+                                          className="w-full py-1 bg-brand text-white rounded text-[9px] font-bold uppercase hover:bg-slate-900"
                                         >
                                           Add +
                                         </button>
@@ -923,7 +923,7 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                             </p>
                           </div>
                           <div className="p-3 bg-white text-left">
-                            <p className="text-[7px] font-black text-[#A5BEAC] uppercase tracking-widest italic mb-1">Live Retail</p>
+                            <p className="text-[7px] font-black text-brand uppercase tracking-widest italic mb-1">Live Retail</p>
                             <p className="text-base sm:text-lg font-black text-slate-900 leading-none whitespace-nowrap">
                               ${pricesLoaded ? formatCurrency(liveRetail) : "--.--"}
                             </p>
@@ -974,7 +974,7 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                       </div>
 
                       <details className="group border-t border-stone-50 text-left">
-                        <summary className="list-none cursor-pointer py-2 text-center text-[8px] font-black uppercase tracking-[0.3em] text-stone-300 hover:text-[#A5BEAC] transition-colors">View Breakdown & Notes</summary>
+                        <summary className="list-none cursor-pointer py-2 text-center text-[8px] font-black uppercase tracking-[0.3em] text-stone-300 hover:text-brand transition-colors">View Breakdown & Notes</summary>
                         <div className="p-5 md:p-6 bg-stone-50/50 space-y-6">
 
                           {/* Compact Formula, Materials, Labor, and Rounding Boxes */}
@@ -999,7 +999,7 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                               <button
                                 type="button"
                                 onClick={() => { setEditingTimeEntryId(null); setLogTimeItemId(item.id); setLogTimeAllowItemSelect(false); setLogTimeHours(''); setLogTimeDate(localTodayYYYYMMDD()); setLogTimeNote(''); setShowLogTimeModal(true); }}
-                                className="mt-1.5 py-1 px-2 rounded-lg text-[8px] font-black uppercase bg-[#A5BEAC]/20 text-[#A5BEAC] hover:bg-[#A5BEAC]/30 transition"
+                                className="mt-1.5 py-1 px-2 rounded-lg text-[8px] font-black uppercase bg-brand/20 text-brand hover:bg-brand/30 transition"
                               >
                                 Log time
                               </button>
@@ -1107,7 +1107,7 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
 
                           <div className="bg-white p-4 rounded-2xl border border-stone-200 text-left">
                             <h4 className="text-[9px] font-black uppercase text-stone-400 mb-2">Vault Notes</h4>
-                            <textarea className="w-full p-3 bg-stone-50 border border-stone-100 rounded-xl text-xs italic text-slate-600 resize-none h-24 outline-none focus:border-[#A5BEAC] transition-all" placeholder="Click to add notes..." defaultValue={item.notes || ''} onBlur={(e) => saveNote(item.id, (e.target as HTMLTextAreaElement).value)} />
+                            <textarea className="w-full p-3 bg-stone-50 border border-stone-100 rounded-xl text-xs italic text-slate-600 resize-none h-24 outline-none focus:border-brand transition-all" placeholder="Click to add notes..." defaultValue={item.notes || ''} onBlur={(e) => saveNote(item.id, (e.target as HTMLTextAreaElement).value)} />
                           </div>
                         </div>
                       </details>

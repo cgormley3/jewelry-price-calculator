@@ -49,7 +49,7 @@ function DraggableBlock({ token, id }: DraggableBlockProps) {
       type="button"
       className={`
         px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase border transition-all
-        ${token.kind === 'op' ? 'bg-stone-100 text-stone-600 border-stone-200' : 'bg-white text-slate-700 border-stone-200 hover:border-[#A5BEAC]'}
+        ${token.kind === 'op' ? 'bg-stone-100 text-stone-600 border-stone-200' : 'bg-white text-slate-700 border-stone-200 hover:border-brand'}
         ${isDragging ? 'opacity-50 shadow-lg' : ''}
       `}
     >
@@ -72,7 +72,7 @@ function TapBlock({ token, label, onTap, isOp }: TapBlockProps) {
       onClick={onTap}
       className={`
         min-h-[44px] min-w-[44px] px-3 py-2 rounded-lg text-[10px] font-bold uppercase border transition-all
-        ${isOp ? 'bg-stone-100 text-stone-600 border-stone-200' : 'bg-white text-slate-700 border-stone-200 active:border-[#A5BEAC]'}
+        ${isOp ? 'bg-stone-100 text-stone-600 border-stone-200' : 'bg-white text-slate-700 border-stone-200 active:border-brand'}
       `}
     >
       {label}
@@ -181,7 +181,7 @@ function ConstantBlock() {
       type="button"
       className={`
         px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition-all
-        bg-white text-slate-700 border-stone-200 hover:border-[#A5BEAC]
+        bg-white text-slate-700 border-stone-200 hover:border-brand
         ${isDragging ? 'opacity-50 shadow-lg' : ''}
       `}
     >

@@ -117,7 +117,7 @@ export default function CompareTabPanel(props: CompareTabPanelProps) {
   } = props;
 
   return (
-          <div className="bg-white rounded-2xl sm:rounded-[2.5rem] border-2 border-[#A5BEAC] shadow-sm flex flex-col flex-1 min-h-0 min-h-[50vh] lg:min-h-0 lg:max-h-[calc(100vh-5rem)] overflow-hidden">
+          <div className="bg-white rounded-2xl sm:rounded-[2.5rem] border-2 border-brand shadow-sm flex flex-col flex-1 min-h-0 min-h-[50vh] lg:min-h-0 lg:max-h-[calc(100vh-5rem)] overflow-hidden">
             <div className="p-3 sm:p-6 border-b border-stone-100 bg-white space-y-3 sm:space-y-4 rounded-t-2xl sm:rounded-t-[2.5rem] shrink-0">
               <h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Compare Prices</h2>
               <div className="text-[10px] text-stone-500 space-y-2">
@@ -137,18 +137,18 @@ export default function CompareTabPanel(props: CompareTabPanelProps) {
                   )}
                   <div className="flex flex-col sm:flex-row gap-2 items-center justify-center">
                     {!user ? (
-                      <button onClick={() => setShowAuth(true)} className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-[#A5BEAC] text-white hover:bg-slate-900 transition shadow-sm">
+                      <button onClick={() => setShowAuth(true)} className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-brand text-white hover:bg-slate-900 transition shadow-sm">
                         Sign in
                       </button>
                     ) : (
                       <>
-                        <button onClick={() => setShowVaultPlusModal(true)} className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-[#A5BEAC] text-white hover:bg-slate-900 transition shadow-sm">
+                        <button onClick={() => setShowVaultPlusModal(true)} className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-brand text-white hover:bg-slate-900 transition shadow-sm">
                           Upgrade to Vault+
                         </button>
                         {VAULT_REFRESH_AND_STRIPE_SYNC_UI_ENABLED && (
                           <>
-                            <button type="button" onClick={() => { setLoading(true); void fetchInventory(); }} className="text-[10px] font-bold uppercase text-stone-400 hover:text-[#A5BEAC] transition">Refresh</button>
-                            <button type="button" disabled={syncingVaultPlus} onClick={() => { void syncVaultPlusFromStripe(); }} className="text-[10px] font-bold uppercase text-[#A5BEAC] hover:text-slate-900 transition disabled:opacity-50">
+                            <button type="button" onClick={() => { setLoading(true); void fetchInventory(); }} className="text-[10px] font-bold uppercase text-stone-400 hover:text-brand transition">Refresh</button>
+                            <button type="button" disabled={syncingVaultPlus} onClick={() => { void syncVaultPlusFromStripe(); }} className="text-[10px] font-bold uppercase text-brand hover:text-slate-900 transition disabled:opacity-50">
                               {syncingVaultPlus ? 'Syncing…' : 'Sync from Stripe'}
                             </button>
                           </>
@@ -165,13 +165,13 @@ export default function CompareTabPanel(props: CompareTabPanelProps) {
                     <button
                       ref={compareFilterButtonRef}
                       onClick={() => setShowCompareFilterMenu(!showCompareFilterMenu)}
-                      className={`w-full h-full min-h-[48px] sm:min-h-0 flex items-center justify-center rounded-xl border transition-all ${showCompareFilterMenu ? 'bg-slate-900 text-white border-slate-900' : 'bg-stone-50 border-stone-200 text-stone-400 hover:border-[#A5BEAC]'}`}
+                      className={`w-full h-full min-h-[48px] sm:min-h-0 flex items-center justify-center rounded-xl border transition-all ${showCompareFilterMenu ? 'bg-slate-900 text-white border-slate-900' : 'bg-stone-50 border-stone-200 text-stone-400 hover:border-brand'}`}
                     >
                       <span className="text-lg">⚡</span>
                     </button>
                     {showCompareFilterMenu && compareFilterDropdownRect && typeof document !== 'undefined' && createPortal(
                       <div
-                        className="fixed w-[min(18rem,calc(100vw-1rem))] max-h-[min(85dvh,calc(100dvh-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px)-1rem))] bg-white rounded-2xl shadow-2xl border-2 border-[#A5BEAC] z-[9999] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2"
+                        className="fixed w-[min(18rem,calc(100vw-1rem))] max-h-[min(85dvh,calc(100dvh-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px)-1rem))] bg-white rounded-2xl shadow-2xl border-2 border-brand z-[9999] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2"
                         style={{ top: compareFilterDropdownRect.top, left: compareFilterDropdownRect.left }}
                       >
                         <div className="overflow-y-auto overscroll-contain touch-pan-y p-4 space-y-4 min-h-0 flex-1 custom-scrollbar">
@@ -179,7 +179,7 @@ export default function CompareTabPanel(props: CompareTabPanelProps) {
                           <h4 className="text-xs font-black uppercase text-slate-900">Compare Filters</h4>
                           <button onClick={() => {
                             setCompareFilterLocation('All'); setCompareFilterTag('All'); setCompareFilterStrategy('All'); setCompareFilterMetal('All'); setCompareFilterStatus('Active'); setCompareSearchTerm('');
-                          }} className="text-[9px] font-bold text-[#A5BEAC] uppercase hover:text-slate-900">Reset</button>
+                          }} className="text-[9px] font-bold text-brand uppercase hover:text-slate-900">Reset</button>
                         </div>
                         <div className="space-y-1">
                           <label className="text-[9px] font-bold text-stone-400 uppercase">Location</label>
@@ -191,9 +191,9 @@ export default function CompareTabPanel(props: CompareTabPanelProps) {
                         <div className="space-y-1">
                           <label className="text-[9px] font-bold text-stone-400 uppercase">Tag</label>
                           <div className="flex flex-wrap gap-2">
-                            <button key="All" onClick={() => setCompareFilterTag('All')} className={`py-1.5 px-2 rounded-lg text-[9px] font-black uppercase border ${compareFilterTag === 'All' ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-400'}`}>All</button>
+                            <button key="All" onClick={() => setCompareFilterTag('All')} className={`py-1.5 px-2 rounded-lg text-[9px] font-black uppercase border ${compareFilterTag === 'All' ? 'bg-brand text-white border-brand' : 'bg-white border-stone-200 text-stone-400'}`}>All</button>
                             {uniqueTags.map(t => (
-                              <button key={t} onClick={() => setCompareFilterTag(t)} className={`py-1.5 px-2 rounded-lg text-[9px] font-black uppercase border ${compareFilterTag === t ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-400'}`}>{t}</button>
+                              <button key={t} onClick={() => setCompareFilterTag(t)} className={`py-1.5 px-2 rounded-lg text-[9px] font-black uppercase border ${compareFilterTag === t ? 'bg-brand text-white border-brand' : 'bg-white border-stone-200 text-stone-400'}`}>{t}</button>
                             ))}
                           </div>
                         </div>
@@ -209,7 +209,7 @@ export default function CompareTabPanel(props: CompareTabPanelProps) {
                           <label className="text-[9px] font-bold text-stone-400 uppercase">Formula</label>
                           <div className="flex gap-2">
                             {['All', 'A', 'B', 'custom'].map(s => (
-                              <button key={s} onClick={() => setCompareFilterStrategy(s)} className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase border ${compareFilterStrategy === s ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-400'}`}>{s === 'custom' ? 'Custom' : s}</button>
+                              <button key={s} onClick={() => setCompareFilterStrategy(s)} className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase border ${compareFilterStrategy === s ? 'bg-brand text-white border-brand' : 'bg-white border-stone-200 text-stone-400'}`}>{s === 'custom' ? 'Custom' : s}</button>
                             ))}
                           </div>
                         </div>
@@ -217,7 +217,7 @@ export default function CompareTabPanel(props: CompareTabPanelProps) {
                           <label className="text-[9px] font-bold text-stone-400 uppercase">Metal Type</label>
                           <div className="grid grid-cols-2 gap-2">
                             {['All', 'Gold', 'Silver', 'Platinum'].map(m => (
-                              <button key={m} onClick={() => setCompareFilterMetal(m)} className={`py-1.5 rounded-lg text-[9px] font-black uppercase border ${compareFilterMetal === m ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-400'}`}>{m}</button>
+                              <button key={m} onClick={() => setCompareFilterMetal(m)} className={`py-1.5 rounded-lg text-[9px] font-black uppercase border ${compareFilterMetal === m ? 'bg-brand text-white border-brand' : 'bg-white border-stone-200 text-stone-400'}`}>{m}</button>
                             ))}
                           </div>
                         </div>
@@ -231,7 +231,7 @@ export default function CompareTabPanel(props: CompareTabPanelProps) {
                     <input
                       type="text"
                       placeholder="Search by name, tag, metal, location..."
-                      className="w-full h-full min-h-[48px] sm:min-h-0 pl-10 pr-4 bg-stone-50 border rounded-xl text-xs font-bold outline-none focus:border-[#A5BEAC] transition-all"
+                      className="w-full h-full min-h-[48px] sm:min-h-0 pl-10 pr-4 bg-stone-50 border rounded-xl text-xs font-bold outline-none focus:border-brand transition-all"
                       value={compareSearchTerm}
                       onChange={(e) => setCompareSearchTerm(e.target.value)}
                     />
@@ -251,14 +251,14 @@ export default function CompareTabPanel(props: CompareTabPanelProps) {
                 <button
                   type="button"
                   onClick={() => setCompareFormulas(p => ({ ...p, a: !p.a }))}
-                  className={`py-2 px-3 rounded-xl text-[10px] font-black uppercase border transition-all ${compareFormulas.a ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-500 hover:border-stone-300'}`}
+                  className={`py-2 px-3 rounded-xl text-[10px] font-black uppercase border transition-all ${compareFormulas.a ? 'bg-brand text-white border-brand' : 'bg-white border-stone-200 text-stone-500 hover:border-stone-300'}`}
                 >
                   Formula A
                 </button>
                 <button
                   type="button"
                   onClick={() => setCompareFormulas(p => ({ ...p, b: !p.b }))}
-                  className={`py-2 px-3 rounded-xl text-[10px] font-black uppercase border transition-all ${compareFormulas.b ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-500 hover:border-stone-300'}`}
+                  className={`py-2 px-3 rounded-xl text-[10px] font-black uppercase border transition-all ${compareFormulas.b ? 'bg-brand text-white border-brand' : 'bg-white border-stone-200 text-stone-500 hover:border-stone-300'}`}
                 >
                   Formula B
                 </button>
@@ -273,7 +273,7 @@ export default function CompareTabPanel(props: CompareTabPanelProps) {
                         else setCompareFormulas(p => ({ ...p, customIds: [...p.customIds, f.id] }));
                       }}
                       title={f.name}
-                      className={`py-2 px-3 rounded-xl text-[10px] font-black uppercase border transition-all truncate max-w-[140px] ${isSelected ? 'bg-[#A5BEAC] text-white border-[#A5BEAC]' : 'bg-white border-stone-200 text-stone-500 hover:border-stone-300'}`}
+                      className={`py-2 px-3 rounded-xl text-[10px] font-black uppercase border transition-all truncate max-w-[140px] ${isSelected ? 'bg-brand text-white border-brand' : 'bg-white border-stone-200 text-stone-500 hover:border-stone-300'}`}
                     >
                       {f.name}
                     </button>
@@ -307,7 +307,7 @@ export default function CompareTabPanel(props: CompareTabPanelProps) {
                             step="0.01"
                             value={compareCustomSpots[metal] || ''}
                             onChange={e => setCompareCustomSpots(p => ({ ...p, [metal]: Number(e.target.value) || 0 }))}
-                            className="w-[92px] pl-5 pr-2 py-1.5 bg-white border border-stone-200 rounded-lg text-xs font-bold outline-none focus:border-[#A5BEAC] transition-all"
+                            className="w-[92px] pl-5 pr-2 py-1.5 bg-white border border-stone-200 rounded-lg text-xs font-bold outline-none focus:border-brand transition-all"
                           />
                         </div>
                       </div>
@@ -315,7 +315,7 @@ export default function CompareTabPanel(props: CompareTabPanelProps) {
                     <button
                       type="button"
                       onClick={() => setCompareCustomSpots({ gold: prices.gold || 0, silver: prices.silver || 0, platinum: prices.platinum || 0, palladium: prices.palladium || 0 })}
-                      className="py-1.5 px-3 rounded-lg text-[9px] font-black uppercase text-[#A5BEAC] border border-[#A5BEAC]/30 hover:bg-[#A5BEAC]/10 transition-all"
+                      className="py-1.5 px-3 rounded-lg text-[9px] font-black uppercase text-brand border border-brand/30 hover:bg-brand/10 transition-all"
                     >
                       Load live
                     </button>
@@ -418,7 +418,7 @@ export default function CompareTabPanel(props: CompareTabPanelProps) {
                               </td>
                             )}
                             {compareFormulas.a && (
-                              <td className={`max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 tabular-nums bg-white group-hover:bg-stone-50/50 align-top max-sm:max-w-[2.75rem] max-sm:min-w-0 ${itemStrategy === 'A' ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
+                              <td className={`max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 tabular-nums bg-white group-hover:bg-stone-50/50 align-top max-sm:max-w-[2.75rem] max-sm:min-w-0 ${itemStrategy === 'A' ? 'bg-brand/10 font-bold text-slate-800' : 'text-stone-600'}`}>
                                 {formatCompareWholesaleRetail(pricesByFormula['A']?.wholesale ?? 0, pricesByFormula['A']?.retail ?? 0)}
                               </td>
                             )}
@@ -434,7 +434,7 @@ export default function CompareTabPanel(props: CompareTabPanelProps) {
                               </td>
                             )}
                             {compareFormulas.b && (
-                              <td className={`max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 tabular-nums bg-white group-hover:bg-stone-50/50 align-top max-sm:max-w-[2.75rem] max-sm:min-w-0 ${itemStrategy === 'B' ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
+                              <td className={`max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 tabular-nums bg-white group-hover:bg-stone-50/50 align-top max-sm:max-w-[2.75rem] max-sm:min-w-0 ${itemStrategy === 'B' ? 'bg-brand/10 font-bold text-slate-800' : 'text-stone-600'}`}>
                                 {formatCompareWholesaleRetail(pricesByFormula['B']?.wholesale ?? 0, pricesByFormula['B']?.retail ?? 0)}
                               </td>
                             )}
@@ -456,7 +456,7 @@ export default function CompareTabPanel(props: CompareTabPanelProps) {
                               const sp = scenarioPrices?.[f.name];
                               const isCurrent = itemStrategy === f.name;
                               return (<React.Fragment key={f.id}>
-                                <td className={`max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 tabular-nums bg-white group-hover:bg-stone-50/50 align-top max-sm:max-w-[2.6rem] max-sm:min-w-0 sm:max-w-[5.5rem] ${isCurrent ? 'bg-[#A5BEAC]/10 font-bold text-slate-800' : 'text-stone-600'}`}>
+                                <td className={`max-sm:py-0.5 max-sm:px-[2px] sm:py-1.5 sm:px-1.5 tabular-nums bg-white group-hover:bg-stone-50/50 align-top max-sm:max-w-[2.6rem] max-sm:min-w-0 sm:max-w-[5.5rem] ${isCurrent ? 'bg-brand/10 font-bold text-slate-800' : 'text-stone-600'}`}>
                                   {formatCompareWholesaleRetail(p?.wholesale ?? 0, p?.retail ?? 0)}
                                 </td>
                                 {compareSpotEnabled && sp ? (

@@ -4,8 +4,8 @@ import { appIconPwaPath } from "@/lib/app-icon";
 import { IOS_PWA_STARTUP_IMAGES } from "./pwa-apple-splash";
 import { AuthProvider } from "./providers";
 
-/** Stone-50 — matches splash PNGs and reduces Chrome/system UI flash before paint */
-const PWA_THEME = "#fafaf9";
+/** BOMA pale cream — matches globals background / reduces UI flash before paint */
+const PWA_THEME = "#f6f1e9";
 
 export const metadata: Metadata = {
   title: "Jewelry Vault — Boulder Metalsmithing Association",
