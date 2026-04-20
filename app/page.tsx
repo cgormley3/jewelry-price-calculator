@@ -10,7 +10,11 @@ import { GoogleOAuthProvider } from '@react-oauth/google';
 import InstallPrompt from './InstallPrompt';
 import { evaluateCustomModel, formulaReferencesBase, formulaToReadableString, formulaToTokens, parseTokensStrict, PRESET_A, type FormulaNode } from '../lib/formula-engine';
 import type { FormulaTokens } from '../components/FormulaBuilder';
-import { VAULT_PLUS_PRICE_PHRASE } from '@/lib/vault-plus-copy';
+import {
+  VAULT_PLUS_MODAL_SUPPORT_PARAGRAPH,
+  VAULT_PLUS_PRICE_PHRASE,
+  VAULT_PLUS_PRICING_HEADLINE,
+} from '@/lib/vault-plus-copy';
 import { buildShopifyProductCsv } from '@/lib/shopifyProductCsv';
 import { buildSquarespaceProductCsv } from '@/lib/squarespaceProductCsv';
 import { vaultExportItemTitle } from '@/lib/shopifyProductExport';
@@ -4205,52 +4209,57 @@ export default function Home() {
       {/* Vault+ Upgrade Modal */}
       {showVaultPlusModal && (
         <div className="fixed inset-0 bg-charcoal/60 backdrop-blur-sm z-[250] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
-          <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-brand p-8 space-y-6">
-            <h3 className="text-xl font-black uppercase italic tracking-tighter text-foreground">Upgrade to Vault+</h3>
+          <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl border-2 border-brand p-8 space-y-5">
+            <h3 className="text-xl font-black uppercase italic tracking-tighter text-foreground">UNLOCK VAULT+</h3>
+            <p className="text-base font-semibold text-foreground leading-snug">{VAULT_PLUS_PRICING_HEADLINE}.</p>
             {(!user || user.is_anonymous) ? (
               <>
-                <p className="text-sm text-stone-600 font-medium">
-                  Create your free Vault account first. Then upgrade for {VAULT_PLUS_PRICE_PHRASE} and unlock everything.
+                <p className="text-sm font-semibold text-foreground bg-brand/5 border border-brand/15 rounded-xl px-3 py-2.5 leading-snug">
+                  You are not signed in. <span className="font-black">Sign up for a free Vault account first</span>, then you can unlock Vault+ and complete checkout.
                 </p>
-                <ul className="text-[10px] font-bold text-stone-500 uppercase tracking-wider space-y-2">
-                  <li className="flex items-center gap-2"><span className="text-brand">✓</span> Unlimited vault items</li>
-                  <li className="flex items-center gap-2"><span className="text-brand">✓</span> Time tracking</li>
-                  <li className="flex items-center gap-2"><span className="text-brand">✓</span> Custom price formulas</li>
-                  <li className="flex items-center gap-2"><span className="text-brand">✓</span> Compare prices across formulas</li>
-                </ul>
-                <div className="flex gap-3">
-                  <button onClick={() => setShowVaultPlusModal(false)} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Maybe later</button>
-                  <button
-                    onClick={() => {
-                      setPendingVaultPlusAfterAuth(true);
-                      setShowVaultPlusModal(false);
-                      setShowAuth(true);
-                      setIsSignUp(true);
-                      setShowPassword(false);
-                    }}
-                    className="flex-1 py-4 bg-charcoal text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition shadow-lg"
-                  >
-                    Sign Up to Continue
-                  </button>
-                </div>
+                <p className="text-sm text-stone-600 leading-relaxed">{VAULT_PLUS_MODAL_SUPPORT_PARAGRAPH}</p>
               </>
             ) : (
-              <>
-                <p className="text-sm text-stone-600 font-medium">
-                  Save vault items, log time, and use custom formulas. Vault+ unlocks everything—{VAULT_PLUS_PRICE_PHRASE}.
-                </p>
-                <ul className="text-[10px] font-bold text-stone-500 uppercase tracking-wider space-y-2">
-                  <li className="flex items-center gap-2"><span className="text-brand">✓</span> Unlimited vault items</li>
-                  <li className="flex items-center gap-2"><span className="text-brand">✓</span> Time tracking</li>
-                  <li className="flex items-center gap-2"><span className="text-brand">✓</span> Custom price formulas</li>
-                  <li className="flex items-center gap-2"><span className="text-brand">✓</span> Compare prices across formulas</li>
-                </ul>
-                <div className="flex gap-3">
-                  <button onClick={() => setShowVaultPlusModal(false)} className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase hover:bg-stone-200 transition">Maybe later</button>
-                  <button onClick={initiateVaultPlusCheckout} className="flex-1 py-4 bg-charcoal text-white rounded-2xl font-black text-[10px] uppercase hover:bg-brand transition shadow-lg">Get Vault+</button>
-                </div>
-              </>
+              <p className="text-sm text-stone-600 leading-relaxed">{VAULT_PLUS_MODAL_SUPPORT_PARAGRAPH}</p>
             )}
+            <ul className="text-[10px] font-bold text-stone-500 uppercase tracking-wider space-y-2">
+              <li className="flex items-center gap-2"><span className="text-brand">✓</span> Unlimited vault items</li>
+              <li className="flex items-center gap-2"><span className="text-brand">✓</span> Time tracking</li>
+              <li className="flex items-center gap-2"><span className="text-brand">✓</span> Custom price formulas</li>
+              <li className="flex items-center gap-2"><span className="text-brand">✓</span> Compare prices across formulas</li>
+            </ul>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => setShowVaultPlusModal(false)}
+                className="flex-1 py-4 bg-stone-100 rounded-2xl font-black text-[10px] uppercase tracking-wide hover:bg-stone-200 transition"
+              >
+                Stay Free
+              </button>
+              {(!user || user.is_anonymous) ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPendingVaultPlusAfterAuth(true);
+                    setShowVaultPlusModal(false);
+                    setShowAuth(true);
+                    setIsSignUp(true);
+                    setShowPassword(false);
+                  }}
+                  className="flex-1 py-4 bg-charcoal text-white rounded-2xl font-black text-[10px] uppercase tracking-wide hover:bg-brand transition shadow-lg"
+                >
+                  Unlock for $12/year
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={initiateVaultPlusCheckout}
+                  className="flex-1 py-4 bg-charcoal text-white rounded-2xl font-black text-[10px] uppercase tracking-wide hover:bg-brand transition shadow-lg"
+                >
+                  Unlock for $12/year
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -5866,7 +5875,6 @@ export default function Home() {
                 VAULT_REFRESH_AND_STRIPE_SYNC_UI_ENABLED={VAULT_REFRESH_AND_STRIPE_SYNC_UI_ENABLED}
                 MAX_VAULT_PHOTO_UPLOAD_BYTES={MAX_VAULT_PHOTO_UPLOAD_BYTES}
                 VAULT_PHOTO_ACCEPT={VAULT_PHOTO_ACCEPT}
-                VAULT_PLUS_PRICE_PHRASE={VAULT_PLUS_PRICE_PHRASE}
                 addCustomLocation={addCustomLocation}
                 addCustomTag={addCustomTag}
                 calculateFullBreakdown={calculateFullBreakdown}

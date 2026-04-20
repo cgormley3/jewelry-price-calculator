@@ -3,6 +3,10 @@
 import React from "react";
 import { createPortal } from "react-dom";
 import { findingsMultFromItem } from "@/lib/findings-mult";
+import {
+  VAULT_PLUS_PRICING_HEADLINE,
+  VAULT_PLUS_SUPPORT_COPY,
+} from "@/lib/vault-plus-copy";
 
 export type CompareTabPanelProps = {
   user: any;
@@ -133,6 +137,11 @@ export default function CompareTabPanel(props: CompareTabPanelProps) {
                   {!user && (
                     <p className="text-stone-600 font-bold uppercase text-xs tracking-wider">
                       Sign in to compare prices. With a vault and Vault+, you can compare item prices across different formulas.
+                    </p>
+                  )}
+                  {user && showVaultPlusUpgradeLikeCompare && (
+                    <p className="text-[10px] text-stone-500 font-medium leading-snug max-w-md mx-auto normal-case tracking-normal">
+                      {VAULT_PLUS_PRICING_HEADLINE}. {VAULT_PLUS_SUPPORT_COPY}
                     </p>
                   )}
                   <div className="flex flex-col sm:flex-row gap-2 items-center justify-center">

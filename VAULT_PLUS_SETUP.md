@@ -28,7 +28,7 @@ In Supabase SQL Editor, run the migrations in order:
 3. Add a **Price**:
    - Type: Recurring
    - Billing period: Yearly
-   - Set your price (e.g. **$15/year** — must match in-app copy in `lib/vault-plus-copy.ts`)
+   - Set your price (e.g. **$12/year** — must match in-app copy in `lib/vault-plus-copy.ts`)
 4. Copy the **Price ID** (starts with `price_`).
 
 ## 3. Get Your Stripe Keys

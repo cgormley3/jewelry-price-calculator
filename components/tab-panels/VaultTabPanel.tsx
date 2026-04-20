@@ -13,6 +13,11 @@ import {
 } from "@/lib/vault-metal-display";
 import { vaultThumbnailSrc } from "@/lib/vault-thumbnail";
 import { localTodayYYYYMMDD } from "@/lib/local-date";
+import {
+  VAULT_PLUS_PRICE_PHRASE,
+  VAULT_PLUS_PRICING_HEADLINE,
+  VAULT_PLUS_SUPPORT_COPY,
+} from "@/lib/vault-plus-copy";
 
 export type VaultTabPanelProps = {
   SHOPIFY_FEATURE_ENABLED: boolean;
@@ -20,7 +25,6 @@ export type VaultTabPanelProps = {
   VAULT_REFRESH_AND_STRIPE_SYNC_UI_ENABLED: boolean;
   MAX_VAULT_PHOTO_UPLOAD_BYTES: number;
   VAULT_PHOTO_ACCEPT: string;
-  VAULT_PLUS_PRICE_PHRASE: string;
   addCustomLocation: (itemId: string) => void | Promise<void>;
   addCustomTag: (itemId: string) => void | Promise<void>;
   calculateFullBreakdown: (...args: any[]) => any;
@@ -142,7 +146,6 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
     VAULT_REFRESH_AND_STRIPE_SYNC_UI_ENABLED,
     MAX_VAULT_PHOTO_UPLOAD_BYTES,
     VAULT_PHOTO_ACCEPT,
-    VAULT_PLUS_PRICE_PHRASE,
     addCustomLocation,
     addCustomTag,
     calculateFullBreakdown,
@@ -498,7 +501,14 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                 <div className="p-12 text-center space-y-4">
                   {showVaultPlusUpgradeLikeCompare && vaultPaywallHasItems ? (
                     <>
-                      <p className="text-stone-600 font-bold uppercase text-xs tracking-wider">To see your items upgrade to Vault+ ({VAULT_PLUS_PRICE_PHRASE})</p>
+                      <div className="space-y-2 text-center max-w-md mx-auto">
+                        <p className="text-stone-600 font-bold uppercase text-xs tracking-wider">
+                          To see your items, upgrade to Vault+ ({VAULT_PLUS_PRICE_PHRASE})
+                        </p>
+                        <p className="text-[10px] text-stone-500 font-medium leading-snug normal-case tracking-normal">
+                          {VAULT_PLUS_PRICING_HEADLINE}. {VAULT_PLUS_SUPPORT_COPY}
+                        </p>
+                      </div>
                       <div className="flex flex-col sm:flex-row gap-2 items-center justify-center">
                         <button onClick={() => setShowVaultPlusModal(true)} className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-brand text-white hover:bg-forest transition shadow-sm">
                           Upgrade to Vault+
@@ -517,13 +527,18 @@ export default function VaultTabPanel(props: VaultTabPanelProps) {
                     <div className="space-y-4">
                       <p className="text-stone-500 font-bold uppercase text-xs tracking-wider">No items yet</p>
                       {showVaultPlusUpgradeLikeCompare && (
-                        <button
-                          type="button"
-                          onClick={() => setShowVaultPlusModal(true)}
-                          className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-brand text-white hover:bg-forest transition shadow-sm"
-                        >
-                          Upgrade to Vault+
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setShowVaultPlusModal(true)}
+                            className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-brand text-white hover:bg-forest transition shadow-sm"
+                          >
+                            Upgrade to Vault+
+                          </button>
+                          <p className="text-[10px] text-stone-500 font-medium leading-snug max-w-md mx-auto normal-case tracking-normal">
+                            {VAULT_PLUS_PRICING_HEADLINE}. {VAULT_PLUS_SUPPORT_COPY}
+                          </p>
+                        </>
                       )}
                     </div>
                   )}
