@@ -1,4 +1,4 @@
-export const SHOPIFY_PRODUCT_VENDOR = 'Bear Silver and Stone';
+export const SHOPIFY_PRODUCT_VENDOR = 'Boulder Metalsmithing Association';
 
 export function escapeHtml(s: string): string {
   return s

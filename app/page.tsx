@@ -25,7 +25,17 @@ import type { TimeTabPanelProps } from '@/components/tab-panels/TimeTabPanel';
 import type { CompareTabPanelProps } from '@/components/tab-panels/CompareTabPanel';
 import type { FormulasTabPanelProps } from '@/components/tab-panels/FormulasTabPanel';
 import type { VaultTabPanelProps } from '@/components/tab-panels/VaultTabPanel';
-import { appIconHeaderPath, appIconHeaderPathForImage } from '@/lib/app-icon';
+import {
+  BOMA_HEADER_LOGO_PATH,
+  CREATOR_ATTRIBUTION_LABEL,
+  CREATOR_SITE_URL,
+  ORG_NAME,
+  ORG_SHORT_NAME,
+  authRedirectOrigin,
+  orgSiteUrl,
+  privacyPolicyUrl,
+} from '@/lib/branding';
+import { appIconHeaderPath } from '@/lib/app-icon';
 import { formatLocalDateYYYYMMDD, localTodayYYYYMMDD } from '@/lib/local-date';
 import { FALLBACK_SPOT, METAL_PURITIES, UNIT_TO_GRAMS } from '@/lib/vault-metal-display';
 
@@ -3391,19 +3401,22 @@ export default function Home() {
     doc.setFont("helvetica", "normal"); doc.setFontSize(6); doc.setTextColor(130, 130, 130);
     doc.text('Powered by', pdfMargin, footerY - 2);
     const logoSize = 5;
+    const orgLine = ORG_SHORT_NAME;
     if (iconData) {
       try {
         doc.addImage(iconData, 'PNG', pdfMargin + 20, footerY - 6, logoSize, logoSize);
         doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.setTextColor(60, 60, 60);
-        doc.text('Bear Silver and Stone', pdfMargin + 26, footerY - 2);
+        doc.text(orgLine, pdfMargin + 26, footerY - 2);
       } catch {
         doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(80, 80, 80);
-        doc.text('Bear Silver and Stone', pdfMargin + 20, footerY - 2);
+        doc.text(orgLine, pdfMargin + 20, footerY - 2);
       }
     } else {
       doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(80, 80, 80);
-      doc.text('Bear Silver and Stone', pdfMargin + 20, footerY - 2);
+      doc.text(orgLine, pdfMargin + 20, footerY - 2);
     }
+    doc.setFont("helvetica", "normal"); doc.setFontSize(5); doc.setTextColor(130, 130, 130);
+    doc.text(CREATOR_ATTRIBUTION_LABEL, pdfMargin, footerY + 3);
     if (pageNum != null) {
       doc.setFont("helvetica", "normal"); doc.setFontSize(6); doc.setTextColor(130, 130, 130);
       doc.text(`Page ${pageNum}`, pdfPageWidth - pdfMargin - doc.getTextWidth(`Page ${pageNum}`), footerY - 2);
@@ -3759,7 +3772,7 @@ export default function Home() {
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    const authRedirectUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || 'https://vault.bearsilverandstone.com';
+    const authRedirectUrl = authRedirectOrigin();
     let result = isSignUp
       ? await supabase.auth.signUp({
           email,
@@ -3880,8 +3893,9 @@ export default function Home() {
       setNotification({ title: "Email Required", message: "Please enter your email address first so we know where to send the recovery link.", type: 'info' });
       return;
     }
+    const recoveryRedirect = authRedirectOrigin();
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: 'https://vault.bearsilverandstone.com',
+      redirectTo: recoveryRedirect || undefined,
     });
     if (error) {
       setNotification({ title: "Recovery Error", message: error.message, type: 'error' });
@@ -5015,20 +5029,38 @@ export default function Home() {
           <div className="hidden md:block md:w-1/4" />
           <div className="flex flex-col items-center justify-center text-center w-full md:w-2/4">
             <NextImage
-              src={appIconHeaderPathForImage()}
-              alt="Logo"
-              width={192}
-              height={192}
-              className="w-12 h-12 object-contain bg-transparent block brightness-110 contrast-125 mb-3"
-              style={{ mixBlendMode: 'multiply' }}
+              src={BOMA_HEADER_LOGO_PATH}
+              alt={ORG_NAME}
+              width={64}
+              height={64}
+              className="w-12 h-12 object-contain bg-transparent block mb-3"
               sizes="48px"
               priority
             />
-            <div className="flex flex-col items-center leading-none">
-              <div className="flex items-center justify-center gap-2 mb-2">
+            <div className="flex flex-col items-center leading-none gap-1">
+              <div className="flex items-center justify-center gap-2 mb-1">
                 <h1 className="text-3xl font-black uppercase italic tracking-[0.1em] text-slate-900 leading-none">THE VAULT</h1>
               </div>
-              <a href="https://bearsilverandstone.com" target="_blank" rel="noopener noreferrer" className="text-[9px] font-black uppercase tracking-[0.15em] text-stone-600 hover:text-[#A5BEAC] transition-colors">BY BEAR SILVER AND STONE</a>
+              {orgSiteUrl() ? (
+                <a
+                  href={orgSiteUrl()}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[9px] font-black uppercase tracking-[0.12em] text-stone-600 hover:text-[#A5BEAC] transition-colors text-center max-w-[20rem]"
+                >
+                  {ORG_NAME}
+                </a>
+              ) : (
+                <span className="text-[9px] font-black uppercase tracking-[0.12em] text-stone-600 text-center max-w-[20rem]">{ORG_NAME}</span>
+              )}
+              <a
+                href={CREATOR_SITE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[8px] font-bold uppercase tracking-[0.08em] text-stone-400 hover:text-[#A5BEAC] transition-colors text-center max-w-[22rem] leading-snug"
+              >
+                {CREATOR_ATTRIBUTION_LABEL}
+              </a>
             </div>
           </div>
 
@@ -6109,21 +6141,53 @@ export default function Home() {
           )}
 
         <div className="flex flex-col items-center justify-center gap-2 pt-8 pb-[calc(2rem+env(safe-area-inset-bottom,0px))] md:py-8 border-t border-stone-200 mt-10">
-            <a href="https://bearsilverandstone.com" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400">Powered by</span>
-              <NextImage
-                src={appIconHeaderPathForImage()}
-                alt="Bear Silver and Stone"
-                width={192}
-                height={192}
-                className="w-6 h-6 object-contain brightness-110 contrast-125 mb-3"
-                style={{ mixBlendMode: 'multiply' }}
-                sizes="24px"
-              />
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900">Bear Silver and Stone</span>
+            {orgSiteUrl() ? (
+              <a
+                href={orgSiteUrl()}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex flex-wrap items-center justify-center gap-2 hover:opacity-80 transition-opacity"
+              >
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400">Powered by</span>
+                <NextImage
+                  src={BOMA_HEADER_LOGO_PATH}
+                  alt=""
+                  width={64}
+                  height={64}
+                  className="w-6 h-6 object-contain"
+                  sizes="24px"
+                />
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900">{ORG_NAME}</span>
+              </a>
+            ) : (
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400">Powered by</span>
+                <NextImage
+                  src={BOMA_HEADER_LOGO_PATH}
+                  alt=""
+                  width={64}
+                  height={64}
+                  className="w-6 h-6 object-contain"
+                  sizes="24px"
+                />
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900">{ORG_NAME}</span>
+              </div>
+            )}
+            <a
+              href={CREATOR_SITE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[8px] font-bold uppercase tracking-[0.12em] text-stone-400 hover:text-[#A5BEAC] transition-colors text-center max-w-md leading-snug"
+            >
+              {CREATOR_ATTRIBUTION_LABEL}
             </a>
             <InstallPrompt />
-            <a href="https://bearsilverandstone.com/policies/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-[8px] font-bold uppercase tracking-widest text-stone-300 hover:text-[#A5BEAC] transition-colors mt-2">
+            <a
+              href={privacyPolicyUrl()}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[8px] font-bold uppercase tracking-widest text-stone-300 hover:text-[#A5BEAC] transition-colors mt-2"
+            >
               Privacy Policy
             </a>
           </div>
