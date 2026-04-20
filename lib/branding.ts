@@ -30,8 +30,16 @@ export function privacyPolicyUrl(): string | null {
   return fromEnv || DEFAULT_PRIVACY_POLICY_URL;
 }
 
-/** Wordmark for app header/footer (see `public/boma-logo-header.png`). */
+/**
+ * Wordmark for light backgrounds (dark ink on transparent).
+ * Source: Boulder Metalsmithing Association stacked logo asset.
+ */
 export const BOMA_HEADER_LOGO_PATH = '/boma-logo-header.png';
+
+/**
+ * Wordmark for dark backgrounds (light ink on transparent), e.g. charcoal bars or dark modes.
+ */
+export const BOMA_LOGO_ON_DARK_PATH = '/boma-logo-on-dark.png';
 
 /** Email auth and password-recovery redirects: env first, then current origin (client). */
 export function authRedirectOrigin(): string {

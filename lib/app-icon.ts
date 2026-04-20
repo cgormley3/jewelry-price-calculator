@@ -2,7 +2,7 @@
  * Single cache-bust version for favicon / PWA `icon.png` and the small header raster.
  * Bump when replacing assets so browsers pick up new files in one shot.
  */
-export const APP_ICON_CACHE_VERSION = "6";
+export const APP_ICON_CACHE_VERSION = "9";
 
 export function appIconPwaPath(): string {
   return `/icon.png?v=${APP_ICON_CACHE_VERSION}`;

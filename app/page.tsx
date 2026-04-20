@@ -31,6 +31,7 @@ import type { FormulasTabPanelProps } from '@/components/tab-panels/FormulasTabP
 import type { VaultTabPanelProps } from '@/components/tab-panels/VaultTabPanel';
 import {
   BOMA_HEADER_LOGO_PATH,
+  BOMA_LOGO_ON_DARK_PATH,
   CREATOR_ATTRIBUTION_LABEL,
   CREATOR_SITE_URL,
   ORG_NAME,
@@ -4038,9 +4039,19 @@ export default function Home() {
       {showProfileModal && user && !user.is_anonymous && (
         <div className="fixed inset-0 bg-charcoal/60 backdrop-blur-sm z-[260] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border-2 border-brand p-8 space-y-6">
-            <div className="flex justify-between items-center">
-              <h3 className="text-xl font-black uppercase italic tracking-tighter text-foreground">Profile</h3>
-              <button onClick={() => setShowProfileModal(false)} className="text-stone-300 hover:text-brand font-black text-lg">✕</button>
+            <div className="flex justify-between items-start gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <NextImage
+                  src={BOMA_HEADER_LOGO_PATH}
+                  alt=""
+                  width={1024}
+                  height={1024}
+                  className="h-10 w-auto max-w-[120px] shrink-0 object-contain"
+                  unoptimized
+                />
+                <h3 className="text-xl font-black uppercase italic tracking-tighter text-foreground leading-tight">Profile</h3>
+              </div>
+              <button onClick={() => setShowProfileModal(false)} className="text-stone-300 hover:text-brand font-black text-lg shrink-0">✕</button>
             </div>
             <p className="text-xs text-stone-500">Your display name, company, and logo appear in PDF reports and exports.</p>
             <div className="space-y-4">
@@ -4210,7 +4221,17 @@ export default function Home() {
       {showVaultPlusModal && (
         <div className="fixed inset-0 bg-charcoal/60 backdrop-blur-sm z-[250] flex items-center justify-center pt-4 px-4 pb-modal-safe animate-in fade-in">
           <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl border-2 border-brand p-8 space-y-5">
-            <h3 className="text-xl font-black uppercase italic tracking-tighter text-foreground">UNLOCK VAULT+</h3>
+            <div className="flex justify-center">
+              <NextImage
+                src={BOMA_HEADER_LOGO_PATH}
+                alt=""
+                width={1024}
+                height={1024}
+                className="h-14 w-auto max-w-[min(100%,240px)] object-contain"
+                unoptimized
+              />
+            </div>
+            <h3 className="text-xl font-black uppercase italic tracking-tighter text-foreground text-center">UNLOCK VAULT+</h3>
             <p className="text-base font-semibold text-foreground leading-snug">{VAULT_PLUS_PRICING_HEADLINE}.</p>
             {(!user || user.is_anonymous) ? (
               <>
@@ -4273,6 +4294,16 @@ export default function Home() {
           aria-busy="true"
         >
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] border-2 border-brand p-10 space-y-6 shadow-2xl animate-in zoom-in-95 text-center">
+            <div className="flex justify-center">
+              <NextImage
+                src={BOMA_HEADER_LOGO_PATH}
+                alt=""
+                width={1024}
+                height={1024}
+                className="h-12 w-auto max-w-[200px] object-contain mx-auto"
+                unoptimized
+              />
+            </div>
             <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto bg-brand/20 animate-pulse">
               <span className="text-3xl" aria-hidden>
                 ⟳
@@ -4672,6 +4703,16 @@ export default function Home() {
 
             {/* LIVE CALCULATION DISPLAY */}
             <div className="p-4 bg-charcoal rounded-2xl text-white space-y-2">
+              <div className="flex justify-center pb-3 mb-1 border-b border-white/10">
+                <NextImage
+                  src={BOMA_LOGO_ON_DARK_PATH}
+                  alt=""
+                  width={1024}
+                  height={1024}
+                  className="h-8 w-auto max-w-[200px] object-contain"
+                  unoptimized
+                />
+              </div>
               {(() => {
                 const laborHours = recalcItem.hours || 1;
                 const effectiveRate = recalcParams.laborRate
@@ -5146,6 +5187,16 @@ export default function Home() {
                 <GoogleAuthShell clientId={GOOGLE_WEB_CLIENT_ID}>
                 <div className="absolute right-0 mt-12 w-full md:w-80 bg-white p-6 rounded-3xl border-2 border-brand shadow-2xl z-[100] animate-in fade-in slide-in-from-top-2 mx-auto auth-menu-container">
                   <button onClick={() => { setShowAuth(false); setShowPassword(false); setSignUpAwaitingConfirmation(false); setPendingVaultPlusAfterAuth(false); }} className="absolute top-4 right-4 text-stone-300 hover:text-brand font-black text-sm">✕</button>
+                  <div className="flex justify-center mb-3 pt-1">
+                    <NextImage
+                      src={BOMA_HEADER_LOGO_PATH}
+                      alt=""
+                      width={1024}
+                      height={1024}
+                      className="h-12 w-auto max-w-[200px] object-contain"
+                      unoptimized
+                    />
+                  </div>
                   <h3 className="text-sm font-black uppercase mb-4 text-center text-foreground">Vault Access</h3>
                   {signUpAwaitingConfirmation ? (
                     <div className="space-y-4">

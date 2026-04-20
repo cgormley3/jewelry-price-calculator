@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
+import { BOMA_HEADER_LOGO_PATH } from '@/lib/branding';
 
 export default function InstallPrompt() {
   const [showPrompt, setShowPrompt] = useState(false);
@@ -21,6 +23,16 @@ export default function InstallPrompt() {
 
   return (
     <div className="mt-10 p-6 bg-brand/10 rounded-[2rem] border-2 border-dashed border-brand/30 text-center mx-4 mb-10">
+      <div className="flex justify-center mb-4">
+        <Image
+          src={BOMA_HEADER_LOGO_PATH}
+          alt=""
+          width={1024}
+          height={1024}
+          className="h-11 w-auto max-w-[200px] object-contain"
+          unoptimized
+        />
+      </div>
       <p className="text-[10px] font-black uppercase text-slate-700 tracking-widest">
         Install The Vault
       </p>
