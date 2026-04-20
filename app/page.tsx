@@ -125,6 +125,12 @@ const VaultTabPanel = dynamic<VaultTabPanelProps>(
   }
 );
 
+/** Only wraps with GoogleOAuthProvider when `NEXT_PUBLIC_GOOGLE_CLIENT_ID` is set (avoids fake client IDs). */
+function GoogleAuthShell({ clientId, children }: { clientId: string; children: React.ReactNode }) {
+  if (!clientId) return <>{children}</>;
+  return <GoogleOAuthProvider clientId={clientId}>{children}</GoogleOAuthProvider>;
+}
+
 export default function Home() {
   const privacyFooterUrl = privacyPolicyUrl();
   // Check if Turnstile is configured (for human verification)
@@ -5125,7 +5131,7 @@ export default function Home() {
                 </button>
               )}
               {showAuth ? (
-                <GoogleOAuthProvider clientId={GOOGLE_WEB_CLIENT_ID}>
+                <GoogleAuthShell clientId={GOOGLE_WEB_CLIENT_ID}>
                 <div className="absolute right-0 mt-12 w-full md:w-80 bg-white p-6 rounded-3xl border-2 border-brand shadow-2xl z-[100] animate-in fade-in slide-in-from-top-2 mx-auto auth-menu-container">
                   <button onClick={() => { setShowAuth(false); setShowPassword(false); setSignUpAwaitingConfirmation(false); setPendingVaultPlusAfterAuth(false); }} className="absolute top-4 right-4 text-stone-300 hover:text-brand font-black text-sm">✕</button>
                   <h3 className="text-sm font-black uppercase mb-4 text-center text-foreground">Vault Access</h3>
@@ -5139,6 +5145,7 @@ export default function Home() {
                     </div>
                   ) : (
                     <div className="space-y-0">
+                      {GOOGLE_WEB_CLIENT_ID ? (
                       <div className="w-full flex justify-center mb-4">
                         <GoogleLoginButton
                           onSuccess={handleGoogleHandshake}
@@ -5150,6 +5157,11 @@ export default function Home() {
                           text="continue_with"
                         />
                       </div>
+                      ) : (
+                      <p className="text-[10px] text-center text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-4 leading-snug">
+                        Google sign-in is not configured. Set <span className="font-mono">NEXT_PUBLIC_GOOGLE_CLIENT_ID</span> in <span className="font-mono">.env.local</span> (and Vercel) to your Web client ID, then add this site under Authorized JavaScript origins in Google Cloud.
+                      </p>
+                      )}
                       <div className="flex border-b border-stone-100 mb-4">
                         <button onClick={() => { setIsSignUp(false); setShowPassword(false); }} className={`flex-1 py-2 text-[10px] font-black uppercase ${!isSignUp ? 'text-brand border-b-2 border-brand' : 'text-stone-300'}`}>Login</button>
                         <button onClick={() => { setIsSignUp(true); setShowPassword(false); }} className={`flex-1 py-2 text-[10px] font-black uppercase ${isSignUp ? 'text-brand border-b-2 border-brand' : 'text-stone-300'}`}>Sign Up</button>
@@ -5181,7 +5193,7 @@ export default function Home() {
                     </div>
                   )}
                 </div>
-                </GoogleOAuthProvider>
+                </GoogleAuthShell>
               ) : null}
             </div>
           </div>
