@@ -35,6 +35,7 @@ import {
   orgSiteUrl,
   privacyPolicyUrl,
 } from '@/lib/branding';
+import { vaultHeaderFont } from '@/lib/vault-header-font';
 import { appIconHeaderPath } from '@/lib/app-icon';
 import { formatLocalDateYYYYMMDD, localTodayYYYYMMDD } from '@/lib/local-date';
 import { FALLBACK_SPOT, METAL_PURITIES, UNIT_TO_GRAMS } from '@/lib/vault-metal-display';
@@ -5053,15 +5054,17 @@ export default function Home() {
                 unoptimized
               />
             </a>
-            <div className="flex flex-col items-center leading-none gap-1">
-              <div className="flex items-center justify-center gap-2 mb-1">
-                <h1 className="text-3xl font-black uppercase italic tracking-[0.1em] text-foreground leading-none">THE VAULT</h1>
-              </div>
+            <div className="mx-auto flex w-full max-w-[20rem] flex-col gap-1.5 self-stretch text-center leading-none">
+              <h1
+                className={`${vaultHeaderFont.className} w-full min-w-0 text-3xl font-black uppercase italic tracking-[0.1em] text-foreground leading-none [font-synthesis-weight:none] sm:text-4xl`}
+              >
+                THE VAULT
+              </h1>
               <a
                 href={orgSiteUrl()}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[9px] font-black uppercase tracking-[0.12em] text-stone-600 hover:text-brand transition-colors text-center max-w-[20rem]"
+                className="block w-full min-w-0 text-balance text-[9px] font-black uppercase tracking-[0.12em] text-stone-600 transition-colors hover:text-brand"
               >
                 {ORG_NAME}
               </a>
