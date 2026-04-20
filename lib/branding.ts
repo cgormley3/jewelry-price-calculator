@@ -5,9 +5,13 @@
 export const ORG_NAME = 'Boulder Metalsmithing Association';
 export const ORG_SHORT_NAME = 'BOMA';
 
-/** Primary org link in header/footer; leave unset until BOMA’s public site URL is final. */
+/** Public site — [Boulder Metalsmithing Association](https://www.bouldermetalsmiths.com/) */
+export const ORG_SITE_URL_DEFAULT = 'https://www.bouldermetalsmiths.com/';
+
+/** Primary org link in header/footer. Override with `NEXT_PUBLIC_ORG_SITE_URL` if needed. */
 export function orgSiteUrl(): string {
-  return process.env.NEXT_PUBLIC_ORG_SITE_URL?.trim() ?? '';
+  const fromEnv = process.env.NEXT_PUBLIC_ORG_SITE_URL?.trim();
+  return fromEnv || ORG_SITE_URL_DEFAULT;
 }
 
 export const CREATOR_ATTRIBUTION_LABEL = 'Created by Claire Gormley / Bear Silver and Stone';

@@ -5028,32 +5028,36 @@ export default function Home() {
         <div className="flex flex-col md:flex-row justify-between items-center bg-white px-6 py-8 rounded-[2rem] border-2 shadow-sm gap-8 shrink-0 relative border-brand">
           <div className="hidden md:block md:w-1/4" />
           <div className="flex flex-col items-center justify-center text-center w-full md:w-2/4">
-            <NextImage
-              src={BOMA_HEADER_LOGO_PATH}
-              alt={ORG_NAME}
-              width={1024}
-              height={1024}
-              className="h-16 sm:h-[4.75rem] w-auto max-w-[min(100%,220px)] sm:max-w-[260px] object-contain object-center block mb-3"
-              sizes="(max-width: 640px) 220px, 260px"
-              priority
-              unoptimized
-            />
+            <a
+              href={orgSiteUrl()}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mb-3 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 hover:opacity-90 transition-opacity"
+              aria-label={`${ORG_NAME} — visit website`}
+            >
+              <NextImage
+                src={BOMA_HEADER_LOGO_PATH}
+                alt=""
+                width={1024}
+                height={1024}
+                className="h-16 sm:h-[4.75rem] w-auto max-w-[min(100%,220px)] sm:max-w-[260px] object-contain object-center block pointer-events-none"
+                sizes="(max-width: 640px) 220px, 260px"
+                priority
+                unoptimized
+              />
+            </a>
             <div className="flex flex-col items-center leading-none gap-1">
               <div className="flex items-center justify-center gap-2 mb-1">
                 <h1 className="text-3xl font-black uppercase italic tracking-[0.1em] text-slate-900 leading-none">THE VAULT</h1>
               </div>
-              {orgSiteUrl() ? (
-                <a
-                  href={orgSiteUrl()}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[9px] font-black uppercase tracking-[0.12em] text-stone-600 hover:text-brand transition-colors text-center max-w-[20rem]"
-                >
-                  {ORG_NAME}
-                </a>
-              ) : (
-                <span className="text-[9px] font-black uppercase tracking-[0.12em] text-stone-600 text-center max-w-[20rem]">{ORG_NAME}</span>
-              )}
+              <a
+                href={orgSiteUrl()}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[9px] font-black uppercase tracking-[0.12em] text-stone-600 hover:text-brand transition-colors text-center max-w-[20rem]"
+              >
+                {ORG_NAME}
+              </a>
             </div>
           </div>
 
@@ -6134,40 +6138,25 @@ export default function Home() {
           )}
 
         <div className="flex flex-col items-center justify-center gap-2 pt-8 pb-[calc(2rem+env(safe-area-inset-bottom,0px))] md:py-8 border-t border-stone-200 mt-10">
-            {orgSiteUrl() ? (
-              <a
-                href={orgSiteUrl()}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex flex-wrap items-center justify-center gap-2 hover:opacity-80 transition-opacity"
-              >
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400">Powered by</span>
-                <NextImage
-                  src={BOMA_HEADER_LOGO_PATH}
-                  alt=""
-                  width={1024}
-                  height={1024}
-                  className="h-6 w-6 object-contain"
-                  sizes="24px"
-                  unoptimized
-                />
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900">{ORG_NAME}</span>
-              </a>
-            ) : (
-              <div className="flex flex-wrap items-center justify-center gap-2">
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400">Powered by</span>
-                <NextImage
-                  src={BOMA_HEADER_LOGO_PATH}
-                  alt=""
-                  width={1024}
-                  height={1024}
-                  className="h-6 w-6 object-contain"
-                  sizes="24px"
-                  unoptimized
-                />
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900">{ORG_NAME}</span>
-              </div>
-            )}
+            <a
+              href={orgSiteUrl()}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex flex-wrap items-center justify-center gap-2 hover:opacity-80 transition-opacity rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+              aria-label={`${ORG_NAME} — visit website`}
+            >
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400">Powered by</span>
+              <NextImage
+                src={BOMA_HEADER_LOGO_PATH}
+                alt=""
+                width={1024}
+                height={1024}
+                className="h-6 w-6 object-contain pointer-events-none"
+                sizes="24px"
+                unoptimized
+              />
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900">{ORG_NAME}</span>
+            </a>
             <a
               href={CREATOR_SITE_URL}
               target="_blank"
