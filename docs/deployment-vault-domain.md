@@ -2,6 +2,17 @@
 
 This checklist starts at **DNS + hosting** (step 1). Supabase, Google OAuth, Turnstile, and Stripe are configured in **their dashboards**, not only in this repo.
 
+## 0. Migrating from `vault.bearsilverandstone.com` (301 to canonical host)
+
+The app **301-redirects** the legacy vault hostname to **`https://vault.bouldermetalsmiths.com`** (same path; query string preserved). Rule lives in [`next.config.mjs`](../next.config.mjs). For it to run in production:
+
+1. **Vercel → Project → Domains:** add **both** `vault.bouldermetalsmiths.com` and `vault.bearsilverandstone.com` to the **same** project (so traffic to the old host reaches this deployment).
+2. **DNS** for the old hostname should still resolve to Vercel (CNAME to `cname.vercel-dns.com` or as instructed), until you no longer need redirects.
+3. **Environment:** set `NEXT_PUBLIC_APP_URL=https://vault.bouldermetalsmiths.com` (Production). Remove reliance on the old URL in Supabase **Site URL** / **Redirect URLs**, Google OAuth origins, Stripe return URLs, Turnstile domains, etc.
+4. **Shopify app:** [`shopify.app.toml`](../shopify.app.toml) should list the **bouldermetalsmiths** callback only for production vault; redeploy the app config when you change hosts.
+
+After cutover, you can remove the old domain from Vercel and DNS when you no longer need redirects (optional).
+
 ## 1. DNS (your DNS provider)
 
 1. Log in where **bouldermetalsmiths.com** DNS is managed (registrar, Cloudflare, etc.).
@@ -40,7 +51,7 @@ Optional:
 | `NEXT_PUBLIC_PRIVACY_POLICY_URL` | Footer privacy link if not using default |
 | `NEXT_PUBLIC_ORG_SITE_URL` | Override main org marketing site URL |
 
-See [`.env.example`](../.env.example) for other keys (Supabase, Stripe, etc.).
+See env keys referenced in `README.md` and `VAULT_PLUS_SETUP.md` (Supabase, Stripe, etc.).
 
 ## 4. Supabase Auth
 
@@ -82,6 +93,7 @@ After deploying with the new domain:
 ## 9. Smoke tests
 
 - Load `https://vault.bouldermetalsmiths.com`
+- Open **`https://vault.bearsilverandstone.com`** (or any path with query) → lands on the same path on **`vault.bouldermetalsmiths.com`** (301), after step 0 Domains setup
 - Email/password sign-in and **password reset**
 - **Google** sign-in
 - **Vault+** checkout return with `?vaultplus=1`

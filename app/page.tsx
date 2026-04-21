@@ -8,6 +8,8 @@ import { supabase, hasValidSupabaseCredentials } from '../lib/supabase';
 import type { CredentialResponse } from '@react-oauth/google';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import InstallPrompt from './InstallPrompt';
+import { AuthGoogleLogin } from '@/components/AuthGoogleLogin';
+import { BomaInfoDock } from '@/components/BomaInfoDock';
 import { evaluateCustomModel, formulaReferencesBase, formulaToReadableString, formulaToTokens, parseTokensStrict, PRESET_A, type FormulaNode } from '../lib/formula-engine';
 import type { FormulaTokens } from '../components/FormulaBuilder';
 import {
@@ -37,7 +39,9 @@ import {
   ORG_NAME,
   ORG_SHORT_NAME,
   authRedirectOrigin,
+  buildAuthEmailRedirectUrl,
   orgSiteUrl,
+  parseAuthEmailRedirectTab,
   privacyPolicyUrl,
 } from '@/lib/branding';
 import { vaultHeaderFont } from '@/lib/vault-header-font';
@@ -77,11 +81,6 @@ const PRICE_NETWORK_MIN_INTERVAL_MS = 60_000;
 const PRICE_SESSION_MAX_AGE_MS = 60_000;
 
 const Turnstile = dynamic(() => import('@marsidev/react-turnstile').then((m) => m.Turnstile), { ssr: false });
-
-const GoogleLoginButton = dynamic(
-  () => import('@react-oauth/google').then((m) => m.GoogleLogin),
-  { ssr: false }
-);
 
 const LogicTabPanel = dynamic<LogicTabPanelProps>(
   () => import('@/components/tab-panels/LogicTabPanel'),
@@ -190,6 +189,8 @@ export default function Home() {
   const [recalcItem, setRecalcItem] = useState<any>(null);
   const [showResetModal, setShowResetModal] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
+  /** Bump when auth opens so Google button remounts once (stale GSI renderButton / Strict Mode). */
+  const [authGoogleMountKey, setAuthGoogleMountKey] = useState(0);
 
   // PDF Export Options Modal
   const [showPDFOptions, setShowPDFOptions] = useState(false);
@@ -505,6 +506,7 @@ export default function Home() {
 
   const openAuthPanel = useCallback((intent: 'signup_preferred' | 'login_preferred' = 'login_preferred') => {
     setAuthWelcomeIntent(intent);
+    setAuthGoogleMountKey((k) => k + 1);
     setShowAuth(true);
   }, []);
 
@@ -572,6 +574,13 @@ export default function Home() {
     const t2 = setTimeout(() => { void runSyncAndFetch(); }, 5500);
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [user?.id]);
+
+  // Email magic-link / confirmation landing: `?tab=vault` etc. (see buildAuthEmailRedirectUrl)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const tab = parseAuthEmailRedirectTab(new URLSearchParams(window.location.search).get('tab'));
+    if (tab) setActiveTab(tab);
+  }, []);
 
   // Handle Shopify OAuth callback URL params
   useEffect(() => {
@@ -1225,6 +1234,7 @@ export default function Home() {
                 url.searchParams.delete('type');
                 url.searchParams.delete('error');
                 url.searchParams.delete('error_description');
+                url.searchParams.delete('tab');
                 const q = url.searchParams.toString();
                 window.history.replaceState({}, '', url.pathname + (q ? `?${q}` : '') + url.hash);
               }
@@ -3838,7 +3848,7 @@ export default function Home() {
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    const authRedirectUrl = authRedirectOrigin();
+    const authRedirectUrl = buildAuthEmailRedirectUrl({ origin: authRedirectOrigin(), tab: activeTab });
     let result = isSignUp
       ? await supabase.auth.signUp({
           email,
@@ -3877,10 +3887,7 @@ export default function Home() {
       setNotification({ title: 'Email required', message: 'Enter your email address first.', type: 'info' });
       return;
     }
-    const emailRedirectTo =
-      typeof window !== 'undefined'
-        ? `${window.location.origin}/`
-        : `${authRedirectOrigin().replace(/\/$/, '')}/`;
+    const emailRedirectTo = buildAuthEmailRedirectUrl({ tab: activeTab });
 
     setSendingMagicLink(true);
     try {
@@ -4023,7 +4030,7 @@ export default function Home() {
       setNotification({ title: "Email Required", message: "Please enter your email address first so we know where to send the recovery link.", type: 'info' });
       return;
     }
-    const recoveryRedirect = authRedirectOrigin();
+    const recoveryRedirect = buildAuthEmailRedirectUrl({ origin: authRedirectOrigin(), tab: activeTab });
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: recoveryRedirect || undefined,
     });
@@ -5237,8 +5244,10 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="flex flex-col items-center md:items-end justify-center gap-3 w-full md:w-1/4">
-            <div className="relative flex flex-col items-center md:items-end gap-2 w-full">
+          <div className="flex flex-col items-center md:items-end justify-center gap-3 w-full min-w-0 md:w-1/4">
+            {/* self-stretch: default `items-center` on the header shrinks this box to the Login button width (~12rem), */}
+            {/* which made the auth pop-up too narrow and clipped the Google control. */}
+            <div className="relative flex w-full min-w-0 flex-col items-center self-stretch md:items-end gap-2">
               {(!user || user.is_anonymous) ? (
                 <>
                   <button
@@ -5319,25 +5328,25 @@ export default function Home() {
               )}
               {showAuth ? (
                 <GoogleAuthShell clientId={GOOGLE_WEB_CLIENT_ID}>
-                <div className="absolute right-0 mt-12 w-full md:w-80 bg-white p-6 rounded-3xl border-2 border-brand shadow-2xl z-[100] animate-in fade-in slide-in-from-top-2 mx-auto auth-menu-container">
-                  <button onClick={() => { setShowAuth(false); setShowPassword(false); setSignUpAwaitingConfirmation(false); setMagicLinkPending(false); setPendingVaultPlusAfterAuth(false); }} className="absolute top-4 right-4 text-stone-300 hover:text-brand font-black text-sm">✕</button>
-                  <div className="flex justify-center mb-3 pt-1">
+                <div className="auth-menu-container absolute left-1/2 z-[100] mt-12 box-border w-[min(20rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-3xl border-2 border-brand bg-white px-4 py-4 shadow-xl animate-in fade-in slide-in-from-top-2 overflow-visible sm:px-5 sm:py-5 md:left-auto md:right-0 md:translate-x-0">
+                  <button onClick={() => { setShowAuth(false); setShowPassword(false); setSignUpAwaitingConfirmation(false); setMagicLinkPending(false); setPendingVaultPlusAfterAuth(false); }} className="absolute top-3 right-3 text-stone-300 hover:text-brand font-black text-sm">✕</button>
+                  <div className="flex justify-center mb-2">
                     <NextImage
                       src={BOMA_HEADER_LOGO_PATH}
                       alt=""
                       width={1024}
                       height={1024}
-                      className="h-12 w-auto max-w-[200px] object-contain"
+                      className="h-10 w-auto max-w-[180px] object-contain"
                       unoptimized
                     />
                   </div>
                   <h3
-                    className={`${vaultHeaderFont.className} text-base sm:text-lg font-black uppercase italic tracking-[0.1em] text-center text-foreground mb-4 leading-none [font-synthesis-weight:none]`}
+                    className={`${vaultHeaderFont.className} text-base sm:text-lg font-black uppercase italic tracking-[0.1em] text-center text-foreground mb-3 leading-none [font-synthesis-weight:none]`}
                   >
                     The Vault
                   </h3>
                   {magicLinkPending ? (
-                    <div className="space-y-4">
+                    <div className="space-y-3">
                       <p className="text-sm text-stone-600 text-center leading-relaxed">
                         {isSignUp ? (
                           <>We sent a sign-up link to <strong>{email}</strong>. Open it on this device to finish creating your Vault account.</>
@@ -5362,7 +5371,7 @@ export default function Home() {
                       </button>
                     </div>
                   ) : signUpAwaitingConfirmation ? (
-                    <div className="space-y-4">
+                    <div className="space-y-3">
                       <p className="text-sm text-stone-600 text-center">We&apos;ve sent a verification link to <strong>{email}</strong>. Please confirm your account to get access to your Vault.</p>
                       <button type="button" onClick={handleResendConfirmation} disabled={resendingConfirmation} className="w-full py-3 rounded-xl text-[10px] font-black uppercase border-2 border-brand bg-brand/10 text-slate-800 hover:bg-brand hover:text-white transition disabled:opacity-50">
                         {resendingConfirmation ? 'Sending…' : 'Resend confirmation email'}
@@ -5370,14 +5379,14 @@ export default function Home() {
                       <button type="button" onClick={() => { setSignUpAwaitingConfirmation(false); setAuthEmailStep('email'); setPassword(''); }} className="w-full text-center text-[9px] font-black uppercase text-stone-600 hover:text-brand transition tracking-widest">Use a different email</button>
                     </div>
                   ) : authEmailStep === 'email' ? (
-                    <div className="space-y-4">
+                    <div className="space-y-3">
                       <div>
-                        <label className="block text-[9px] font-black uppercase text-stone-500 mb-1.5">Email</label>
+                        <label className="block text-[9px] font-black uppercase text-stone-500 mb-1">Email</label>
                         <input
                           type="email"
                           autoComplete="email"
                           placeholder="you@example.com"
-                          className="w-full p-3 border rounded-xl text-sm outline-none focus:border-brand transition"
+                          className="w-full p-2.5 border rounded-xl text-sm outline-none focus:border-brand transition"
                           value={email}
                           onChange={e => setEmail(e.target.value)}
                         />
@@ -5386,11 +5395,11 @@ export default function Home() {
                         type="button"
                         onClick={() => void lookupEmailAndContinue()}
                         disabled={checkingEmail}
-                        className="w-full bg-brand text-white py-3 rounded-xl font-black text-xs uppercase hover:bg-forest transition shadow-md disabled:opacity-60"
+                        className="w-full bg-brand text-white py-2.5 rounded-xl font-black text-xs uppercase hover:bg-forest transition shadow-md disabled:opacity-60"
                       >
                         {checkingEmail ? 'Checking…' : 'Continue'}
                       </button>
-                      <div className="relative my-1">
+                      <div className="relative my-0.5">
                         <div className="absolute inset-0 flex items-center" aria-hidden>
                           <div className="w-full border-t border-stone-100" />
                         </div>
@@ -5399,15 +5408,11 @@ export default function Home() {
                         </div>
                       </div>
                       {GOOGLE_WEB_CLIENT_ID ? (
-                        <div className="w-full flex justify-center pt-1">
-                          <GoogleLoginButton
+                        <div className="flex w-full min-w-0 max-w-full justify-center pt-0.5">
+                          <AuthGoogleLogin
+                            remountKey={`${authGoogleMountKey}-email-${authEmailStep}`}
                             onSuccess={handleGoogleHandshake}
                             onError={() => setNotification({ title: "Error", message: "Google Login Failed", type: 'error' })}
-                            theme="outline"
-                            size="large"
-                            width="300"
-                            shape="pill"
-                            text="continue_with"
                           />
                         </div>
                       ) : (
@@ -5417,63 +5422,67 @@ export default function Home() {
                       )}
                     </div>
                   ) : (
-                    <div className="space-y-4">
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="text-[11px] text-stone-600 leading-snug flex-1">
-                          {isSignUp ? (
-                            <>New here—create a password or use an email link to sign up. Signing in as <span className="font-bold text-foreground">{email}</span></>
-                          ) : authSuggestGoogle ? (
-                            <>Welcome back—this account has signed in with Google before. The fastest option is Continue with Google. You can still use a password or link if you prefer. Signing in as <span className="font-bold text-foreground">{email}</span></>
-                          ) : (
-                            <>Welcome back—enter your password or use a magic link. Signing in as <span className="font-bold text-foreground">{email}</span></>
-                          )}
-                        </p>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-3 border-b border-stone-100 pb-2">
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[9px] font-black uppercase tracking-wide text-stone-400 block mb-0.5">Signing in with</span>
+                          <span className="text-sm font-bold text-foreground truncate block" title={email}>{email}</span>
+                        </div>
                         <button
                           type="button"
                           onClick={() => { setAuthEmailStep('email'); setPassword(''); setAuthSuggestGoogle(false); }}
-                          className="text-[9px] font-black uppercase text-brand hover:text-forest shrink-0 pt-0.5"
+                          className="text-[9px] font-black uppercase text-brand hover:text-forest shrink-0 px-2 py-1.5 rounded-lg hover:bg-brand/5 transition-colors"
                         >
                           Change
                         </button>
                       </div>
+
+                      {isSignUp ? (
+                        <p className="text-[10px] text-stone-500 leading-snug -mt-0.5">
+                          Create a password below, or use an email link instead.
+                        </p>
+                      ) : authSuggestGoogle ? (
+                        <p className="text-[10px] text-stone-500 leading-snug -mt-0.5">
+                          This account uses Google—fastest option first. Password or email link still work.
+                        </p>
+                      ) : (
+                        <p className="text-[10px] text-stone-500 leading-snug -mt-0.5">
+                          Enter your password, or get a magic link by email.
+                        </p>
+                      )}
+
                       {!isSignUp && authSuggestGoogle && GOOGLE_WEB_CLIENT_ID ? (
                         <>
-                          <div className="rounded-2xl border-2 border-brand/25 bg-brand/5 px-3 py-3 space-y-2">
-                            <p className="text-[10px] font-black uppercase text-brand text-center tracking-wide">Suggested</p>
-                            <p className="text-[10px] text-stone-600 text-center leading-snug">
-                              Continue with Google—same as your last Google sign-in for this email.
-                            </p>
-                            <div className="w-full flex justify-center pt-1">
-                              <GoogleLoginButton
+                          <div className="min-w-0 space-y-2 overflow-hidden rounded-2xl border border-brand/30 bg-brand/5 px-2.5 py-2.5 shadow-sm">
+                            <p className="text-[9px] font-black uppercase tracking-wider text-brand/90 text-center">Recommended</p>
+                            <div className="flex w-full min-w-0 max-w-full justify-center self-stretch">
+                              <AuthGoogleLogin
+                                remountKey={`${authGoogleMountKey}-pwd-${authEmailStep}`}
                                 onSuccess={handleGoogleHandshake}
                                 onError={() => setNotification({ title: "Error", message: "Google Login Failed", type: 'error' })}
-                                theme="outline"
-                                size="large"
-                                width="280"
-                                shape="pill"
-                                text="continue_with"
                               />
                             </div>
                           </div>
-                          <div className="relative my-1">
+                          <div className="relative py-0.5">
                             <div className="absolute inset-0 flex items-center" aria-hidden>
-                              <div className="w-full border-t border-stone-100" />
+                              <div className="w-full border-t border-stone-200" />
                             </div>
                             <div className="relative flex justify-center">
-                              <span className="bg-white px-2 text-[9px] font-black uppercase text-stone-400">Or use password</span>
+                              <span className="bg-white px-2 text-[8px] font-black uppercase tracking-widest text-stone-400">Or use password</span>
                             </div>
                           </div>
                         </>
                       ) : null}
-                      <form onSubmit={handleAuth} className="space-y-3">
+
+                      <form onSubmit={handleAuth} className="space-y-2">
                         <div>
-                          <label className="block text-[9px] font-black uppercase text-stone-500 mb-1.5">{isSignUp ? 'Create password' : 'Password'}</label>
+                          <label className="block text-[9px] font-black uppercase text-stone-500 mb-1">{isSignUp ? 'Create password' : 'Password'}</label>
                           <div className="relative">
                             <input
                               type={showPassword ? "text" : "password"}
                               autoComplete={isSignUp ? 'new-password' : 'current-password'}
                               placeholder={isSignUp ? 'At least 6 characters' : 'Password'}
-                              className="w-full p-3 border rounded-xl text-sm outline-none focus:border-brand transition"
+                              className="w-full rounded-xl border py-2 pl-3 pr-[4.5rem] text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
                               value={password}
                               onChange={e => setPassword(e.target.value)}
                               required
@@ -5481,34 +5490,35 @@ export default function Home() {
                             <button
                               type="button"
                               onClick={() => setShowPassword(!showPassword)}
-                              className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black uppercase text-stone-300 hover:text-brand"
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-black uppercase text-stone-400 hover:text-brand min-w-[2.75rem] text-right"
                             >
                               {showPassword ? "Hide" : "Show"}
                             </button>
                           </div>
                         </div>
-                        <button type="submit" className="w-full bg-brand text-white py-3 rounded-xl font-black text-xs uppercase hover:bg-forest transition shadow-md">
+                        <button type="submit" className="w-full rounded-xl bg-brand py-2.5 font-black text-xs uppercase text-white shadow-md transition hover:bg-forest">
                           {isSignUp ? 'Create Vault Account' : 'Open The Vault'}
                         </button>
                         {!isSignUp && (
-                          <button type="button" onClick={handleResetPassword} className="w-full text-center text-[9px] font-black uppercase text-stone-600 hover:text-brand transition tracking-widest">
+                          <button type="button" onClick={handleResetPassword} className="w-full pt-0 text-center text-[9px] font-black uppercase tracking-widest text-stone-500 transition hover:text-brand">
                             Forgot Password?
                           </button>
                         )}
                       </form>
-                      <div className="relative my-1">
+
+                      <div className="relative pt-0">
                         <div className="absolute inset-0 flex items-center" aria-hidden>
-                          <div className="w-full border-t border-stone-100" />
+                          <div className="w-full border-t border-stone-200" />
                         </div>
                         <div className="relative flex justify-center">
-                          <span className="bg-white px-2 text-[9px] font-black uppercase text-stone-400">Or</span>
+                          <span className="bg-white px-2 text-[8px] font-black uppercase tracking-widest text-stone-400">Or</span>
                         </div>
                       </div>
                       <button
                         type="button"
                         onClick={() => void handleMagicLink()}
                         disabled={sendingMagicLink}
-                        className="w-full py-3 rounded-xl text-[10px] font-black uppercase border-2 border-stone-200 bg-stone-50 text-slate-800 hover:border-brand hover:bg-brand/5 transition disabled:opacity-50"
+                        className="w-full rounded-xl border-2 border-stone-200 bg-stone-50 py-2 text-[10px] font-black uppercase text-slate-800 transition hover:border-brand hover:bg-brand/5 disabled:opacity-50"
                       >
                         {sendingMagicLink ? 'Sending…' : isSignUp ? 'Email me a sign-up link instead' : 'Email me a magic sign-in link'}
                       </button>
@@ -6513,6 +6523,8 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      <BomaInfoDock />
 
     </div>
   );

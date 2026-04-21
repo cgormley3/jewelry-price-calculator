@@ -1,11 +1,12 @@
 /**
- * Single cache-bust version for favicon / PWA `icon.png` and the small header raster.
- * Bump when replacing assets so browsers pick up new files in one shot.
+ * Cache-bust version for the header raster (`icon-header-192.png`). Main favicon / Apple touch icons use
+ * `app/icon.png` + `app/apple-icon.png` (served as `/icon.png`, `/apple-icon.png`) so Next can refresh tags on deploy.
  */
-export const APP_ICON_CACHE_VERSION = "9";
+export const APP_ICON_CACHE_VERSION = "10";
 
+/** Same URL the root metadata/icon routes use (`app/icon.png`). */
 export function appIconPwaPath(): string {
-  return `/icon.png?v=${APP_ICON_CACHE_VERSION}`;
+  return "/icon.png";
 }
 
 /**

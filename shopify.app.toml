@@ -24,7 +24,6 @@ redirect_urls = [
   "http://localhost:3001/api/shopify/callback",
   "http://localhost:3002/api/shopify/callback",
   "https://vault.bouldermetalsmiths.com/api/shopify/callback",
-  "https://vault.bearsilverandstone.com/api/shopify/callback",
   "https://jewelry-price-calculator-gamma.vercel.app/api/shopify/callback",
   "https://jewelry-price-calculator-b6mp22086-claires-projects-4b85753e.vercel.app/api/shopify/callback"
 ]

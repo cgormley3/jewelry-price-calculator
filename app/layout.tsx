@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { appIconPwaPath } from "@/lib/app-icon";
 import { IOS_PWA_STARTUP_IMAGES } from "./pwa-apple-splash";
 import { AuthProvider } from "./providers";
 
@@ -17,10 +16,8 @@ export const metadata: Metadata = {
     statusBarStyle: "black-translucent",
     startupImage: IOS_PWA_STARTUP_IMAGES,
   },
-  icons: {
-    icon: appIconPwaPath(),
-    apple: appIconPwaPath(),
-  },
+  // Favicons + apple-touch-icon: `app/icon.png` + `app/apple-icon.png` (Next.js file convention — avoids Safari
+  // clinging to stale `/public/icon.png?v=…` when you replace assets).
 };
 
 /**

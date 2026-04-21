@@ -49,3 +49,28 @@ export function authRedirectOrigin(): string {
   if (typeof window !== 'undefined') return window.location.origin;
   return '';
 }
+
+/** Matches main nav tab ids — embedded in email redirect URLs as `?tab=…` so post-login lands on the same area. */
+const AUTH_EMAIL_REDIRECT_TAB_IDS = ['calculator', 'vault', 'compare', 'logic', 'formulas', 'time'] as const;
+export type AuthEmailRedirectTabId = (typeof AUTH_EMAIL_REDIRECT_TAB_IDS)[number];
+
+export function parseAuthEmailRedirectTab(tab: string | null | undefined): AuthEmailRedirectTabId | null {
+  if (!tab) return null;
+  return (AUTH_EMAIL_REDIRECT_TAB_IDS as readonly string[]).includes(tab) ? (tab as AuthEmailRedirectTabId) : null;
+}
+
+/**
+ * Magic-link / sign-up / password-recovery `redirectTo` URLs. Omits `?tab=` when on Calculator (default).
+ * Supabase dashboard → Redirect URLs should allow the production origin; `/**` matchers include query strings.
+ */
+export function buildAuthEmailRedirectUrl(options?: { origin?: string; tab?: string | null }): string {
+  const originRaw =
+    options?.origin?.trim() ||
+    (typeof window !== 'undefined' ? window.location.origin : '') ||
+    authRedirectOrigin().trim();
+  const base = originRaw.replace(/\/$/, '');
+  if (!base) return '/';
+  const t = parseAuthEmailRedirectTab(options?.tab ?? null);
+  const qs = t && t !== 'calculator' ? `?tab=${encodeURIComponent(t)}` : '';
+  return `${base}/${qs}`;
+}
