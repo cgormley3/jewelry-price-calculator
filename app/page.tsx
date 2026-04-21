@@ -3895,10 +3895,8 @@ export default function Home() {
         email: trimmed,
         options: {
           emailRedirectTo,
-          shouldCreateUser: isSignUp,
-          data: {
-            is_converted_from_anonymous: Boolean(user?.is_anonymous && isSignUp),
-          },
+          // Magic link is sign-in only for existing accounts (no sign-up / create-user via email link).
+          shouldCreateUser: false,
         },
       });
       if (error) {
@@ -5348,11 +5346,7 @@ export default function Home() {
                   {magicLinkPending ? (
                     <div className="space-y-3">
                       <p className="text-sm text-stone-600 text-center leading-relaxed">
-                        {isSignUp ? (
-                          <>We sent a sign-up link to <strong>{email}</strong>. Open it on this device to finish creating your Vault account.</>
-                        ) : (
-                          <>We sent a sign-in link to <strong>{email}</strong>. Use the link in your email to open The Vault.</>
-                        )}
+                        We sent a sign-in link to <strong>{email}</strong>. Use the link in your email to open The Vault.
                       </p>
                       <button
                         type="button"
@@ -5439,15 +5433,15 @@ export default function Home() {
 
                       {isSignUp ? (
                         <p className="text-[10px] text-stone-500 leading-snug -mt-0.5">
-                          Create a password below, or use an email link instead.
+                          Create a password below to finish your Vault account.
                         </p>
                       ) : authSuggestGoogle ? (
                         <p className="text-[10px] text-stone-500 leading-snug -mt-0.5">
-                          This account uses Google—fastest option first. Password or email link still work.
+                          This account uses Google—fastest option first. Password or magic sign-in link still work.
                         </p>
                       ) : (
                         <p className="text-[10px] text-stone-500 leading-snug -mt-0.5">
-                          Enter your password, or get a magic link by email.
+                          Enter your password, or get a magic sign-in link by email (existing accounts only).
                         </p>
                       )}
 
@@ -5506,22 +5500,26 @@ export default function Home() {
                         )}
                       </form>
 
-                      <div className="relative pt-0">
-                        <div className="absolute inset-0 flex items-center" aria-hidden>
-                          <div className="w-full border-t border-stone-200" />
-                        </div>
-                        <div className="relative flex justify-center">
-                          <span className="bg-white px-2 text-[8px] font-black uppercase tracking-widest text-stone-400">Or</span>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => void handleMagicLink()}
-                        disabled={sendingMagicLink}
-                        className="w-full rounded-xl border-2 border-stone-200 bg-stone-50 py-2 text-[10px] font-black uppercase text-slate-800 transition hover:border-brand hover:bg-brand/5 disabled:opacity-50"
-                      >
-                        {sendingMagicLink ? 'Sending…' : isSignUp ? 'Email me a sign-up link instead' : 'Email me a magic sign-in link'}
-                      </button>
+                      {!isSignUp ? (
+                        <>
+                          <div className="relative pt-0">
+                            <div className="absolute inset-0 flex items-center" aria-hidden>
+                              <div className="w-full border-t border-stone-200" />
+                            </div>
+                            <div className="relative flex justify-center">
+                              <span className="bg-white px-2 text-[8px] font-black uppercase tracking-widest text-stone-400">Or</span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => void handleMagicLink()}
+                            disabled={sendingMagicLink}
+                            className="w-full rounded-xl border-2 border-stone-200 bg-stone-50 py-2 text-[10px] font-black uppercase text-slate-800 transition hover:border-brand hover:bg-brand/5 disabled:opacity-50"
+                          >
+                            {sendingMagicLink ? 'Sending…' : 'Email me a magic sign-in link'}
+                          </button>
+                        </>
+                      ) : null}
                     </div>
                   )}
                 </div>
@@ -5992,7 +5990,10 @@ export default function Home() {
                       className="w-full flex flex-col sm:flex-row sm:items-stretch sm:gap-4 p-5 text-left"
                     >
                       <div className="flex-1 min-w-0">
-                        <p className="text-[10px] font-black text-brand uppercase tracking-tighter mb-1">Formula A</p>
+                        <p className="text-[10px] font-black text-brand uppercase mb-1 inline-flex items-center gap-x-1">
+                          <span className="tracking-tighter">Formula</span>
+                          <span>A</span>
+                        </p>
                         <p className="text-2xl sm:text-3xl font-black text-foreground tabular-nums">${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator, undefined, calculatorFindingsMult).retailA).toFixed(2)}</p>
                         <p className="text-[10px] font-semibold text-stone-500 mt-1">Wholesale ${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator, undefined, calculatorFindingsMult).wholesaleA).toFixed(2)}</p>
                       </div>
@@ -6037,7 +6038,10 @@ export default function Home() {
                       className="w-full flex flex-col sm:flex-row sm:items-stretch sm:gap-4 p-5 text-left"
                     >
                       <div className="flex-1 min-w-0">
-                        <p className="text-[10px] font-black text-brand uppercase tracking-tighter mb-1">Formula B</p>
+                        <p className="text-[10px] font-black text-brand uppercase mb-1 inline-flex items-center gap-x-1">
+                          <span className="tracking-tighter">Formula</span>
+                          <span>B</span>
+                        </p>
                         <p className="text-2xl sm:text-3xl font-black text-foreground tabular-nums">${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator, undefined, calculatorFindingsMult).retailB).toFixed(2)}</p>
                         <p className="text-[10px] font-semibold text-stone-500 mt-1">Wholesale ${roundForDisplay(calculateFullBreakdown(metalList, calcHours, calcRate, calcOtherCosts, calcStoneList, calcOverheadCost, overheadType, undefined, undefined, undefined, applyManualMetalInCalculator, undefined, calculatorFindingsMult).wholesaleB).toFixed(2)}</p>
                       </div>
