@@ -48,15 +48,18 @@ export function BomaInfoDock() {
 
   useEffect(() => () => cancelLeaveTimer(), []);
 
+  /** Close on tap/click outside the dock (FAB + card + connector)—whenever the card is visible. */
   useEffect(() => {
-    if (!pinnedOpen) return;
+    if (!showCard) return;
     const onDown = (e: PointerEvent) => {
       if (rootRef.current?.contains(e.target as Node)) return;
+      cancelLeaveTimer();
       setPinnedOpen(false);
+      setHoverOpen(false);
     };
     document.addEventListener('pointerdown', onDown, true);
     return () => document.removeEventListener('pointerdown', onDown, true);
-  }, [pinnedOpen]);
+  }, [showCard]);
 
   const siteUrl = orgSiteUrl();
 
