@@ -46,5 +46,12 @@ if (!hasValidSupabaseCredentials) {
 export const supabase = createClient(
   hasValidSupabaseCredentials ? supabaseUrl : 'https://placeholder.supabase.co',
   hasValidSupabaseCredentials ? supabaseAnonKey : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE2NDUxOTIwMDAsImV4cCI6MTk2MDc2ODAwMH0.placeholder',
-  { global: { fetch: supabaseFetch } }
+  {
+    global: { fetch: supabaseFetch },
+    auth: {
+      flowType: 'pkce',
+      detectSessionInUrl: true,
+      persistSession: true,
+    },
+  }
 );

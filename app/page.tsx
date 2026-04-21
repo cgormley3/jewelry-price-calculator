@@ -346,6 +346,16 @@ export default function Home() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [signUpAwaitingConfirmation, setSignUpAwaitingConfirmation] = useState(false);
   const [resendingConfirmation, setResendingConfirmation] = useState(false);
+  /** After `signInWithOtp` — user must click the email link (same pattern as confirmation email). */
+  const [magicLinkPending, setMagicLinkPending] = useState(false);
+  const [sendingMagicLink, setSendingMagicLink] = useState(false);
+  /** Email-first flow: collect address, then show password / magic link based on server lookup. */
+  const [authEmailStep, setAuthEmailStep] = useState<'email' | 'methods'>('email');
+  const [checkingEmail, setCheckingEmail] = useState(false);
+  /** Google link-to-anonymous: prefer sign-up when user opened auth from Vault+ unlock vs generic Login. */
+  const [authWelcomeIntent, setAuthWelcomeIntent] = useState<'signup_preferred' | 'login_preferred'>('login_preferred');
+  /** After email lookup: account has a Google identity — surface “continue with Google” on the sign-in step. */
+  const [authSuggestGoogle, setAuthSuggestGoogle] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [activeTab, setActiveTab] = useState<MainNavTabId>('calculator');
@@ -479,6 +489,38 @@ export default function Home() {
       });
     }
   }, [showProfileModal]);
+
+  const prevShowAuthForResetRef = useRef(false);
+  useEffect(() => {
+    if (showAuth && !prevShowAuthForResetRef.current) {
+      setAuthEmailStep('email');
+      setPassword('');
+      setCheckingEmail(false);
+      setMagicLinkPending(false);
+      setSignUpAwaitingConfirmation(false);
+      setAuthSuggestGoogle(false);
+    }
+    prevShowAuthForResetRef.current = showAuth;
+  }, [showAuth]);
+
+  const openAuthPanel = useCallback((intent: 'signup_preferred' | 'login_preferred' = 'login_preferred') => {
+    setAuthWelcomeIntent(intent);
+    setShowAuth(true);
+  }, []);
+
+  /** Close auth sheet once a real account session exists (e.g. magic link redirect completed). */
+  useEffect(() => {
+    if (!showAuth) return;
+    if (user && !user.is_anonymous) {
+      setMagicLinkPending(false);
+      setSignUpAwaitingConfirmation(false);
+      setShowAuth(false);
+      if (pendingVaultPlusAfterAuth) {
+        setPendingVaultPlusAfterAuth(false);
+        setShowVaultPlusModal(true);
+      }
+    }
+  }, [user, showAuth, pendingVaultPlusAfterAuth]);
 
   useEffect(() => {
     const stored = localStorage.getItem('price_rounding');
@@ -1176,6 +1218,17 @@ export default function Home() {
                 event === 'MFA_CHALLENGE_VERIFIED');
             if (shouldRefreshVault) void fetchInventory();
             if (event === "PASSWORD_RECOVERY") setShowResetModal(true);
+            if (event === 'SIGNED_IN' && typeof window !== 'undefined') {
+              const url = new URL(window.location.href);
+              if (url.searchParams.has('code')) {
+                url.searchParams.delete('code');
+                url.searchParams.delete('type');
+                url.searchParams.delete('error');
+                url.searchParams.delete('error_description');
+                const q = url.searchParams.toString();
+                window.history.replaceState({}, '', url.pathname + (q ? `?${q}` : '') + url.hash);
+              }
+            }
           });
           subscription = authSub;
           const initialSession = await Promise.race([
@@ -2280,7 +2333,7 @@ export default function Home() {
         return;
       }
     }
-    if (!currentUser) { setShowAuth(true); return; }
+    if (!currentUser) { openAuthPanel('login_preferred'); return; }
     if (subscriptionStatus && !subscriptionStatus.subscribed) {
       setShowVaultPlusModal(true);
       return;
@@ -2488,7 +2541,7 @@ export default function Home() {
           currentUser = anonData?.user;
         }
       } catch (_) {}
-      if (!currentUser) { setShowAuth(true); setShowQuickAddPiece(false); return; }
+      if (!currentUser) { openAuthPanel('login_preferred'); setShowQuickAddPiece(false); return; }
     }
     if (subscriptionStatus && !subscriptionStatus.subscribed) {
       setShowVaultPlusModal(true);
@@ -2564,7 +2617,7 @@ export default function Home() {
       return;
     }
     const currentUser = user || (await supabase.auth.getUser()).data?.user;
-    if (!currentUser) { setShowAuth(true); return; }
+    if (!currentUser) { openAuthPanel('login_preferred'); return; }
     if (subscriptionStatus && !subscriptionStatus.subscribed) {
       setShowVaultPlusModal(true);
       return;
@@ -2620,7 +2673,7 @@ export default function Home() {
       return;
     }
     const currentUser = user || (await supabase.auth.getUser()).data?.user;
-    if (!currentUser) { setShowAuth(true); return; }
+    if (!currentUser) { openAuthPanel('login_preferred'); return; }
     if (subscriptionStatus && !subscriptionStatus.subscribed) {
       setShowVaultPlusModal(true);
       return;
@@ -2671,7 +2724,7 @@ export default function Home() {
   const deleteTimeEntry = async (entryId: string) => {
     if (!confirm('Delete this time entry?')) return;
     const currentUser = user || (await supabase.auth.getUser()).data?.user;
-    if (!currentUser) { setShowAuth(true); return; }
+    if (!currentUser) { openAuthPanel('login_preferred'); return; }
     const { data: { session } } = await supabase.auth.getSession();
     const accessToken = session?.access_token;
     if (!accessToken) {
@@ -3183,7 +3236,7 @@ export default function Home() {
     let accessToken = (session as any)?.access_token;
     if (!accessToken) {
       setNotification({ title: 'Sign in required', message: `Please sign in to upgrade to Vault+ (${VAULT_PLUS_PRICE_PHRASE}).`, type: 'info' });
-      setShowAuth(true);
+      openAuthPanel('login_preferred');
       setShowVaultPlusModal(false);
       return;
     }
@@ -3191,7 +3244,7 @@ export default function Home() {
     accessToken = (refreshed as any)?.access_token ?? accessToken;
     if (!accessToken || !user?.id) {
       setNotification({ title: 'Sign in required', message: `Please sign in to upgrade to Vault+ (${VAULT_PLUS_PRICE_PHRASE}).`, type: 'info' });
-      setShowAuth(true);
+      openAuthPanel('login_preferred');
       setShowVaultPlusModal(false);
       return;
     }
@@ -3226,7 +3279,7 @@ export default function Home() {
           title: isAuthError ? 'Session expired' : 'Checkout error',
           message: isAuthError ? 'Please sign in again and try again.' : msg,
           type: 'error',
-          onConfirm: isAuthError ? () => { setShowAuth(true); setShowVaultPlusModal(false); } : undefined,
+          onConfirm: isAuthError ? () => { openAuthPanel('login_preferred'); setShowVaultPlusModal(false); } : undefined,
         });
       }
     } catch (e: any) {
@@ -3239,7 +3292,7 @@ export default function Home() {
     const accessToken = (session as any)?.access_token;
     if (!accessToken) {
       setNotification({ title: 'Sign in required', message: 'Please sign in to manage your subscription.', type: 'info' });
-      setShowAuth(true);
+      openAuthPanel('login_preferred');
       return;
     }
     try {
@@ -3818,6 +3871,70 @@ export default function Home() {
     }
   };
 
+  const handleMagicLink = async () => {
+    const trimmed = email?.trim();
+    if (!trimmed) {
+      setNotification({ title: 'Email required', message: 'Enter your email address first.', type: 'info' });
+      return;
+    }
+    const emailRedirectTo =
+      typeof window !== 'undefined'
+        ? `${window.location.origin}/`
+        : `${authRedirectOrigin().replace(/\/$/, '')}/`;
+
+    setSendingMagicLink(true);
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: trimmed,
+        options: {
+          emailRedirectTo,
+          shouldCreateUser: isSignUp,
+          data: {
+            is_converted_from_anonymous: Boolean(user?.is_anonymous && isSignUp),
+          },
+        },
+      });
+      if (error) {
+        setNotification({ title: 'Magic link failed', message: error.message, type: 'error' });
+        return;
+      }
+      setMagicLinkPending(true);
+    } finally {
+      setSendingMagicLink(false);
+    }
+  };
+
+  const lookupEmailAndContinue = async () => {
+    const trimmed = email?.trim();
+    if (!trimmed) {
+      setNotification({ title: 'Email required', message: 'Enter your email address to continue.', type: 'info' });
+      return;
+    }
+    setCheckingEmail(true);
+    try {
+      const res = await fetch('/api/auth/lookup-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: trimmed }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setNotification({
+          title: 'Could not continue',
+          message: typeof data?.error === 'string' ? data.error : 'Try again in a moment.',
+          type: 'error',
+        });
+        return;
+      }
+      const exists = data?.exists === true;
+      setIsSignUp(!exists);
+      setAuthSuggestGoogle(exists && data?.hasGoogleIdentity === true);
+      setAuthEmailStep('methods');
+    } finally {
+      setCheckingEmail(false);
+    }
+  };
+
   const handleResendConfirmation = async () => {
     if (!email) return;
     setResendingConfirmation(true);
@@ -3838,9 +3955,9 @@ export default function Home() {
       return;
     }
 
-    // Login tab: always sign in (don't try to link guest account)
-    // Sign Up tab + anonymous: try to link to preserve guest vault items
-    const shouldLink = user?.is_anonymous && isSignUp;
+    // Generic login: always sign in (don't try to link guest account).
+    // Vault+ "unlock" flow + anonymous: try to link to preserve guest vault items.
+    const shouldLink = user?.is_anonymous && authWelcomeIntent === 'signup_preferred';
     if (shouldLink) {
       const { error: linkError } = await supabase.auth.linkIdentity({
         provider: 'google',
@@ -4263,8 +4380,7 @@ export default function Home() {
                   onClick={() => {
                     setPendingVaultPlusAfterAuth(true);
                     setShowVaultPlusModal(false);
-                    setShowAuth(true);
-                    setIsSignUp(true);
+                    openAuthPanel('signup_preferred');
                     setShowPassword(false);
                   }}
                   className="flex-1 py-4 bg-charcoal text-white rounded-2xl font-black text-[10px] uppercase tracking-wide hover:bg-brand transition shadow-lg"
@@ -5125,7 +5241,25 @@ export default function Home() {
             <div className="relative flex flex-col items-center md:items-end gap-2 w-full">
               {(!user || user.is_anonymous) ? (
                 <>
-                  <button onClick={() => { setShowAuth(!showAuth); setShowPassword(false); }} className="w-48 text-[10px] font-black uppercase bg-charcoal text-white px-8 py-3 rounded-xl hover:bg-brand transition shadow-sm">Login / Sign Up</button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (showAuth) {
+                        setShowAuth(false);
+                        setShowPassword(false);
+                        setMagicLinkPending(false);
+                        setSignUpAwaitingConfirmation(false);
+                      } else {
+                        openAuthPanel('login_preferred');
+                        setShowPassword(false);
+                        setMagicLinkPending(false);
+                        setSignUpAwaitingConfirmation(false);
+                      }
+                    }}
+                    className="w-48 text-[10px] font-black uppercase bg-charcoal text-white px-8 py-3 rounded-xl hover:bg-brand transition shadow-sm"
+                  >
+                    Login / Sign Up
+                  </button>
                   {(!user || user.is_anonymous || !subscriptionStatus?.subscribed) && (
                     <button onClick={() => setShowVaultPlusModal(true)} className="w-48 text-[10px] font-black uppercase bg-charcoal text-white px-8 py-3 rounded-xl hover:bg-brand transition shadow-sm">
                       Upgrade to Vault+
@@ -5186,7 +5320,7 @@ export default function Home() {
               {showAuth ? (
                 <GoogleAuthShell clientId={GOOGLE_WEB_CLIENT_ID}>
                 <div className="absolute right-0 mt-12 w-full md:w-80 bg-white p-6 rounded-3xl border-2 border-brand shadow-2xl z-[100] animate-in fade-in slide-in-from-top-2 mx-auto auth-menu-container">
-                  <button onClick={() => { setShowAuth(false); setShowPassword(false); setSignUpAwaitingConfirmation(false); setPendingVaultPlusAfterAuth(false); }} className="absolute top-4 right-4 text-stone-300 hover:text-brand font-black text-sm">✕</button>
+                  <button onClick={() => { setShowAuth(false); setShowPassword(false); setSignUpAwaitingConfirmation(false); setMagicLinkPending(false); setPendingVaultPlusAfterAuth(false); }} className="absolute top-4 right-4 text-stone-300 hover:text-brand font-black text-sm">✕</button>
                   <div className="flex justify-center mb-3 pt-1">
                     <NextImage
                       src={BOMA_HEADER_LOGO_PATH}
@@ -5197,62 +5331,183 @@ export default function Home() {
                       unoptimized
                     />
                   </div>
-                  <h3 className="text-sm font-black uppercase mb-4 text-center text-foreground">Vault Access</h3>
-                  {signUpAwaitingConfirmation ? (
+                  <h3 className="text-sm font-black uppercase mb-4 text-center text-foreground">The Vault</h3>
+                  {magicLinkPending ? (
+                    <div className="space-y-4">
+                      <p className="text-sm text-stone-600 text-center leading-relaxed">
+                        {isSignUp ? (
+                          <>We sent a sign-up link to <strong>{email}</strong>. Open it on this device to finish creating your Vault account.</>
+                        ) : (
+                          <>We sent a sign-in link to <strong>{email}</strong>. Use the link in your email to open The Vault.</>
+                        )}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => void handleMagicLink()}
+                        disabled={sendingMagicLink}
+                        className="w-full py-3 rounded-xl text-[10px] font-black uppercase border-2 border-brand bg-brand/10 text-slate-800 hover:bg-brand hover:text-white transition disabled:opacity-50"
+                      >
+                        {sendingMagicLink ? 'Sending…' : 'Resend magic link'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMagicLinkPending(false)}
+                        className="w-full text-center text-[9px] font-black uppercase text-stone-600 hover:text-brand transition tracking-widest"
+                      >
+                        Back
+                      </button>
+                    </div>
+                  ) : signUpAwaitingConfirmation ? (
                     <div className="space-y-4">
                       <p className="text-sm text-stone-600 text-center">We&apos;ve sent a verification link to <strong>{email}</strong>. Please confirm your account to get access to your Vault.</p>
                       <button type="button" onClick={handleResendConfirmation} disabled={resendingConfirmation} className="w-full py-3 rounded-xl text-[10px] font-black uppercase border-2 border-brand bg-brand/10 text-slate-800 hover:bg-brand hover:text-white transition disabled:opacity-50">
                         {resendingConfirmation ? 'Sending…' : 'Resend confirmation email'}
                       </button>
-                      <button type="button" onClick={() => { setSignUpAwaitingConfirmation(false); setIsSignUp(false); }} className="w-full text-center text-[9px] font-black uppercase text-stone-600 hover:text-brand transition tracking-widest">Switch to Login</button>
+                      <button type="button" onClick={() => { setSignUpAwaitingConfirmation(false); setAuthEmailStep('email'); setPassword(''); }} className="w-full text-center text-[9px] font-black uppercase text-stone-600 hover:text-brand transition tracking-widest">Use a different email</button>
                     </div>
-                  ) : (
-                    <div className="space-y-0">
-                      {GOOGLE_WEB_CLIENT_ID ? (
-                      <div className="w-full flex justify-center mb-4">
-                        <GoogleLoginButton
-                          onSuccess={handleGoogleHandshake}
-                          onError={() => setNotification({ title: "Error", message: "Google Login Failed", type: 'error' })}
-                          theme="outline"
-                          size="large"
-                          width="300"
-                          shape="pill"
-                          text="continue_with"
+                  ) : authEmailStep === 'email' ? (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-[9px] font-black uppercase text-stone-500 mb-1.5">Email</label>
+                        <input
+                          type="email"
+                          autoComplete="email"
+                          placeholder="you@example.com"
+                          className="w-full p-3 border rounded-xl text-sm outline-none focus:border-brand transition"
+                          value={email}
+                          onChange={e => setEmail(e.target.value)}
                         />
                       </div>
-                      ) : (
-                      <p className="text-[10px] text-center text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-4 leading-snug">
-                        Google sign-in is not configured. Set <span className="font-mono">NEXT_PUBLIC_GOOGLE_CLIENT_ID</span> in <span className="font-mono">.env.local</span> (and Vercel) to your Web client ID, then add this site under Authorized JavaScript origins in Google Cloud.
-                      </p>
-                      )}
-                      <div className="flex border-b border-stone-100 mb-4">
-                        <button onClick={() => { setIsSignUp(false); setShowPassword(false); }} className={`flex-1 py-2 text-[10px] font-black uppercase ${!isSignUp ? 'text-brand border-b-2 border-brand' : 'text-stone-300'}`}>Login</button>
-                        <button onClick={() => { setIsSignUp(true); setShowPassword(false); }} className={`flex-1 py-2 text-[10px] font-black uppercase ${isSignUp ? 'text-brand border-b-2 border-brand' : 'text-stone-300'}`}>Sign Up</button>
-                      </div>
-                      <form onSubmit={handleAuth} className="space-y-3">
-                        <input type="email" placeholder="Email" className="w-full p-3 border rounded-xl text-sm outline-none focus:border-brand transition" value={email} onChange={e => setEmail(e.target.value)} required />
-                        <div className="relative">
-                          <input
-                            type={showPassword ? "text" : "password"}
-                            placeholder="Password"
-                            className="w-full p-3 border rounded-xl text-sm outline-none focus:border-brand transition"
-                            value={password}
-                            onChange={e => setPassword(e.target.value)}
-                            required
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowPassword(!showPassword)}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black uppercase text-stone-300 hover:text-brand"
-                          >
-                            {showPassword ? "Hide" : "Show"}
-                          </button>
+                      <button
+                        type="button"
+                        onClick={() => void lookupEmailAndContinue()}
+                        disabled={checkingEmail}
+                        className="w-full bg-brand text-white py-3 rounded-xl font-black text-xs uppercase hover:bg-forest transition shadow-md disabled:opacity-60"
+                      >
+                        {checkingEmail ? 'Checking…' : 'Continue'}
+                      </button>
+                      <div className="relative my-1">
+                        <div className="absolute inset-0 flex items-center" aria-hidden>
+                          <div className="w-full border-t border-stone-100" />
                         </div>
-                        <button type="submit" className="w-full bg-brand text-white py-3 rounded-xl font-black text-xs uppercase hover:bg-forest transition shadow-md">{isSignUp ? 'Create Vault Account' : 'Open The Vault'}</button>
+                        <div className="relative flex justify-center">
+                          <span className="bg-white px-2 text-[9px] font-black uppercase text-stone-400">Or</span>
+                        </div>
+                      </div>
+                      {GOOGLE_WEB_CLIENT_ID ? (
+                        <div className="w-full flex justify-center pt-1">
+                          <GoogleLoginButton
+                            onSuccess={handleGoogleHandshake}
+                            onError={() => setNotification({ title: "Error", message: "Google Login Failed", type: 'error' })}
+                            theme="outline"
+                            size="large"
+                            width="300"
+                            shape="pill"
+                            text="continue_with"
+                          />
+                        </div>
+                      ) : (
+                        <p className="text-[10px] text-center text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 leading-snug">
+                          Google sign-in is not configured. Set <span className="font-mono">NEXT_PUBLIC_GOOGLE_CLIENT_ID</span> in <span className="font-mono">.env.local</span> (and Vercel) to your Web client ID, then add this site under Authorized JavaScript origins in Google Cloud.
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-[11px] text-stone-600 leading-snug flex-1">
+                          {isSignUp ? (
+                            <>New here—create a password or use an email link to sign up. Signing in as <span className="font-bold text-foreground">{email}</span></>
+                          ) : authSuggestGoogle ? (
+                            <>Welcome back—this account has signed in with Google before. The fastest option is Continue with Google. You can still use a password or link if you prefer. Signing in as <span className="font-bold text-foreground">{email}</span></>
+                          ) : (
+                            <>Welcome back—enter your password or use a magic link. Signing in as <span className="font-bold text-foreground">{email}</span></>
+                          )}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => { setAuthEmailStep('email'); setPassword(''); setAuthSuggestGoogle(false); }}
+                          className="text-[9px] font-black uppercase text-brand hover:text-forest shrink-0 pt-0.5"
+                        >
+                          Change
+                        </button>
+                      </div>
+                      {!isSignUp && authSuggestGoogle && GOOGLE_WEB_CLIENT_ID ? (
+                        <>
+                          <div className="rounded-2xl border-2 border-brand/25 bg-brand/5 px-3 py-3 space-y-2">
+                            <p className="text-[10px] font-black uppercase text-brand text-center tracking-wide">Suggested</p>
+                            <p className="text-[10px] text-stone-600 text-center leading-snug">
+                              Continue with Google—same as your last Google sign-in for this email.
+                            </p>
+                            <div className="w-full flex justify-center pt-1">
+                              <GoogleLoginButton
+                                onSuccess={handleGoogleHandshake}
+                                onError={() => setNotification({ title: "Error", message: "Google Login Failed", type: 'error' })}
+                                theme="outline"
+                                size="large"
+                                width="280"
+                                shape="pill"
+                                text="continue_with"
+                              />
+                            </div>
+                          </div>
+                          <div className="relative my-1">
+                            <div className="absolute inset-0 flex items-center" aria-hidden>
+                              <div className="w-full border-t border-stone-100" />
+                            </div>
+                            <div className="relative flex justify-center">
+                              <span className="bg-white px-2 text-[9px] font-black uppercase text-stone-400">Or use password</span>
+                            </div>
+                          </div>
+                        </>
+                      ) : null}
+                      <form onSubmit={handleAuth} className="space-y-3">
+                        <div>
+                          <label className="block text-[9px] font-black uppercase text-stone-500 mb-1.5">{isSignUp ? 'Create password' : 'Password'}</label>
+                          <div className="relative">
+                            <input
+                              type={showPassword ? "text" : "password"}
+                              autoComplete={isSignUp ? 'new-password' : 'current-password'}
+                              placeholder={isSignUp ? 'At least 6 characters' : 'Password'}
+                              className="w-full p-3 border rounded-xl text-sm outline-none focus:border-brand transition"
+                              value={password}
+                              onChange={e => setPassword(e.target.value)}
+                              required
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowPassword(!showPassword)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black uppercase text-stone-300 hover:text-brand"
+                            >
+                              {showPassword ? "Hide" : "Show"}
+                            </button>
+                          </div>
+                        </div>
+                        <button type="submit" className="w-full bg-brand text-white py-3 rounded-xl font-black text-xs uppercase hover:bg-forest transition shadow-md">
+                          {isSignUp ? 'Create Vault Account' : 'Open The Vault'}
+                        </button>
                         {!isSignUp && (
-                          <button type="button" onClick={handleResetPassword} className="w-full text-center text-[9px] font-black uppercase text-stone-600 hover:text-brand transition mt-2 tracking-widest">Forgot Password?</button>
+                          <button type="button" onClick={handleResetPassword} className="w-full text-center text-[9px] font-black uppercase text-stone-600 hover:text-brand transition tracking-widest">
+                            Forgot Password?
+                          </button>
                         )}
                       </form>
+                      <div className="relative my-1">
+                        <div className="absolute inset-0 flex items-center" aria-hidden>
+                          <div className="w-full border-t border-stone-100" />
+                        </div>
+                        <div className="relative flex justify-center">
+                          <span className="bg-white px-2 text-[9px] font-black uppercase text-stone-400">Or</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void handleMagicLink()}
+                        disabled={sendingMagicLink}
+                        className="w-full py-3 rounded-xl text-[10px] font-black uppercase border-2 border-stone-200 bg-stone-50 text-slate-800 hover:border-brand hover:bg-brand/5 transition disabled:opacity-50"
+                      >
+                        {sendingMagicLink ? 'Sending…' : isSignUp ? 'Email me a sign-up link instead' : 'Email me a magic sign-in link'}
+                      </button>
                     </div>
                   )}
                 </div>
