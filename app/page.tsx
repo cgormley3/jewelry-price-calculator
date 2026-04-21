@@ -5331,7 +5331,11 @@ export default function Home() {
                       unoptimized
                     />
                   </div>
-                  <h3 className="text-sm font-black uppercase mb-4 text-center text-foreground">The Vault</h3>
+                  <h3
+                    className={`${vaultHeaderFont.className} text-base sm:text-lg font-black uppercase italic tracking-[0.1em] text-center text-foreground mb-4 leading-none [font-synthesis-weight:none]`}
+                  >
+                    The Vault
+                  </h3>
                   {magicLinkPending ? (
                     <div className="space-y-4">
                       <p className="text-sm text-stone-600 text-center leading-relaxed">

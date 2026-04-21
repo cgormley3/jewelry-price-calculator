@@ -33,13 +33,14 @@ export function privacyPolicyUrl(): string | null {
 /**
  * Wordmark for light backgrounds (dark ink on transparent).
  * Source: Boulder Metalsmithing Association stacked logo asset.
+ * Bump `v` when replacing the file so browsers skip stale cache.
  */
-export const BOMA_HEADER_LOGO_PATH = '/boma-logo-header.png';
+export const BOMA_HEADER_LOGO_PATH = '/boma-logo-header.png?v=3';
 
 /**
  * Wordmark for dark backgrounds (light ink on transparent), e.g. charcoal bars or dark modes.
  */
-export const BOMA_LOGO_ON_DARK_PATH = '/boma-logo-on-dark.png';
+export const BOMA_LOGO_ON_DARK_PATH = '/boma-logo-on-dark.png?v=3';
 
 /** Email auth and password-recovery redirects: env first, then current origin (client). */
 export function authRedirectOrigin(): string {
