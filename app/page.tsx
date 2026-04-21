@@ -5328,8 +5328,8 @@ export default function Home() {
               )}
               {showAuth ? (
                 <GoogleAuthShell clientId={GOOGLE_WEB_CLIENT_ID}>
-                <div className="auth-menu-container absolute left-1/2 z-[100] mt-12 box-border w-[min(20rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-3xl border-2 border-brand bg-white px-4 py-4 shadow-xl animate-in fade-in slide-in-from-top-2 overflow-visible sm:px-5 sm:py-5 md:left-auto md:right-0 md:translate-x-0">
-                  <button onClick={() => { setShowAuth(false); setShowPassword(false); setSignUpAwaitingConfirmation(false); setMagicLinkPending(false); setPendingVaultPlusAfterAuth(false); }} className="absolute top-3 right-3 text-stone-300 hover:text-brand font-black text-sm">✕</button>
+                <div className="auth-menu-container absolute left-1/2 z-[100] mt-12 box-border w-[min(20rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-3xl border-2 border-brand bg-white px-4 py-4 shadow-xl animate-in fade-in slide-in-from-top-2 overflow-visible sm:px-5 sm:py-5 md:left-auto md:right-0 md:translate-x-0 [&_button]:touch-manipulation [&_input]:text-base md:[&_input]:text-sm">
+                  <button type="button" onClick={() => { setShowAuth(false); setShowPassword(false); setSignUpAwaitingConfirmation(false); setMagicLinkPending(false); setPendingVaultPlusAfterAuth(false); }} className="absolute right-2 top-2 flex h-11 w-11 touch-manipulation items-center justify-center rounded-full text-stone-300 hover:text-brand active:bg-stone-100 font-black text-sm">✕</button>
                   <div className="flex justify-center mb-2">
                     <NextImage
                       src={BOMA_HEADER_LOGO_PATH}

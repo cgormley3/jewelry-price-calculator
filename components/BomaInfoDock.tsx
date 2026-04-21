@@ -4,20 +4,30 @@ import { useEffect, useRef, useState } from 'react';
 import NextImage from 'next/image';
 import { ORG_NAME, orgSiteUrl } from '@/lib/branding';
 
-const ANVIL_SRC = '/boma-anvil-mark.png';
-const HAMMER_SRC = '/boma-hammer-mark.png';
+/** BoMA mark inside the circular FAB (`public/boma-info-card-mark.png`) */
+const CIRCLE_MARK_SRC = '/boma-info-card-mark.png';
 const HOVER_LEAVE_MS = 160;
 
 /**
- * Persistent bottom-right BoMA info: anvil FAB + expandable card (tap to toggle; hover expands on desktop).
+ * Persistent bottom-right BoMA info: circular FAB + expandable card (tap to toggle; hover expands on desktop).
  */
 export function BomaInfoDock() {
   const [pinnedOpen, setPinnedOpen] = useState(false);
   const [hoverOpen, setHoverOpen] = useState(false);
+  /** Desktop / trackpad: hover opens card. Touch-only: tap FAB only (avoids stray hover on mobile). */
+  const [fineHover, setFineHover] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const leaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showCard = pinnedOpen || hoverOpen;
+
+  useEffect(() => {
+    const mq = window.matchMedia('(hover: hover) and (pointer: fine)');
+    const apply = () => setFineHover(mq.matches);
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, []);
 
   const cancelLeaveTimer = () => {
     if (leaveTimerRef.current !== null) {
@@ -54,65 +64,60 @@ export function BomaInfoDock() {
     <div
       ref={rootRef}
       className="fixed z-[80] bottom-[max(1rem,env(safe-area-inset-bottom,0px))] right-[max(1rem,env(safe-area-inset-right,0px))]"
-      onMouseEnter={onDockEnter}
-      onMouseLeave={onDockLeave}
+      onMouseEnter={fineHover ? onDockEnter : undefined}
+      onMouseLeave={fineHover ? onDockLeave : undefined}
     >
       <div className="relative flex flex-col items-end">
-        <div
-          id="boma-info-dock-card"
-          role="region"
-          aria-label={`About ${ORG_NAME}`}
-          className={`absolute bottom-[calc(100%+0.5rem)] right-0 w-[min(18rem,calc(100vw-2rem))] max-h-[min(70vh,24rem)] overflow-y-auto rounded-2xl border-2 border-brand bg-white p-4 shadow-xl text-left transition-[opacity,transform] duration-200 ease-out ${
-            showCard ? 'pointer-events-auto z-10 opacity-100 translate-y-0' : 'pointer-events-none z-0 opacity-0 -translate-y-1'
-          }`}
-          aria-hidden={!showCard}
-        >
-          <p className="text-[13px] leading-relaxed text-stone-700">
-            <span className="font-bold text-foreground">The Vault</span> is provided by{' '}
-            <span className="font-bold text-foreground">BoMA</span>. We are a 501(c)(3) non-profit located in
-            Colorado dedicated to the art of metalsmithing.
-          </p>
-          <a
-            href={siteUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            tabIndex={showCard ? 0 : -1}
-            className="mt-3 inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-[0.1em] text-brand hover:text-forest transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 rounded-lg"
-          >
-            Visit our main site
-            <span aria-hidden className="translate-y-px">
-              →
-            </span>
-          </a>
-        </div>
+        {showCard ? (
+          <>
+            <div
+              id="boma-info-dock-card"
+              role="region"
+              aria-label={`About ${ORG_NAME}`}
+              className="z-10 mb-0 w-[min(18rem,calc(100vw-2rem))] max-h-[min(70dvh,24rem)] overflow-y-auto overscroll-contain rounded-2xl border-2 border-brand bg-white p-4 text-left shadow-xl animate-in fade-in slide-in-from-bottom-2 duration-200"
+              style={{ WebkitOverflowScrolling: 'touch' }}
+            >
+              <p className="text-sm leading-relaxed text-stone-700 sm:text-[13px]">
+                <span className="font-bold text-foreground">The Vault</span> is provided by{' '}
+                <span className="font-bold text-foreground">BoMA</span>. We are a 501(c)(3) non-profit located in
+                Colorado dedicated to the art of metalsmithing.
+              </p>
+              <a
+                href={siteUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 inline-flex min-h-[44px] items-center gap-1.5 rounded-lg py-2 text-xs font-black uppercase tracking-[0.1em] text-brand transition-colors hover:text-forest focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 active:opacity-80 sm:min-h-0 sm:py-0 sm:text-[11px] touch-manipulation"
+              >
+                Visit our main site
+                <span aria-hidden className="translate-y-px">
+                  →
+                </span>
+              </a>
+            </div>
+            {/* Aligns with horizontal center of the 48px FAB */}
+            <div
+              className="mr-[calc(1.5rem-0.5px)] h-2 w-px shrink-0 self-end bg-brand"
+              aria-hidden
+            />
+          </>
+        ) : null}
 
         <button
           type="button"
           onClick={() => setPinnedOpen((o) => !o)}
-          className="relative z-20 flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 border-brand bg-white shadow-lg transition hover:bg-amber-50/80 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+          className="relative z-20 flex h-12 w-12 shrink-0 touch-manipulation items-center justify-center overflow-hidden rounded-full border-2 border-brand bg-white shadow-lg transition hover:bg-amber-50/80 hover:shadow-xl active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
           aria-expanded={showCard}
           aria-controls="boma-info-dock-card"
         >
-          <span className="relative block h-8 w-8 shrink-0" aria-hidden>
-            <NextImage
-              src={ANVIL_SRC}
-              alt=""
-              width={112}
-              height={112}
-              className="pointer-events-none select-none object-contain absolute bottom-0 left-1/2 z-0 h-[26px] w-[26px] max-w-none -translate-x-1/2"
-              sizes="32px"
-              unoptimized
-            />
-            <NextImage
-              src={HAMMER_SRC}
-              alt=""
-              width={112}
-              height={112}
-              className="pointer-events-none select-none object-contain absolute left-1/2 top-0 z-10 h-[15px] w-[24px] max-w-none -translate-x-1/2 translate-y-px"
-              sizes="32px"
-              unoptimized
-            />
-          </span>
+          <NextImage
+            src={CIRCLE_MARK_SRC}
+            alt=""
+            width={3000}
+            height={3000}
+            className="h-full w-full object-contain object-center pointer-events-none select-none"
+            sizes="48px"
+            unoptimized
+          />
           <span className="sr-only">About {ORG_NAME}</span>
         </button>
       </div>

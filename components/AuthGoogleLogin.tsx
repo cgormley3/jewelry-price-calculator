@@ -41,7 +41,7 @@ export function AuthGoogleLogin({ onSuccess, onError, remountKey }: Props) {
   return (
     <div
       ref={wrapRef}
-      className="flex w-full min-w-0 max-w-full justify-center [&>div]:min-w-0 [&_iframe]:max-w-full"
+      className="flex w-full min-w-0 max-w-full touch-manipulation justify-center [&>div]:min-w-0 [&_iframe]:max-w-full"
     >
       <GoogleLogin
         key={remountKey}
