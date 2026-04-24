@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { IOS_PWA_STARTUP_IMAGES } from "./pwa-apple-splash";
 import { AuthProvider } from "./providers";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 /** Claire Gormley cream — matches globals background / reduces UI flash before paint */
 const PWA_THEME = "#f8f9db";
@@ -62,6 +63,7 @@ export default function RootLayout({
         <AuthProvider>
           {children}
         </AuthProvider>
+        <SpeedInsights />
       </body>
     </html>
   );

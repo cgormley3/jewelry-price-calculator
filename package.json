@@ -21,6 +21,7 @@
     "@supabase/auth-ui-react": "^0.4.7",
     "@supabase/auth-ui-shared": "^0.1.8",
     "@supabase/supabase-js": "^2.95.3",
+    "@vercel/speed-insights": "^2.0.0",
     "cheerio": "^1.2.0",
     "jspdf": "^4.1.0",
     "jspdf-autotable": "^5.0.7",
