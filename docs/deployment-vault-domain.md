@@ -48,7 +48,8 @@ Optional:
 
 | Variable | Purpose |
 |----------|---------|
-| `NEXT_PUBLIC_PRIVACY_POLICY_URL` | Footer privacy link if not using default |
+| `NEXT_PUBLIC_PRIVACY_POLICY_URL` | Override footer privacy link (default: in-app `/privacy`) |
+| `NEXT_PUBLIC_TERMS_OF_SERVICE_URL` | Override Terms link (default: in-app `/terms`; set to empty string to hide) |
 | `NEXT_PUBLIC_ORG_SITE_URL` | Override main org marketing site URL |
 
 See env keys referenced in `README.md` and `VAULT_PLUS_SETUP.md` (Supabase, Stripe, etc.).

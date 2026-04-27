@@ -17,7 +17,10 @@ export function orgSiteUrl(): string {
 export const CREATOR_ATTRIBUTION_LABEL = 'Created by Claire Gormley / Bear Silver and Stone';
 export const CREATOR_SITE_URL = 'https://bearsilverandstone.com';
 
-const DEFAULT_PRIVACY_POLICY_URL = 'https://bouldermetalsmiths.com/privacy';
+/** In-app default; override with an absolute URL if policies are hosted elsewhere. */
+const DEFAULT_PRIVACY_POLICY_URL = '/privacy';
+
+const DEFAULT_TERMS_OF_SERVICE_URL = '/terms';
 
 /** Footer link — returns null when hidden via env. Override with `NEXT_PUBLIC_PRIVACY_POLICY_URL`. */
 export function privacyPolicyUrl(): string | null {
@@ -28,6 +31,20 @@ export function privacyPolicyUrl(): string | null {
   if (fromEnv === '') return null;
 
   return fromEnv || DEFAULT_PRIVACY_POLICY_URL;
+}
+
+/**
+ * Terms of Service URL for The Vault. Empty `NEXT_PUBLIC_TERMS_OF_SERVICE_URL` hides the footer link.
+ */
+export function termsOfServiceUrl(): string | null {
+  const fromEnv = process.env.NEXT_PUBLIC_TERMS_OF_SERVICE_URL?.trim();
+  if (fromEnv === '') return null;
+  return fromEnv || DEFAULT_TERMS_OF_SERVICE_URL;
+}
+
+/** Same-tab navigation for in-app routes (relative paths), e.g. `/privacy` and `/terms`. */
+export function isInternalLegalPath(href: string): boolean {
+  return href.startsWith('/') && !href.startsWith('//');
 }
 
 /**

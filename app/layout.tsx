@@ -7,7 +7,7 @@ import { AuthProvider } from "./providers";
 const PWA_THEME = "#f8f9db";
 
 export const metadata: Metadata = {
-  title: "Jewelry Vault — Boulder Metalsmithing Association",
+  title: "The Vault - Boulder Metalsmithing Association",
   description: "Calculate and inventory your precious metal jewelry. Made by a jeweler, for jewelers.",
   // These settings trigger the standalone "App" mode on iPhone
   appleWebApp: {

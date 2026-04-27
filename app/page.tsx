@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom';
 import type { jsPDF } from 'jspdf';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import NextImage from 'next/image';
 import { supabase, hasValidSupabaseCredentials } from '../lib/supabase';
 import type { CredentialResponse } from '@react-oauth/google';
@@ -40,9 +41,11 @@ import {
   ORG_SHORT_NAME,
   authRedirectOrigin,
   buildAuthEmailRedirectUrl,
+  isInternalLegalPath,
   orgSiteUrl,
   parseAuthEmailRedirectTab,
   privacyPolicyUrl,
+  termsOfServiceUrl,
 } from '@/lib/branding';
 import { vaultHeaderFont } from '@/lib/vault-header-font';
 import { appIconHeaderPath } from '@/lib/app-icon';
@@ -138,6 +141,9 @@ function GoogleAuthShell({ clientId, children }: { clientId: string; children: R
 
 export default function Home() {
   const privacyFooterUrl = privacyPolicyUrl();
+  const termsFooterUrl = termsOfServiceUrl();
+  const legalFooterLinkClass =
+    'text-[8px] font-bold uppercase tracking-widest text-stone-300 hover:text-brand transition-colors';
   // Check if Turnstile is configured (for human verification)
   const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '';
   const hasTurnstile = !!turnstileSiteKey;
@@ -6514,15 +6520,45 @@ export default function Home() {
               {CREATOR_ATTRIBUTION_LABEL}
             </a>
             <InstallPrompt />
-            {privacyFooterUrl ? (
-              <a
-                href={privacyFooterUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[8px] font-bold uppercase tracking-widest text-stone-300 hover:text-brand transition-colors mt-2"
-              >
-                Privacy Policy
-              </a>
+            {privacyFooterUrl || termsFooterUrl ? (
+              <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1 mt-2">
+                {privacyFooterUrl
+                  ? isInternalLegalPath(privacyFooterUrl)
+                    ? (
+                        <Link href={privacyFooterUrl} className={legalFooterLinkClass}>
+                          Privacy Policy
+                        </Link>
+                      )
+                    : (
+                        <a
+                          href={privacyFooterUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={legalFooterLinkClass}
+                        >
+                          Privacy Policy
+                        </a>
+                      )
+                  : null}
+                {termsFooterUrl
+                  ? isInternalLegalPath(termsFooterUrl)
+                    ? (
+                        <Link href={termsFooterUrl} className={legalFooterLinkClass}>
+                          Terms of Service
+                        </Link>
+                      )
+                    : (
+                        <a
+                          href={termsFooterUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={legalFooterLinkClass}
+                        >
+                          Terms of Service
+                        </a>
+                      )
+                  : null}
+              </div>
             ) : null}
           </div>
         </div>
